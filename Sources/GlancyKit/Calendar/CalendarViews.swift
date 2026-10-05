@@ -155,12 +155,13 @@ private enum AgendaItem: Identifiable {
     var id: String { switch self { case .event(let e): e.id; case .nowLine: "now" } }
 }
 
+/// Today's list on the left; the next events of the coming days on the right.
 struct Agenda: View {
     let model: CalendarModel
 
-    private func items(for day: CalendarLogic.Day, isToday: Bool) -> [AgendaItem] {
+    private func items(for day: CalendarLogic.Day) -> [AgendaItem] {
         var out: [AgendaItem] = []
-        var placed = !isToday
+        var placed = false
         for e in day.timed {
             if !placed, e.start > model.now { out.append(.nowLine); placed = true }
             out.append(.event(e))
@@ -170,33 +171,88 @@ struct Agenda: View {
     }
 
     var body: some View {
-        let days = CalendarLogic.agenda(model.events, now: model.now)
+        let today = CalendarLogic.agenda(model.events, now: model.now, days: 1).first
+        let next = CalendarLogic.upcoming(model.events, now: model.now)
         let nextID = model.next?.id
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(days.enumerated()), id: \.offset) { index, day in
+        HStack(alignment: .top, spacing: 14) {
+            // Today
+            VStack(alignment: .leading, spacing: 4) {
+                ColumnHeader(title: CalL10n.today, date: model.now)
+                ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(verbatim: index == 0 ? CalL10n.today : CalL10n.tomorrow)
-                                .font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
-                            Text(day.start, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
-                                .font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
-                        }
-                        if !day.allDay.isEmpty { AllDayStrip(events: day.allDay) }
-                        if day.timed.isEmpty && day.allDay.isEmpty {
+                        if let today, !today.allDay.isEmpty { AllDayStrip(events: today.allDay) }
+                        if let today, today.timed.isEmpty, today.allDay.isEmpty {
                             Text(verbatim: CalL10n.nothing).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
                         }
-                        ForEach(items(for: day, isToday: index == 0)) { item in
-                            switch item {
-                            case .nowLine: NowLine()
-                            case .event(let e): EventRow(event: e, now: model.now, isNext: e.id == nextID)
+                        if let today {
+                            ForEach(items(for: today)) { item in
+                                switch item {
+                                case .nowLine: NowLine()
+                                case .event(let e): EventRow(event: e, now: model.now, isNext: e.id == nextID)
+                                }
                             }
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
-            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            Rectangle().fill(Theme.card).frame(width: 1)
+
+            // The coming days
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: CalL10n.comingDays).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
+                if next.isEmpty {
+                    Text(verbatim: CalL10n.nothingAhead).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
+                }
+                ForEach(Array(next.enumerated()), id: \.element.id) { i, e in
+                    let newDay = i == 0 || !Calendar.current.isDate(e.start, inSameDayAs: next[i - 1].start)
+                    UpcomingRow(event: e, showDay: newDay, now: model.now)
+                }
+            }
+            .frame(width: 212, alignment: .topLeading)
         }
+    }
+}
+
+private struct ColumnHeader: View {
+    let title: String
+    let date: Date
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(verbatim: title).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
+            Text(date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
+                .font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
+        }
+    }
+}
+
+/// One event of the coming days: the day once per group ("Tomorrow", "Thu 8"), then time and title.
+struct UpcomingRow: View {
+    let event: CalendarEvent
+    let showDay: Bool
+    let now: Date
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if showDay {
+                Text(verbatim: dayLabel).font(Theme.font(.xs, .semibold)).foregroundStyle(Theme.tertiary)
+                    .padding(.top, 2)
+            }
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 1.5).fill(event.color.color).frame(width: 3, height: 14)
+                Text(verbatim: event.isAllDay ? CalL10n.allDay : shortTime(event.start))
+                    .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.secondary)
+                    .frame(width: 40, alignment: .leading)
+                Text(verbatim: event.title).font(Theme.font(.s)).foregroundStyle(Theme.primary).lineLimit(1)
+            }
+        }
+    }
+
+    private var dayLabel: String {
+        let cal = Calendar.current
+        if cal.isDateInTomorrow(event.start) { return CalL10n.tomorrow }
+        return event.start.formatted(.dateTime.weekday(.wide).day().locale(L10n.locale)).capitalized(with: L10n.locale)
     }
 }
 

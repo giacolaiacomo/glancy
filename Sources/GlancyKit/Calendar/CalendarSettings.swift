@@ -59,6 +59,8 @@ enum CalL10n {
     static var openSettings: String { t("Open Settings", "Apri Impostazioni") }
     static var nothingToday: String { t("Nothing else today", "Nient'altro per oggi") }
     static var nothing: String { t("No events", "Nessun evento") }
+    static var comingDays: String { t("Coming days", "Prossimi giorni") }
+    static var nothingAhead: String { t("Nothing in the next 7 days", "Niente nei prossimi 7 giorni") }
     static var now: String { t("Now", "Ora") }
     static var inTwo: String { t("in 2 min", "tra 2 min") }
     static func `in`(_ s: String) -> String { t("in \(s)", "tra \(s)") }

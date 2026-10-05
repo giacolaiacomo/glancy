@@ -102,7 +102,7 @@ public final class CalendarModule: GlancyModule {
 
     // MARK: Refresh
 
-    /// Re-query today + tomorrow, republish activities, and arm the single next wake-up.
+    /// Re-query today and the next 7 days, republish activities, and arm the single next wake-up.
     public func refresh() {
         guard started else { return }
         let access = source.authorization
@@ -113,7 +113,7 @@ public final class CalendarModule: GlancyModule {
             settings.availableCalendars = source.calendars()
             let cal = Calendar.current
             let from = cal.startOfDay(for: now)
-            let to = cal.date(byAdding: .day, value: 2, to: from) ?? from.addingTimeInterval(172_800)
+            let to = cal.date(byAdding: .day, value: 8, to: from) ?? from.addingTimeInterval(8 * 86_400)
             let raw = source.events(from: from, to: to, calendarIDs: settings.selectedCalendarIDs)
             model.events = CalendarLogic.visible(raw, calendarIDs: settings.selectedCalendarIDs)
         } else {

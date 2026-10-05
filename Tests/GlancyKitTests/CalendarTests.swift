@@ -257,3 +257,21 @@ struct CalendarUntilTextTests {
         #expect(untilText(now.addingTimeInterval(120 * 60), now: now).hasSuffix("2 h"))
     }
 }
+
+@Suite("Calendar coming days")
+struct CalendarUpcomingTests {
+    @Test func nextEventsAfterTodayEarliestFirstWithoutDeclined() {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        let now = Date(timeIntervalSince1970: 1_760_000_000)   // a fixed day, mid-afternoon UTC
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+        func ev(_ id: String, _ hours: Double, declined: Bool = false) -> CalendarEvent {
+            let start = tomorrow.addingTimeInterval(hours * 3600)
+            return CalendarEvent(id: id, title: id, start: start, end: start + 1800, isDeclined: declined)
+        }
+        let today = CalendarEvent(id: "today", title: "today", start: now + 3600, end: now + 5400)
+        let list = [ev("c", 30), ev("a", 9), ev("x", 10, declined: true), ev("b", 14), today,
+                    ev("d", 40), ev("e", 50), ev("f", 60)]
+        let up = CalendarLogic.upcoming(list, now: now, calendar: cal)
+        #expect(up.map(\.id) == ["a", "b", "c", "d", "e"])
+    }
+}

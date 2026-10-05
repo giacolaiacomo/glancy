@@ -136,6 +136,14 @@ public enum CalendarLogic {
         public var timed: [CalendarEvent]
     }
 
+    /// The next events after today (from tomorrow's midnight), declined ones out, earliest first.
+    public static func upcoming(_ events: [CalendarEvent], now: Date, calendar: Calendar = .current, limit: Int = 5) -> [CalendarEvent] {
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) else { return [] }
+        return events.filter { !$0.isDeclined && $0.start >= tomorrow }
+            .sorted { ($0.start, $0.isAllDay ? 0 : 1, $0.id) < ($1.start, $1.isAllDay ? 0 : 1, $1.id) }
+            .prefix(limit).map { $0 }
+    }
+
     /// Today + tomorrow, split into all-day strip and timed rows. Events overlapping midnight appear on both.
     public static func agenda(_ events: [CalendarEvent], now: Date, calendar: Calendar = .current, days: Int = 2) -> [Day] {
         let visible = events.filter { !$0.isDeclined }.sorted { ($0.start, $0.id) < ($1.start, $1.id) }

@@ -9,7 +9,11 @@ public enum Modules {
         // Agents ↔ Windows link: ⌥-click tiles a session's terminal, "Lay out sessions" arranges
         // them all (previewed, undoable). Weak: turning Windows off just hides those actions.
         agents.tiling = windows
-        return [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, HUDModule(), PowerModule(), NotificationsModule(),
+        // Devices tab: the Power module shows the HUD module's microphone and output controls.
+        let hud = HUDModule()
+        let power = PowerModule()
+        power.sound = hud
+        return [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power, NotificationsModule(),
                 NotesModule()]
     }
 

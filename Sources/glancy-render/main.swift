@@ -92,6 +92,49 @@ enum Render {
                 shot("09-windows-\(state.rawValue)", live) { $0.expand(tab: .windows) }
             }
         }
+        // Devices (Power + HUD): headphones peek, battery peeks and wings, microphone wings, the
+        // Devices tab. Samples only: no Bluetooth, nothing written to CoreAudio.
+        if let power = modules.compactMap({ $0 as? PowerModule }).first, let hud = modules.compactMap({ $0 as? HUDModule }).first {
+            func devices() -> SurfaceContext {
+                let hub = ActivityHub()
+                for m in [hud, power] as [any GlancyModule] { m.stop(); m.start(hub: hub) }
+                return SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [hud, power])
+            }
+            var ctx = devices(); power.showSamplePeek(); shot("11-devices-airpods-peek", ctx)
+            ctx = devices(); power.showSamplePeek(name: "AirPods Max", battery: BluetoothBattery(main: 64)); shot("11-devices-airpodsmax-peek", ctx)
+            ctx = devices(); power.showSamplePeek(name: "Beats Studio Buds", battery: BluetoothBattery(left: 15, right: 18)); shot("11-devices-beats-peek", ctx)
+            ctx = devices(); power.showSampleAlert(.low(20)); shot("11-devices-low-peek", ctx)
+            ctx = devices(); power.showSampleAlert(.full(limit: nil)); shot("11-devices-full-peek", ctx)
+            ctx = devices(); power.showSampleAlert(.full(limit: 80)); shot("11-devices-limit-peek", ctx)
+            ctx = devices(); power.showSample(.pluggedIn); shot("11-devices-plug-wing", ctx)
+            ctx = devices()
+            power.showSample(.unplugged, state: PowerState(hasBattery: true, percent: 64, onAC: false, minutesToEmpty: 245))
+            shot("11-devices-unplug-wing", ctx)
+            ctx = devices(); hud.showMicSample(.muted); shot("11-devices-mic-muted", ctx)
+            ctx = devices(); hud.showMicSample(.mutedInUse); shot("11-devices-mic-muted-inuse", ctx)
+            ctx = devices(); hud.showMicSample(.flashOn); shot("11-devices-mic-flash", ctx)
+            ctx = devices(); hud.showMicSample(.inUse); shot("11-devices-inuse-dot", ctx)
+            ctx = devices(); hud.showMicSample(.cameraInUse); shot("11-devices-camera-dot", ctx)
+            // The tab, with the full tab strip.
+            let outputs = [AudioDevice(id: 1, uid: "s1", name: "MacBook Pro Speakers", hasInput: false, hasOutput: true, transport: .builtIn),
+                           AudioDevice(id: 2, uid: "s2", name: "AirPods Pro", hasInput: true, hasOutput: true, transport: .bluetooth),
+                           AudioDevice(id: 3, uid: "s3", name: "Studio Display Speakers", hasInput: false, hasOutput: true, transport: .display),
+                           AudioDevice(id: 4, uid: "s4", name: "MacBook Pro Microphone", hasInput: true, hasOutput: false, transport: .builtIn)]
+            let pods = BluetoothDeviceInfo(address: "00:00:00:00:00:01", name: "AirPods Pro", symbol: "airpodspro", isAudio: true,
+                                           battery: BluetoothBattery(left: 82, right: 90, case: 40))
+            hud.audio.setSampleDevices(outputs, output: 2, input: 4)
+            hud.audio.setSample(muted: false, micInUse: true, apps: ["Zoom"])
+            power.prepareForRender(battery: PowerState(hasBattery: true, percent: 64, onAC: false, lowPowerMode: true, minutesToEmpty: 245),
+                                   devices: [pods])
+            shot("11-devices-tab", live) { $0.expand(tab: .power) }
+            hud.audio.setSampleDevices(outputs, output: 1, input: 4)
+            hud.audio.setSample(muted: true)
+            power.prepareForRender(battery: PowerState(hasBattery: true, percent: 41, onAC: true, isCharging: true, minutesToFull: 72),
+                                   devices: [],
+                                   paired: [BluetoothDeviceInfo(address: "00:00:00:00:00:02", name: "AirPods Max", symbol: "airpodsmax", isAudio: true, battery: BluetoothBattery()),
+                                            BluetoothDeviceInfo(address: "00:00:00:00:00:03", name: "Beats Studio Pro", symbol: "beats.headphones", isAudio: true, battery: BluetoothBattery())])
+            shot("11-devices-tab-paired", live) { $0.expand(tab: .power) }
+        }
         // Notifications (opt-in, off by default): turned on for these shots only, synthetic data.
         if let notes = modules.compactMap({ $0 as? NotificationsModule }).first {
             settings.setEnabled(.notifications, true)

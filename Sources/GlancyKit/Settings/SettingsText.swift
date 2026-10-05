@@ -90,6 +90,17 @@ let settingsItalian: [String: String] = [
     "AirPods and other headphones as they connect, with battery":
         "AirPods e altre cuffie appena si collegano, con la batteria",
     "Headphones need Bluetooth access": "Per le cuffie serve l'accesso al Bluetooth",
+    "Plugging in, unplugging, Low Power Mode": "Alimentatore collegato o staccato, risparmio energetico",
+    "Low battery peek": "Avviso batteria scarica",
+    "On battery, once per discharge": "A batteria, una volta per scarica",
+    "Full charge peek": "Avviso carica completa",
+    "At 100 % or at the charge limit": "Al 100 % o al limite di carica",
+    // HUD · microphone
+    "Mute microphone": "Silenzia microfono",
+    "Mute microphone shortcut": "Scorciatoia microfono",
+    "Mutes or unmutes the default microphone": "Silenzia o riattiva il microfono predefinito",
+    "Microphone and camera in use": "Microfono e fotocamera in uso",
+    "A red dot in the notch while an app records": "Un punto rosso nella notch mentre un'app registra",
 
     // Media
     "Checking…": "Verifica…",

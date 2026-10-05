@@ -15,7 +15,14 @@ final class BluetoothWatcher: NSObject {
 
     var onConnect: ((Device) -> Void)?
     var onDisconnect: ((Device) -> Void)?
+    /// A paired-devices list changed (refreshed on connect / disconnect only).
+    var onPairedChange: (() -> Void)?
+    /// An `openConnection` finished: address, success.
+    var onConnectResult: ((String, Bool) -> Void)?
     private(set) var connected: [String: Device] = [:]
+    /// Paired audio devices (headphones, speakers), connected or not.
+    private(set) var pairedAudio: [Device] = []
+    private(set) var isWatching = false
     private var connectNote: IOBluetoothUserNotification?
     private var disconnectNotes: [String: IOBluetoothUserNotification] = [:]
 
@@ -45,15 +52,53 @@ final class BluetoothWatcher: NSObject {
     private func startWatching() {
         guard connectNote == nil else { return }
         central = nil
+        isWatching = true
         // Devices already connected at launch are known silently (no peek), then watched.
         for case let d as IOBluetoothDevice in IOBluetoothDevice.pairedDevices() ?? [] where d.isConnected() {
             track(d)
         }
+        refreshPaired()
         connectNote = IOBluetoothDevice.register(forConnectNotifications: self, selector: #selector(didConnect(_:device:)))
+    }
+
+    private func refreshPaired() {
+        let list = (IOBluetoothDevice.pairedDevices() ?? []).compactMap { $0 as? IOBluetoothDevice }
+            .filter { $0.deviceClassMajor == UInt32(kBluetoothDeviceClassMajorAudio) }
+            .compactMap { d -> Device? in
+                guard let raw = d.addressString else { return nil }
+                return Device(address: BluetoothProfiler.normaliseAddress(raw), name: d.name ?? raw, isAudio: true)
+            }
+        if list != pairedAudio { pairedAudio = list; onPairedChange?() }
+    }
+
+    /// The battery a connected device reports through IOBluetooth (AirPods, Beats: left / right /
+    /// case; other headsets: single). In-process, no child process; empty when unknown.
+    func battery(of address: String) -> BluetoothBattery {
+        guard isWatching, let device = IOBluetoothDevice(addressString: address), device.isConnected() else { return BluetoothBattery() }
+        var values: [String: Int] = [:]
+        for key in ["batteryPercentLeft", "batteryPercentRight", "batteryPercentCase", "batteryPercentSingle", "batteryPercentCombined"]
+        where device.responds(to: NSSelectorFromString(key)) {
+            if let n = device.value(forKey: key) as? NSNumber { values[key] = n.intValue }
+        }
+        return BluetoothBattery.fromDevice(values)
+    }
+
+    /// Connects a paired device without blocking: the result comes to `onConnectResult`.
+    @discardableResult
+    func connect(_ address: String) -> Bool {
+        guard isWatching, let device = IOBluetoothDevice(addressString: address), !device.isConnected() else { return false }
+        return device.openConnection(self) == kIOReturnSuccess
+    }
+
+    @objc func connectionComplete(_ device: IOBluetoothDevice, status: IOReturn) {
+        let address = BluetoothProfiler.normaliseAddress(device.addressString ?? "")
+        onConnectResult?(address, status == kIOReturnSuccess)
     }
 
     func stop() {
         central = nil
+        isWatching = false
+        pairedAudio = []
         connectNote?.unregister()
         connectNote = nil
         disconnectNotes.values.forEach { $0.unregister() }
@@ -64,6 +109,7 @@ final class BluetoothWatcher: NSObject {
     @objc private func didConnect(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
         // Registration replays devices that are already connected: those are not news.
         guard let d = track(device) else { return }
+        refreshPaired()
         onConnect?(d)
     }
 
@@ -71,6 +117,7 @@ final class BluetoothWatcher: NSObject {
         let address = BluetoothProfiler.normaliseAddress(device.addressString ?? "")
         disconnectNotes.removeValue(forKey: address)?.unregister()
         if let d = connected.removeValue(forKey: address) { onDisconnect?(d) }
+        refreshPaired()
     }
 
     /// Starts watching a connected device; nil when it was already tracked.
@@ -123,21 +170,24 @@ enum BluetoothBatteryReader {
         }
     }
 
-    /// Magic Keyboard / Mouse / Trackpad: IORegistry `AppleDeviceManagementHIDEventService`
-    /// `BatteryPercent`, keyed by normalised address (sub-millisecond).
-    static func magicBatteries() -> [String: (name: String, percent: Int)] {
+    /// IORegistry `AppleDeviceManagementHIDEventService` entries (Magic Keyboard / Mouse /
+    /// Trackpad, and any headset the system publishes there): `BatteryPercent` and, when present,
+    /// `BatteryPercentLeft/Right/Case/Single`, keyed by normalised address. Sub-millisecond.
+    static func registryBatteries() -> [String: BluetoothBattery] {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("AppleDeviceManagementHIDEventService"), &iterator) == KERN_SUCCESS
         else { return [:] }
         defer { IOObjectRelease(iterator) }
-        var out: [String: (String, Int)] = [:]
+        var out: [String: BluetoothBattery] = [:]
         while case let service = IOIteratorNext(iterator), service != 0 {
             defer { IOObjectRelease(service) }
-            func prop(_ key: String) -> Any? {
-                IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+            var props: [String: Any] = [:]
+            for key in ["DeviceAddress", "BatteryPercent", "BatteryPercentLeft", "BatteryPercentRight", "BatteryPercentCase", "BatteryPercentSingle"] {
+                if let v = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() { props[key] = v }
             }
-            guard let percent = prop("BatteryPercent") as? Int, let address = prop("DeviceAddress") as? String else { continue }
-            out[BluetoothProfiler.normaliseAddress(address)] = ((prop("Product") as? String) ?? "", percent)
+            guard let address = props["DeviceAddress"] as? String else { continue }
+            let battery = BluetoothBattery.fromRegistry(props)
+            if !battery.isEmpty { out[BluetoothProfiler.normaliseAddress(address)] = battery }
         }
         return out
     }

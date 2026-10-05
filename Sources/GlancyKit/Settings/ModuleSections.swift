@@ -210,6 +210,8 @@ private struct CalendarChip: View {
 private struct HUDSection: View {
     let module: HUDModule
     let context: SurfaceContext
+    @State private var system: Set<Hotkey> = []
+    @State private var tick = 0
 
     static let kinds: [(HUDKind, String, String)] = [
         (.volume, "Volume", "speaker.wave.2.fill"),
@@ -219,6 +221,7 @@ private struct HUDSection: View {
 
     var body: some View {
         @Bindable var settings = module.settings
+        let _ = tick
         VStack(alignment: .leading, spacing: 4) {
             PermissionLine(context: context, permission: .accessibility, text: tr("Needs Accessibility to take over the keys"))
             SettingsRow(tr("Show in the notch"), note: tr("Replaces the system HUD for the keys below")) {
@@ -236,7 +239,27 @@ private struct HUDSection: View {
                 .disabled(!settings.enabled)
             }
             SettingsNote(tr("Keys left out keep the system HUD. ⌥⇧ still steps by quarters."))
+            HStack(alignment: .top, spacing: 22) {
+                SettingsRow(tr("Mute microphone shortcut"), note: tr("Mutes or unmutes the default microphone")) {
+                    HotkeyField(id: "hud.mic", hotkey: settings.micHotkey, conflict: conflict(settings.micHotkey)) { h in
+                        module.setMicHotkey(h)
+                        tick += 1
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                SettingsRow(tr("Microphone and camera in use"), note: tr("A red dot in the notch while an app records")) {
+                    NotchSwitch(isOn: $settings.showInUse)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+        .onAppear { system = HotkeyConflict.systemHotkeys() }
+    }
+
+    private func conflict(_ h: Hotkey) -> HotkeyConflict? {
+        let failed: Set<Hotkey> = module.micHotkeyFailed ? [h] : []
+        return HotkeyConflict.find(HotkeyBinding(id: "hud.mic", title: tr("Mute microphone"), hotkey: h),
+                                   among: GlancyHotkeys.bindings(context), system: system, failed: failed)
     }
 }
 
@@ -249,8 +272,19 @@ private struct PowerSection: View {
     var body: some View {
         @Bindable var settings = module.settings
         VStack(alignment: .leading, spacing: 4) {
-            SettingsRow(tr("Battery in the notch"), note: tr("Plugging in, unplugging, low battery, Low Power Mode")) {
+            SettingsRow(tr("Battery in the notch"), note: tr("Plugging in, unplugging, Low Power Mode")) {
                 NotchSwitch(isOn: $settings.batteryActivities)
+            }
+            SettingsRow(tr("Low battery peek"), note: tr("On battery, once per discharge")) {
+                HStack(spacing: 6) {
+                    NotchSegments(selection: $settings.lowFirst, options: [30, 25, 20, 15].map { ($0, "\($0)%") })
+                    NotchSegments(selection: $settings.lowSecond, options: [15, 10, 5].map { ($0, "\($0)%") })
+                        .opacity(settings.lowAlerts ? 1 : 0.4)
+                    NotchSwitch(isOn: $settings.lowAlerts)
+                }
+            }
+            SettingsRow(tr("Full charge peek"), note: tr("At 100 % or at the charge limit")) {
+                NotchSwitch(isOn: $settings.fullAlert)
             }
             SettingsRow(tr("Headphones peek"), note: tr("AirPods and other headphones as they connect, with battery")) {
                 NotchSwitch(isOn: $settings.bluetoothPeeks)
@@ -437,6 +471,9 @@ enum GlancyHotkeys {
         }
         if let n = context.module(NotesModule.self), context.settings.isEnabled(.notes) {
             out.append(n.hotkeyBinding)
+        }
+        if let h = context.module(HUDModule.self), context.settings.isEnabled(.hud), h.settings.micHotkey.modifiers != 0 {
+            out.append(HotkeyBinding(id: "hud.mic", title: tr("Mute microphone"), hotkey: h.settings.micHotkey))
         }
         if let w = context.module(WindowsModule.self), context.settings.isEnabled(.windows), w.hotkeys.enabled {
             for a in WindowsSection.actions + WindowsSection.arrangeActions {

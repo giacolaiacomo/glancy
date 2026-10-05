@@ -56,6 +56,7 @@ public final class EventKitSource: CalendarEventSource {
             isAllDay: e.isAllDay, isDeclined: declined,
             calendarID: e.calendar?.calendarIdentifier ?? "", color: rgb(e.calendar?.cgColor),
             location: e.location,
-            link: MeetingLink.extract(url: e.url, location: e.location, notes: e.notes))
+            link: MeetingLink.extract(url: e.url, location: e.location, notes: e.notes),
+            isBusy: e.availability != .free)
     }
 }

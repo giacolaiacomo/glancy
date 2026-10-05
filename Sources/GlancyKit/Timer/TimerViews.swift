@@ -5,7 +5,7 @@ import SwiftUI
 enum TimerTint {
     static let focus = Color(red: 0.98, green: 0.55, blue: 0.42)
     static func color(isBreak: Bool) -> Color { isBreak ? Theme.done : focus }
-    static func color(_ s: TimerState) -> Color { color(isBreak: s.phase.map { !Pomodoro.isFocus($0) } ?? false) }
+    static func color(_ s: TimerState) -> Color { color(isBreak: s.isBreakRun) }
 }
 
 /// A progress ring. Static: it draws the value it is given and never animates on its own.
@@ -58,15 +58,19 @@ struct TimerWingSnapshot {
     var paused: Bool
     var isBreak: Bool
     var finishingUntil: Date?
+    /// "Focus" / "Break" before the minutes (Pomodoro and break timers).
+    var label: TimerText.WingKind? = nil
+    /// A Pomodoro phase waiting for Start.
+    var held = false
 }
 
 struct TimerWingLeft: View {
     let snap: TimerWingSnapshot
     var body: some View {
         ZStack {
-            TimerRing(progress: snap.progress, color: snap.paused ? Theme.tertiary : TimerTint.color(isBreak: snap.isBreak), lineWidth: 2.5)
+            TimerRing(progress: snap.progress, color: snap.paused && !snap.held ? Theme.tertiary : TimerTint.color(isBreak: snap.isBreak), lineWidth: 2.5)
                 .frame(width: 15, height: 15)
-            if snap.paused {
+            if snap.paused, !snap.held {
                 Image(systemName: "pause.fill").font(.system(size: 6, weight: .bold)).foregroundStyle(Theme.secondary)
             }
         }
@@ -82,9 +86,9 @@ struct TimerWingRight: View {
                 Text(timerInterval: Date.now...until, countsDown: true)
                     .font(Theme.font(.s, .semibold)).foregroundStyle(TimerTint.color(isBreak: snap.isBreak))
             } else {
-                Text(verbatim: TimerText.left(snap.minutesLeft))
+                Text(verbatim: TimerText.wing(snap.label, minutes: snap.minutesLeft, held: snap.held))
                     .font(Theme.font(.s, .medium))
-                    .foregroundStyle(snap.paused ? Theme.tertiary : Theme.primary)
+                    .foregroundStyle(snap.held ? TimerTint.color(isBreak: snap.isBreak) : snap.paused ? Theme.tertiary : Theme.primary)
             }
         }
         .monospacedDigit()
@@ -119,7 +123,7 @@ struct TimerHomeCard: View {
             TimerRing(progress: model.progress, color: s.status == .paused ? Theme.tertiary : TimerTint.color(s), lineWidth: 3)
                 .frame(width: 30, height: 30)
             VStack(alignment: .leading, spacing: 1) {
-                Caption(text: s.status == .paused ? TimerText.caption(s) + " · " + L10n.tr("Paused") : TimerText.caption(s))
+                Caption(text: s.status == .paused && !s.isHeld ? TimerText.caption(s) + " · " + L10n.tr("Paused") : TimerText.caption(s))
                 Countdown(state: s, now: model.now)
                     .font(.system(size: 20, weight: .light)).monospacedDigit()
                     .foregroundStyle(s.status == .paused ? Theme.secondary : Theme.primary)
@@ -199,7 +203,7 @@ struct TimerTabView: View {
                         Countdown(state: s, now: model.now)
                             .font(.system(size: 24, weight: .light)).monospacedDigit()
                             .foregroundStyle(s.status == .paused ? Theme.secondary : Theme.primary)
-                        if s.status == .paused {
+                        if s.status == .paused, !s.isHeld {
                             Text(verbatim: L10n.tr("Paused")).font(Theme.font(.xs, .medium)).foregroundStyle(Theme.tertiary)
                         }
                     } else {
@@ -221,21 +225,32 @@ struct TimerTabView: View {
     }
 
     @ViewBuilder private func running(_ s: TimerState) -> some View {
-        Caption(text: TimerText.caption(s))
         HStack(spacing: 8) {
-            if s.status == .running {
+            Caption(text: TimerText.caption(s))
+            if s.phase != nil { RoundDots(phase: s.phase ?? 0, held: s.isHeld) }
+        }
+        HStack(spacing: 8) {
+            if s.isHeld {
+                PillButton(title: TimerText.startHeld(s), filled: true) { timer.resume() }
+            } else if s.status == .running {
                 RoundIcon(symbol: "pause.fill", help: L10n.tr("Pause"), size: 34) { timer.pause() }
             } else {
                 RoundIcon(symbol: "play.fill", help: L10n.tr("Resume"), size: 34) { timer.resume() }
             }
             RoundIcon(symbol: "stop.fill", help: L10n.tr("Stop"), size: 34) { timer.stopTimer() }
-            PillButton(title: L10n.tr("+1 min")) { timer.addMinute() }
+            if !s.isHeld { PillButton(title: L10n.tr("+1 min")) { timer.addMinute() } }
+            if s.phase != nil, !s.isHeld {
+                RoundIcon(symbol: "forward.end.fill", help: L10n.tr("Skip to the next phase"), size: 34) { timer.skip() }
+            }
         }
-        if let next = TimerText.upNext(s) {
+        if let next = TimerText.upNext(s), !s.isHeld {
             Text(verbatim: L10n.tr("Up next") + " · " + next).font(Theme.font(.s)).foregroundStyle(Theme.secondary)
         } else if let deadline = s.deadline {
             Text(verbatim: "→ " + deadline.formatted(date: .omitted, time: .shortened))
                 .font(Theme.font(.s)).monospacedDigit().foregroundStyle(Theme.tertiary)
+        }
+        if s.phase != nil, model.roundsToday > 0 {
+            Text(verbatim: TimerText.roundsToday(model.roundsToday)).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
         }
     }
 
@@ -256,16 +271,39 @@ struct TimerTabView: View {
             RoundIcon(symbol: "plus", help: "+", size: 26) { timer.setCustomMinutes(model.customMinutes + 1) }
             PillButton(title: L10n.tr("Start"), filled: true) { timer.startCustom() }
         }
-        Button { timer.startPomodoro() } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "repeat").font(.system(size: 10, weight: .semibold))
-                Text(verbatim: L10n.tr("Pomodoro")).font(Theme.font(.s, .semibold))
-                Text(verbatim: L10n.tr("%d / %d ×4, then %d", Pomodoro.lengths.focus, Pomodoro.lengths.shortBreak, Pomodoro.lengths.longBreak)).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
+        HStack(spacing: 10) {
+            Button { timer.startPomodoro() } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "repeat").font(.system(size: 10, weight: .semibold))
+                    Text(verbatim: L10n.tr("Pomodoro")).font(Theme.font(.s, .semibold))
+                    Text(verbatim: L10n.tr("%d / %d ×4, then %d", Pomodoro.lengths.focus, Pomodoro.lengths.shortBreak, Pomodoro.lengths.longBreak)).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
+                }
+                .foregroundStyle(Theme.secondary)
+                .contentShape(Rectangle())
             }
-            .foregroundStyle(Theme.secondary)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            if model.roundsToday > 0 {
+                Text(verbatim: "· " + TimerText.roundsToday(model.roundsToday)).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
+            }
         }
-        .buttonStyle(.plain)
+    }
+}
+
+/// Four dots, one per focus round: done ones filled, the current one ringed.
+private struct RoundDots: View {
+    let phase: Int
+    let held: Bool
+    var body: some View {
+        let current = Pomodoro.round(of: phase)
+        HStack(spacing: 4) {
+            ForEach(1...Pomodoro.rounds, id: \.self) { r in
+                let done = r < current || (r == current && !Pomodoro.isFocus(phase))
+                Circle()
+                    .fill(done ? TimerTint.focus : Color.white.opacity(0.14))
+                    .overlay(Circle().strokeBorder(r == current && Pomodoro.isFocus(phase) ? TimerTint.focus : .clear, lineWidth: 1.2))
+                    .frame(width: 6, height: 6)
+            }
+        }
     }
 }
 

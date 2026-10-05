@@ -28,13 +28,21 @@ public struct CalendarEvent: Identifiable, Equatable, Sendable {
     public var color: CalendarRGB
     public var location: String?
     public var link: MeetingLink?
+    /// Shown as busy (EventKit availability not "free"). Free events never turn Focus on.
+    public var isBusy: Bool
 
     public init(id: String, title: String, start: Date, end: Date, isAllDay: Bool = false,
                 isDeclined: Bool = false, calendarID: String = "", color: CalendarRGB = .fallback,
-                location: String? = nil, link: MeetingLink? = nil) {
+                location: String? = nil, link: MeetingLink? = nil, isBusy: Bool = true) {
         self.id = id; self.title = title; self.start = start; self.end = end; self.isAllDay = isAllDay
         self.isDeclined = isDeclined; self.calendarID = calendarID; self.color = color
-        self.location = location; self.link = link
+        self.location = location; self.link = link; self.isBusy = isBusy
+    }
+
+    /// EventKit's own identifier (ours appends "@<start>" to tell recurrences apart).
+    public var eventKitID: String {
+        guard let at = id.lastIndex(of: "@") else { return id }
+        return String(id[..<at])
     }
 }
 
@@ -94,14 +102,17 @@ public enum CalendarLogic {
         countdownEvents(events).filter { $0.end > now }.min { ($0.start, $0.id) < ($1.start, $1.id) }
     }
 
-    public static func boundaries(of event: CalendarEvent) -> [Date] {
-        [event.start.addingTimeInterval(-soonLead), event.start.addingTimeInterval(-imminentLead),
-         event.start, event.end, event.start.addingTimeInterval(startedTail)]
+    /// `endWarning` > 0 adds the "ends in N min" instant (Settings → Calendar).
+    public static func boundaries(of event: CalendarEvent, endWarning: TimeInterval = 0) -> [Date] {
+        var out = [event.start.addingTimeInterval(-soonLead), event.start.addingTimeInterval(-imminentLead),
+                   event.start, event.end, event.start.addingTimeInterval(startedTail)]
+        if endWarning > 0 { out.append(event.end.addingTimeInterval(-endWarning)) }
+        return out
     }
 
     /// The single next instant at which anything about the display could change.
-    public static func nextBoundary(_ events: [CalendarEvent], after now: Date) -> Date? {
-        countdownEvents(events).flatMap(boundaries(of:)).filter { $0 > now }.min()
+    public static func nextBoundary(_ events: [CalendarEvent], after now: Date, endWarning: TimeInterval = 0) -> Date? {
+        countdownEvents(events).flatMap { boundaries(of: $0, endWarning: endWarning) }.filter { $0 > now }.min()
     }
 
     public static func phase(of event: CalendarEvent, now: Date) -> CalendarPhase? {

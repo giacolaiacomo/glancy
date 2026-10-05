@@ -147,6 +147,7 @@ private struct CalendarSection: View {
         let settings = module.settings
         let calendars = settings.availableCalendars
         VStack(alignment: .leading, spacing: 5) {
+            MeetingSettingsView(module: module, context: context)
             PermissionLine(context: context, permission: .calendar, text: tr("Glancy can't read your calendars yet"))
             if calendars.isEmpty {
                 SettingsNote(module.model.access == .granted ? tr("No calendars on this Mac.") : tr("Calendars show up here once access is allowed."))
@@ -321,6 +322,7 @@ private struct TimerSection: View {
                     NotchTextButton(tr("Reset")) { set(PomodoroLengths()) }
                 }
             }
+            TimerMoreSettingsView(module: module)
         }
     }
 
@@ -448,6 +450,9 @@ enum GlancyHotkeys {
         var out: [HotkeyBinding] = []
         if let c = context.module(ClipboardModule.self), context.settings.isEnabled(.clipboard) {
             out.append(HotkeyBinding(id: "clipboard", title: tr("Clipboard"), hotkey: c.model.settings.hotkey))
+        }
+        if let c = context.module(CalendarModule.self), context.settings.isEnabled(.calendar) {
+            out.append(HotkeyBinding(id: "calendar.join", title: CalL10n.joinShortcut, hotkey: c.settings.joinHotkey))
         }
         if let w = context.module(WindowsModule.self), context.settings.isEnabled(.windows), w.hotkeys.enabled {
             for a in WindowsSection.actions + WindowsSection.arrangeActions {

@@ -178,6 +178,23 @@ enum Render {
             control.showSampleColorPeek()
             shot("11-control-peek-color", solo)
         }
+        // Monitor (lot MON): synthetic figures for each gauge, the processes view and the force-quit
+        // question (nothing read or touched), then the strip with every tab on (Notifications too).
+        if let monitor = modules.compactMap({ $0 as? MonitorModule }).first {
+            // This Mac, read-only: two samples a second apart, then the synthetic states.
+            monitor.visibilityChanged(.expanded(.monitor))
+            RunLoop.main.run(until: Date().addingTimeInterval(2.3))
+            shot("12-monitor-live", live) { $0.expand(tab: .monitor) }
+            monitor.visibilityChanged(.collapsed)
+            for state in MonitorModule.RenderState.allCases {
+                monitor.prepareForRender(state)
+                shot("12-monitor-\(state.rawValue)", live) { $0.expand(tab: .monitor) }
+            }
+            settings.setEnabled(.notifications, true)
+            monitor.prepareForRender(.cpu)
+            shot("12-monitor-strip-all", live) { $0.expand(tab: .monitor) }
+            settings.setEnabled(.notifications, false)
+        }
         // Shelf: drop targets while dragging, item actions, screenshot and download drop-downs
         // (sample files in a scratch folder; the real shelf is never saved over).
         if let shelf = modules.compactMap({ $0 as? ShelfModule }).first {

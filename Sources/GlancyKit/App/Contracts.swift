@@ -5,6 +5,7 @@ import SwiftUI
 public enum ModuleID: String, CaseIterable, Codable, Sendable {
     case agents, calendar, media, hud, power, timer, shelf, clipboard, windows, notifications
     case command, control, notes
+    case monitor
 }
 
 /// What the surface is doing right now. Modules use it to start/stop work that only matters

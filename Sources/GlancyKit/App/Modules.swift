@@ -14,7 +14,7 @@ public enum Modules {
         let power = PowerModule()
         power.sound = hud
         var list: [any GlancyModule] = [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power,
-                                        NotificationsModule(), NotesModule(), ControlModule()]
+                                        NotificationsModule(), NotesModule(), ControlModule(), MonitorModule()]
         // Command bar: every other module's commands()/results(for:), held weakly.
         let command = CommandModule()
         command.sources = CommandModule.weakly(list)

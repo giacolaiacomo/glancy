@@ -27,7 +27,8 @@ private struct NotchBody: View {
     let layout: SurfaceLayout
 
     var body: some View {
-        let shape = NotchShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius)
+        let shape = NotchShape(topRadius: layout.topRadius, bottomRadius: layout.bottomRadius,
+                               bandInsetLeft: layout.bandInsetLeft, bandInsetRight: layout.bandInsetRight, bandHeight: layout.bandHeight)
         ZStack(alignment: .top) {
             if model.expanded {
                 ExpandedPanel(model: model, context: context)
@@ -49,7 +50,8 @@ private struct NotchBody: View {
         }
         // 1 pt black cap over the top edge: no hairline seam against the bezel.
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.black).frame(width: max(0, layout.size.width - 2 * layout.topRadius), height: 1)
+            Rectangle().fill(Color.black).frame(width: max(0, layout.size.width - 2 * layout.topRadius - layout.bandInsetLeft - layout.bandInsetRight), height: 1)
+                .offset(x: (layout.bandInsetLeft - layout.bandInsetRight) / 2)
         }
     }
 }

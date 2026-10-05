@@ -100,6 +100,12 @@ public struct SurfaceLayout: Equatable, Sendable {
     /// Horizontal offset of the shape's centre from the notch's centre.
     public var shift: CGFloat
     public var shadow: Bool
+    /// Drop-downs only: how far the shape's sides are pulled in, on each side, within the menu-bar
+    /// band (the top `bandHeight` points), so a wide peek never sits on a menu title or status item.
+    /// 0 = the shape is as wide at the top as below.
+    public var bandInsetLeft: CGFloat = 0
+    public var bandInsetRight: CGFloat = 0
+    public var bandHeight: CGFloat = 0
 
     /// The wider wing (0 = no wings).
     public var wing: CGFloat { max(wingLeft, wingRight) }
@@ -112,6 +118,8 @@ public struct SurfaceLayout: Equatable, Sendable {
     /// Horizontal padding around peekEvent content, and its width bounds.
     public static let peekEventPad: CGFloat = 22
     public static let peekEventMaxWidth: CGFloat = 440
+    /// Radius of the two curves where a drop-down widens below the menu bar.
+    public static let bandShoulder: CGFloat = 6
 
     public init(size: CGSize, topRadius: CGFloat, bottomRadius: CGFloat, wingLeft: CGFloat, wingRight: CGFloat,
                 shift: CGFloat = 0, shadow: Bool) {
@@ -144,7 +152,7 @@ public struct SurfaceLayout: Equatable, Sendable {
     }
 
     public static func make(state: SurfaceState, geometry g: NotchGeometry, wingLeft: CGFloat, wingRight: CGFloat,
-                            peekEventContentWidth: CGFloat) -> SurfaceLayout {
+                            peekEventContentWidth: CGFloat, clearance: MenuBarClearance? = nil) -> SurfaceLayout {
         let notch = g.notchRect.size
         let showWings = state != .expanded && (wingLeft > 0 || wingRight > 0)
         let wl = showWings ? wingLeft : 0, wr = showWings ? wingRight : 0
@@ -165,8 +173,22 @@ public struct SurfaceLayout: Equatable, Sendable {
         case .peekEvent:
             let wanted = min(peekEventContentWidth + 2 * peekEventPad + 2 * closedTop, peekEventMaxWidth)
             let w = max(notch.width + 2 * max(wl, wr), wanted, notch.width + 2 * 44)
-            return .init(size: CGSize(width: w.rounded(.up), height: notch.height + Theme.peekEventDrop),
-                         topRadius: closedTop, bottomRadius: closedBottom + 4, wingLeft: wl, wingRight: wr, shadow: false)
+            var l = SurfaceLayout(size: CGSize(width: w.rounded(.up), height: notch.height + Theme.peekEventDrop),
+                                  topRadius: closedTop, bottomRadius: closedBottom + 4, wingLeft: wl, wingRight: wr, shadow: false)
+            // Within the menu bar the drop-down keeps to the free room either side of the notch;
+            // only below it does it widen (SPEC §1.3: never covers menu-bar items).
+            if g.kind == .notch, let clearance {
+                let half = l.size.width / 2
+                func inset(_ room: CGFloat, _ wing: CGFloat) -> CGFloat {
+                    let allowed = notch.width / 2 + max(wing, room - MenuBarClearance.gap, 0)
+                    let i = max(0, half - allowed)
+                    return i < bandShoulder * 2 + 1 ? 0 : i   // too small a step: keep the plain shape
+                }
+                l.bandInsetLeft = inset(clearance.left, wl)
+                l.bandInsetRight = inset(clearance.right, wr)
+                l.bandHeight = notch.height
+            }
+            return l
         case .expanded:
             let s = Theme.expandedSize
             return .init(size: CGSize(width: max(s.width, notch.width + 160), height: max(s.height, notch.height + 120)),

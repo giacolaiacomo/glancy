@@ -273,3 +273,38 @@ struct MenuBarReadingTests {
         }
     }
 }
+
+@Suite("Menu-bar clearance: drop-downs")
+struct MenuBarClearanceDropDownTests {
+    private let chrome = MenuBarClearance(left: 8, right: 92, source: .measured)
+
+    @Test func aWideDropDownKeepsToTheFreeRoomInTheMenuBar() {
+        let l = SurfaceLayout.make(state: .peekEvent, geometry: g, wingLeft: 0, wingRight: 0,
+                                   peekEventContentWidth: 380, clearance: chrome)
+        let notch = g.notchRect.width
+        // The top edge on each side ends where the free room ends (room − gap from the notch).
+        #expect(l.size.width / 2 - l.bandInsetLeft <= notch / 2 + max(0, 8 - MenuBarClearance.gap))
+        #expect(l.size.width / 2 - l.bandInsetRight <= notch / 2 + 92 - MenuBarClearance.gap)
+        #expect(l.bandInsetLeft > 0 && l.bandInsetRight > 0)
+        #expect(l.bandHeight == g.notchRect.height)
+
+        let shape = NotchShape(topRadius: l.topRadius, bottomRadius: l.bottomRadius, bandInsetLeft: l.bandInsetLeft,
+                               bandInsetRight: l.bandInsetRight, bandHeight: l.bandHeight)
+        let path = shape.path(in: CGRect(origin: .zero, size: l.size))   // y down, like SwiftUI
+        // Over "Help", just left of the notch: free. Below the menu bar, same x: the drop-down.
+        let overHelp = CGPoint(x: l.size.width / 2 - notch / 2 - 12, y: 10)
+        #expect(!path.contains(overHelp))
+        #expect(path.contains(CGPoint(x: overHelp.x, y: l.bandHeight + 16)))
+        // Wide at the bottom: the full width is used below the band.
+        #expect(path.contains(CGPoint(x: 20, y: l.bandHeight + 16)))
+    }
+
+    @Test func noClearanceOrAPillKeepsThePlainShape() {
+        let l = SurfaceLayout.make(state: .peekEvent, geometry: g, wingLeft: 0, wingRight: 0, peekEventContentWidth: 380)
+        #expect(l.bandInsetLeft == 0 && l.bandInsetRight == 0)
+        let roomy = MenuBarClearance(left: 600, right: 600, source: .measured)
+        let r = SurfaceLayout.make(state: .peekEvent, geometry: g, wingLeft: 0, wingRight: 0,
+                                   peekEventContentWidth: 380, clearance: roomy)
+        #expect(r.bandInsetLeft == 0 && r.bandInsetRight == 0)
+    }
+}

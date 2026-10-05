@@ -55,7 +55,8 @@ public final class SurfaceModel {
 
     public var layout: SurfaceLayout {
         let w = wings
-        return .make(state: state, geometry: geometry, wingLeft: w.left, wingRight: w.right, peekEventContentWidth: peekContentWidth)
+        return .make(state: state, geometry: geometry, wingLeft: w.left, wingRight: w.right, peekEventContentWidth: peekContentWidth,
+                     clearance: clearance)
     }
 
     public var visibility: SurfaceVisibility {

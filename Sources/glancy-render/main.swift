@@ -231,6 +231,11 @@ enum Render {
                 let ctx = solo(cal)
                 cal.prepareForRender(state)
                 shot("11-fo-\(state.rawValue)", ctx)
+                if state == .ending {
+                    // Chrome's menus up to the notch: narrow in the menu bar, wide below it.
+                    let crowded = MenuBarClearance(left: 8, right: 92, source: .measured)
+                    shot("11-fo-ending-crowded", ctx, menus: crowded) { $0.setClearance(crowded) }
+                }
             }
         }
         if let timer = timerModule {

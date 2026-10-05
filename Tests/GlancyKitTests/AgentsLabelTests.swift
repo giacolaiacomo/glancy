@@ -64,3 +64,12 @@ import Testing
     print("----- AgentsModule.debugSnapshot() -----\n" + text)
     #expect(text.contains("events parsed:"))
 }
+
+/// Evidence: this Mac's Codex rollouts and OpenCode database through the real readers (read-only).
+@Test func realSourcesSnapshot() throws {
+    guard FileManager.default.fileExists(atPath: CodexSource.defaultRoot.path)
+            || FileManager.default.fileExists(atPath: OpenCodeSource.defaultDataFolder.path) else { return }
+    let text = AgentsModule.debugSourcesSnapshot()
+    print("----- AgentsModule.debugSourcesSnapshot() -----\n" + text)
+    #expect(text.contains("codex rollouts followed:"))
+}

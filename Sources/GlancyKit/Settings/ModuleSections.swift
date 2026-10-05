@@ -55,7 +55,7 @@ enum SettingsCatalog {
             guard let m = context.module(WindowsModule.self) else { return "" }
             return m.hotkeys.enabled ? WindowsSection.summary(m.hotkeys) : tr("Shortcuts off")
         case .agents:
-            return FileManager.default.fileExists(atPath: AgentsModule.defaultLogURL.path) ? tr("Hook log found") : tr("No hook log")
+            return context.module(AgentsModule.self)?.settingsSummary ?? ""
         case .notes:
             return context.module(NotesModule.self)?.settingsSummary ?? ""
         case .command:
@@ -74,7 +74,7 @@ enum SettingsCatalog {
     /// One line under each module in Settings → Modules.
     static func purpose(_ id: ModuleID) -> String {
         switch id {
-        case .agents: "Claude Code sessions"
+        case .agents: AgentsText.t("Claude Code, Codex, OpenCode sessions")
         case .calendar: "Next meeting, Join"
         case .media: "Now playing, controls"
         case .hud: "Volume and brightness"
@@ -121,7 +121,7 @@ struct ModuleSection: View {
         case .shelf: if let m = context.module(ShelfModule.self) { ShelfSettingsSection(module: m) }
         case .clipboard: if let m = context.module(ClipboardModule.self) { ClipboardSection(module: m, context: context) }
         case .windows: if let m = context.module(WindowsModule.self) { WindowsSection(module: m, context: context) }
-        case .agents: AgentsSection()
+        case .agents: if let m = context.module(AgentsModule.self) { m.settingsSection() }
         case .notes: if let m = context.module(NotesModule.self) { NotesSettingsSection(module: m, context: context) }
         case .command: if let m = context.module(CommandModule.self) { CommandSection(module: m, context: context) }
         case .control: if let m = context.module(ControlModule.self) { ControlSection(module: m) }
@@ -591,29 +591,3 @@ private struct WindowsSection: View {
     }
 }
 
-// MARK: Agents
-
-private struct AgentsSection: View {
-    var body: some View {
-        let url = AgentsModule.defaultLogURL
-        let exists = FileManager.default.fileExists(atPath: url.path)
-        VStack(alignment: .leading, spacing: 4) {
-            SettingsRow(tr("Hook log"), note: exists ? tr("Read-only; Glancy never writes to it") : tr("Not found: install the cc-dashboard hook"),
-                        noteColor: exists ? Theme.tertiary : Theme.waiting) {
-                if exists {
-                    NotchTextButton(tr("Show in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                }
-            }
-            Text(verbatim: (url.path as NSString).abbreviatingWithTildeInPath)
-                .font(.system(size: 10.5, design: .monospaced))
-                .foregroundStyle(Theme.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
-                .padding(.horizontal, 8)
-                .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Theme.card))
-            SettingsNote(tr("A session goes idle after 30 min without events; sessions silent for 12 h are dropped."))
-        }
-    }
-}

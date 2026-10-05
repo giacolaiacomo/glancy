@@ -56,6 +56,14 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
     /// Last time a subagent did something while the main agent was not working (background agents).
     public var backgroundActivityAt: Date?
     public var endReason: String?
+    /// The coding agent (Claude Code, Codex, OpenCode).
+    public var agent: AgentKind = .claudeCode
+    /// The app it runs in, once known (from the events, or looked up from the process tree).
+    public var host: AgentHost?
+    /// The session's first prompt (Codex/OpenCode: the title), one line.
+    public var title: String?
+    /// The agent's last reply, one line (sources that record it).
+    public var lastMessage: String?
     /// True once a SessionStart fixed `projectPath`.
     var projectPinned = false
 
@@ -75,6 +83,15 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
     }
 
     public var isLive: Bool { state != .ended }
+
+    /// Attention order across every source: waiting, working, done, failed, idle, ended; within a
+    /// state the most recent change first (a state's start does not move while it lasts, so rows
+    /// do not jump around on every tool call).
+    public static func attentionOrder(_ a: AgentSession, _ b: AgentSession) -> Bool {
+        if a.state != b.state { return a.state < b.state }
+        if a.stateSince != b.stateSince { return a.stateSince > b.stateSince }
+        return a.rowID < b.rowID
+    }
 
     /// done/failed are "fresh" (green/red in the wings) for `AgentSessionStore.freshFor`.
     public func isFresh(at now: Date) -> Bool {
@@ -97,6 +114,10 @@ public struct AgentSessionStore: Sendable {
     /// SessionEnd(resume|clear) → SessionStart in the same folder within this window = same row.
     public static let handoffWindow: TimeInterval = 15
 
+    /// Most sessions kept: beyond it the least useful (ended, then idle, then the oldest) go first,
+    /// so memory stays bounded however many sessions a source reports.
+    public var maxSessions = 24
+
     public private(set) var sessions: [String: AgentSession] = [:]
     private var handoffs: [String: (rowID: String, sessionID: String, at: Date)] = [:]
     /// Labels depend only on (id, projectPath, startedAt, live): recompute only when one changes.
@@ -118,6 +139,8 @@ public struct AgentSessionStore: Sendable {
         guard var s = sessions[e.sessionID] else { return [] }
         let wasEnded = s.state == .ended
         s.lastEventAt = max(s.lastEventAt, e.ts)
+        if let h = e.host { s.host = h }
+        if let t = e.title { s.title = t } else if s.title == nil, let p = e.prompt { s.title = p }
         if !e.cwd.isEmpty { adoptCWD(e.cwd, into: &s, pin: e.kind == .sessionStart) }
 
         // Out-of-order guard: hooks run concurrently, so a line can land after a later one.
@@ -167,6 +190,7 @@ public struct AgentSessionStore: Sendable {
 
         case .stop:
             // A Stop does not clear a failure: only new work (prompt / tool use) does.
+            if let m = e.message { s.lastMessage = m }
             guard inOrder, s.state != .done, s.state != .failed, s.state != .ended else { break }
             let duration = s.turnStartedAt.map { e.ts.timeIntervalSince($0) }
             let hadTurn = s.state == .working || s.state == .waiting
@@ -178,10 +202,18 @@ public struct AgentSessionStore: Sendable {
 
         case .stopFailure:
             // A failure wins over a Stop that landed just before it for the same turn.
+            if let m = e.message { s.lastMessage = m }
             let sameTurn = s.state == .done && e.ts.timeIntervalSince(s.stateSince) < 5
             guard inOrder || sameTurn, s.state != .failed, s.state != .ended else { break }
             if let t = s.turnStartedAt { s.lastTurnDuration = e.ts.timeIntervalSince(t) }
             set(&s, .failed, at: e.ts)
+
+        case .interrupted:
+            // Stopped by the user, who is right there: done, quietly (no peek).
+            if let m = e.message { s.lastMessage = m }
+            guard inOrder, s.state == .working || s.state == .waiting else { break }
+            s.lastTurnDuration = s.turnStartedAt.map { e.ts.timeIntervalSince($0) }
+            set(&s, .done, at: e.ts)
 
         case .sessionEnd:
             guard inOrder else { break }
@@ -193,6 +225,7 @@ public struct AgentSessionStore: Sendable {
         }
 
         sessions[s.id] = s
+        if isNew, sessions.count > maxSessions { trim(keeping: s.id) }
         relabelIfNeeded()
         // Labels may have changed with this event: report the final ones.
         return transitions.map { t in
@@ -210,14 +243,50 @@ public struct AgentSessionStore: Sendable {
         case .permissionRequest: .waiting
         case .stop: .done
         case .stopFailure: .failed
+        case .interrupted: .done
         case .sessionEnd: .ended
         }
         // A session first seen mid-turn starts its turn now; `stateSince` is the event time so the
         // first event itself is "in order".
-        return AgentSession(
+        var s = AgentSession(
             id: e.sessionID, rowID: e.sessionID, projectPath: e.cwd, cwd: e.cwd,
             state: state, stateSince: e.ts, startedAt: e.ts, lastEventAt: e.ts,
             turnStartedAt: (state == .working || state == .waiting) ? e.ts : nil)
+        s.agent = e.agent
+        return s
+    }
+
+    /// Drops sessions beyond `maxSessions`: ended first, then idle, done/failed, and only then
+    /// working/waiting; the least recently active within each group. Never the one just added.
+    private mutating func trim(keeping id: String) {
+        func keep(_ st: AgentState) -> Int {
+            switch st {
+            case .ended: 0
+            case .idle: 1
+            case .done, .failed: 2
+            case .working: 3
+            case .waiting: 4
+            }
+        }
+        let excess = sessions.count - maxSessions
+        guard excess > 0 else { return }
+        let victims = sessions.values.filter { $0.id != id }
+            .sorted { (keep($0.state), $0.lastEventAt) < (keep($1.state), $1.lastEventAt) }
+            .prefix(excess)
+        for v in victims { sessions[v.id] = nil }
+    }
+
+    /// Sets a session's title (a Codex first message found at the top of its file).
+    public mutating func setTitle(_ title: String, sessionID: String) {
+        sessions[sessionID]?.title = title
+    }
+
+    /// Sets the app a session runs in (looked up from the process tree). Returns true when it changed.
+    @discardableResult
+    public mutating func setHost(_ host: AgentHost, rowID: String) -> Bool {
+        guard let s = session(rowID: rowID), s.host != host else { return false }
+        sessions[s.id]?.host = host
+        return true
     }
 
     private func set(_ s: inout AgentSession, _ state: AgentState, at t: Date) {
@@ -306,13 +375,8 @@ public struct AgentSessionStore: Sendable {
         sessions.values.filter(\.isLive).sorted { ($0.startedAt, $0.rowID) < ($1.startedAt, $1.rowID) }
     }
 
-    /// Board order: what needs you first, then by label.
-    public var board: [AgentSession] {
-        sessions.values.sorted {
-            $0.state != $1.state ? $0.state < $1.state
-                : ($0.label.localizedLowercase, $0.rowID) < ($1.label.localizedLowercase, $1.rowID)
-        }
-    }
+    /// Board order: what needs you first (waiting, working, done…), then the most recent change.
+    public var board: [AgentSession] { sessions.values.sorted(by: AgentSession.attentionOrder) }
 
     public func session(rowID: String) -> AgentSession? {
         sessions.values.first { $0.rowID == rowID }

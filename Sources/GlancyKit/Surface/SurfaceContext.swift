@@ -60,7 +60,7 @@ public final class SurfaceContext {
 
     static func symbol(_ id: ModuleID) -> String {
         switch id {
-        case .agents: "sparkle"
+        case .agents: AgentsModule.symbol
         case .calendar: "calendar"
         case .media: "music.note"
         case .hud: "speaker.wave.2"

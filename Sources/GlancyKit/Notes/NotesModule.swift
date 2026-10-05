@@ -8,11 +8,14 @@ import SwiftUI
 public final class NotesModule: GlancyModule {
     public let id: ModuleID = .notes
     public let model: NotesModel
+    /// Voice notes: recording, playback, transcription.
+    public let voice: VoiceNotes
     /// Synthetic notes in a temp folder (the renderer; never the user's notes).
     let sample: Bool
 
-    private var hub: ActivityHub?
+    private(set) var hub: ActivityHub?
     private var hotkey: HotkeyManager.Token?
+    private var voiceHotkey: HotkeyManager.Token?
     private var loadTask: Task<Void, Never>?
     private var started = false
     private var tabVisible = false
@@ -20,6 +23,16 @@ public final class NotesModule: GlancyModule {
 
     /// The hotkey is set but the system refused it (taken by another app).
     public private(set) var hotkeyFailed = false
+    public private(set) var voiceHotkeyFailed = false
+    static let voiceWingID = "notes.voice"
+    /// Recording: above a muted mic (55) and agents working (50), below charging (60).
+    static let voiceWingPriority = 57
+
+    /// The microphone mute (the HUD module), for the "Mic muted" card. Weak.
+    public var micControl: NotesMicControl? {
+        get { voice.micControl }
+        set { voice.micControl = newValue }
+    }
 
     public convenience init() {
         let env = ProcessInfo.processInfo
@@ -27,15 +40,18 @@ public final class NotesModule: GlancyModule {
             let dir = FileManager.default.temporaryDirectory.appendingPathComponent("glancy-notes-sample", isDirectory: true)
             let suite = "ai.glancy.notes.sample"
             UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
-            self.init(store: NotesStore(directory: dir), settings: NotesSettings(defaults: UserDefaults(suiteName: suite)!), sample: true)
+            self.init(store: NotesStore(directory: dir), settings: NotesSettings(defaults: UserDefaults(suiteName: suite)!), sample: true,
+                      voiceSystem: .sample)
         } else {
             self.init(store: NotesStore(), settings: NotesSettings(), sample: false)
         }
     }
 
     public init(store: NotesStore, settings: NotesSettings, sample: Bool = false, debounce: Duration = .milliseconds(700),
-                now: @escaping () -> Date = { .now }) {
+                now: @escaping () -> Date = { .now }, voiceSystem: VoiceSystem = .system) {
         model = NotesModel(store: store, settings: settings, debounce: debounce, now: now)
+        voice = VoiceNotes(notes: model, mic: voiceSystem.mic, transcriber: voiceSystem.transcriber,
+                           makeRecorder: voiceSystem.recorder, makePlayer: voiceSystem.player, analyze: voiceSystem.analyze)
         self.sample = sample
         // Settings → Notes is reachable while the module is off: its strings must be there too.
         L10n.addItalian(NotesText.italian)
@@ -48,12 +64,17 @@ public final class NotesModule: GlancyModule {
         started = true
         self.hub = hub
         L10n.addItalian(NotesText.italian)
+        voice.onRecordingChange = { [weak self] on in self?.recordingChanged(on) }
+        model.willDelete = { [weak self] id in
+            if self?.voice.playingID == id { self?.voice.stopPlayback() }
+        }
         if sample {
             NotesSample.fill(model)
             return
         }
         loadTask = Task { [weak self] in await self?.model.load() }
         registerHotkey()
+        registerVoiceHotkey()
     }
 
     public func stop() {
@@ -62,7 +83,14 @@ public final class NotesModule: GlancyModule {
         loadTask?.cancel(); loadTask = nil
         if let hotkey { HotkeyManager.shared.unregister(hotkey) }
         hotkey = nil
+        if let voiceHotkey { HotkeyManager.shared.unregister(voiceHotkey) }
+        voiceHotkey = nil
         setTabVisible(false)
+        voice.display = .none
+        if !sample { voice.finishNow() }
+        voice.stopPlayback()
+        voice.onRecordingChange = nil
+        hub?.clear(Self.voiceWingID)
         if !sample { model.flushNow() }
         hub = nil
     }
@@ -70,6 +98,11 @@ public final class NotesModule: GlancyModule {
     public func visibilityChanged(_ visibility: SurfaceVisibility) {
         guard started else { return }
         setTabVisible(visibility == .expanded(.notes))
+        switch visibility {
+        case .expanded(.notes): voice.display = .tab
+        case .collapsed: voice.display = .wing
+        default: voice.display = .none
+        }
     }
 
     private func setTabVisible(_ on: Bool) {
@@ -89,6 +122,26 @@ public final class NotesModule: GlancyModule {
         guard combo.modifiers != 0 else { hotkeyFailed = false; return }
         hotkey = HotkeyManager.shared.register(combo) { [weak self] in self?.quickNote() }
         hotkeyFailed = hotkey == nil
+    }
+
+    private func registerVoiceHotkey() {
+        if let voiceHotkey { HotkeyManager.shared.unregister(voiceHotkey) }
+        voiceHotkey = nil
+        let combo = model.settings.voiceHotkey
+        guard combo.modifiers != 0 else { voiceHotkeyFailed = false; return }
+        voiceHotkey = HotkeyManager.shared.register(combo) { [weak self] in self?.toggleRecording() }
+        voiceHotkeyFailed = voiceHotkey == nil
+    }
+
+    /// Changes the voice-note hotkey (Settings → Notes); a combination without modifiers clears it.
+    public func setVoiceHotkey(_ combo: Hotkey) {
+        guard combo != model.settings.voiceHotkey else { return }
+        model.settings.voiceHotkey = combo
+        if started, !sample { registerVoiceHotkey() }
+    }
+
+    var voiceHotkeyBinding: HotkeyBinding {
+        HotkeyBinding(id: "notes.voice", title: L10n.tr("Voice note"), hotkey: model.settings.voiceHotkey)
     }
 
     /// Changes the quick-note hotkey (Settings → Notes); a combination without modifiers clears it.
@@ -152,10 +205,12 @@ public final class NotesModule: GlancyModule {
     // MARK: Surface
 
     public var tab: PanelTab? {
-        PanelTab(module: .notes, symbol: "note.text", title: "Notes") { [model, weak self] in
-            AnyView(NotesTabView(model: model, actions: NotesActions(
+        PanelTab(module: .notes, symbol: "note.text", title: "Notes") { [model, voice, weak self] in
+            AnyView(NotesTabView(model: model, voice: voice, actions: NotesActions(
                 openInNotes: { self?.openInNotes($0) },
-                copied: { self?.hub?.requestClose() })))
+                copied: { self?.hub?.requestClose() },
+                record: { self?.startRecording(openOnProblem: false) },
+                stopRecording: { self?.stopRecording() })))
         }
     }
 
@@ -183,7 +238,7 @@ public final class NotesModule: GlancyModule {
                           keywords: ["notes", "open notes", "note", "apri note", "appunti"], closesPanel: false) { [weak self] in
                 self?.hub?.requestOpen(.notes)
             },
-        ]
+        ] + voiceCommands()
     }
 
     /// "note buy milk" / "nota comprare latte" → add to Quick notes; anything else (2+ letters)
@@ -203,7 +258,7 @@ public final class NotesModule: GlancyModule {
             let title = note.title ?? L10n.tr("New note")
             let titleHit = NLQuery.fold(title).contains(NLQuery.fold(trimmed))
             return GlancyCommand(id: "notes.open.\(note.id)", module: .notes, title: title,
-                                 subtitle: Self.snippet(note.text, around: trimmed), symbol: "note.text",
+                                 subtitle: Self.snippet(note.text, around: trimmed), symbol: note.audio == nil ? "note.text" : "waveform",
                                  keywords: [], rank: titleHit ? 70 : 55, closesPanel: false) { [weak self] in
                 self?.open(note.id)
             }
@@ -268,7 +323,7 @@ enum NotesSample {
             """, modified: now.addingTimeInterval(-3 * 3600)),
             Note(id: "sample-3", text: "Ideas\nA notch timer that knows when the kettle boils\nShelf: drop to convert HEIC → JPEG",
                  modified: now.addingTimeInterval(-26 * 3600)),
-        ]
+        ] + voiceSamples(now)
         model.notes = notes
         model.loaded = true
         model.settings.pinnedID = "sample-1"

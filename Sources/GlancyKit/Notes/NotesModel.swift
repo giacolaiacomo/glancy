@@ -26,11 +26,13 @@ public final class NotesModel {
     @ObservationIgnored public let store: NotesStore
     @ObservationIgnored public let settings: NotesSettings
     @ObservationIgnored private let debounce: Duration
-    @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored let now: () -> Date
     @ObservationIgnored private var pending: [String: Task<Void, Never>] = [:]
     /// Notes changed since their last write.
     @ObservationIgnored private var dirty: Set<String> = []
     @ObservationIgnored private(set) var visible = false
+    /// Told before a note goes (voice notes stop playing it).
+    @ObservationIgnored var willDelete: ((String) -> Void)?
 
     /// A quick note reopens the last note edited within this long; otherwise it starts a new one.
     static let quickReuse: TimeInterval = 15 * 60
@@ -110,6 +112,7 @@ public final class NotesModel {
     }
 
     public func delete(_ id: String) {
+        willDelete?(id)
         pending.removeValue(forKey: id)?.cancel()
         dirty.remove(id)
         notes.removeAll { $0.id == id }
@@ -186,7 +189,7 @@ public final class NotesModel {
 
     // MARK: Saving
 
-    private func scheduleSave(_ id: String, immediate: Bool = false) {
+    func scheduleSave(_ id: String, immediate: Bool = false) {
         dirty.insert(id)
         pending.removeValue(forKey: id)?.cancel()
         let delay = immediate ? Duration.zero : debounce

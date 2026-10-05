@@ -13,8 +13,11 @@ public enum Modules {
         let hud = HUDModule()
         let power = PowerModule()
         power.sound = hud
+        // Voice notes: "Mic muted — unmute to record" reads and lifts the HUD's mute. Weak.
+        let notes = NotesModule()
+        notes.micControl = hud
         var list: [any GlancyModule] = [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power,
-                                        NotificationsModule(), NotesModule(), ControlModule()]
+                                        NotificationsModule(), notes, ControlModule()]
         // Command bar: every other module's commands()/results(for:), held weakly.
         let command = CommandModule()
         command.sources = CommandModule.weakly(list)

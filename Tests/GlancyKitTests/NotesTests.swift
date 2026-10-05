@@ -11,6 +11,7 @@ private func tempDir(_ name: String) -> URL {
 @MainActor private func settings(hotkey: Bool = false) -> NotesSettings {
     let s = NotesSettings(defaults: UserDefaults(suiteName: "ai.glancy.tests.notes.\(UUID().uuidString)")!)
     if !hotkey { s.hotkey = Hotkey(keyCode: 0, modifiers: 0) }   // never grab a real global hotkey in tests
+    s.voiceHotkey = Hotkey(keyCode: 0, modifiers: 0)
     return s
 }
 
@@ -323,10 +324,10 @@ private func files(_ dir: URL) -> [String] {
         let hub = ActivityHub()
         module.start(hub: hub)
         L10n.apply(.it)
-        #expect(module.commands().map(\.title) == ["Nuova nota", "Apri le note"])
+        #expect(module.commands().map(\.title) == ["Nuova nota", "Apri le note", "Registra nota vocale"])
         #expect(module.results(for: "nota latte").first?.title == "Aggiungi a Note rapide: latte")
         L10n.apply(.en)
-        #expect(module.commands().map(\.id) == ["notes.new", "notes.open"])
+        #expect(module.commands().map(\.id) == ["notes.new", "notes.open", "notes.voice.record"])
         #expect(module.commands().first?.keywords.contains("nuova nota") == true)
         module.stop()
     }

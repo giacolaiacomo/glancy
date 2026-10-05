@@ -36,7 +36,7 @@ public actor NotesStore {
             guard file.pathExtension == "md", !name.hasPrefix("."),
                   let data = try? Data(contentsOf: file) else { continue }
             let date = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-            out.append(Note(id: file.deletingPathExtension().lastPathComponent, text: String(decoding: data, as: UTF8.self),
+            out.append(Note(id: file.deletingPathExtension().lastPathComponent, fileText: String(decoding: data, as: UTF8.self),
                             modified: date))
         }
         return out.sorted { $0.modified > $1.modified }
@@ -59,7 +59,7 @@ public actor NotesStore {
         }
         let target = directory.appendingPathComponent("\(note.id).md")
         let tmp = directory.appendingPathComponent(".\(note.id).\(UUID().uuidString.prefix(8)).tmp")
-        guard fm.createFile(atPath: tmp.path, contents: Data(note.text.utf8), attributes: [.posixPermissions: 0o600]) else {
+        guard fm.createFile(atPath: tmp.path, contents: Data(note.fileText.utf8), attributes: [.posixPermissions: 0o600]) else {
             return false
         }
         // rename(2) replaces the old file in one step: readers see the old or the new text, never half.
@@ -71,7 +71,13 @@ public actor NotesStore {
         return true
     }
 
+    /// Removes the note and its recording, if any.
     public func delete(_ id: String) {
         try? FileManager.default.removeItem(at: url(id))
+        try? FileManager.default.removeItem(at: audioURL(id: id))
     }
+
+    /// A voice note's recording (`file` from its metadata).
+    public nonisolated func audioURL(_ file: String) -> URL { directory.appendingPathComponent(file) }
+    nonisolated func audioURL(id: String) -> URL { directory.appendingPathComponent("\(id).m4a") }
 }

@@ -1,0 +1,35 @@
+name: Bug report
+description: Something doesn't look or work right
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead? A screenshot or short screen recording of the notch helps.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Glancy version (top of Settings), macOS version, Mac model
+      placeholder: "Glancy 0.1.0 · macOS 26.0 · MacBook Pro 14-inch (M3)"
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Which part?
+      options: [The notch itself, Agents, Calendar, Media, HUD, Battery / AirPods, Timer, Shelf, Clipboard, Windows, Notifications, Settings / permissions, Install / build]
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options: [Release zip, Homebrew, install.sh / from source]
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: Diagnostics (optional)
+      description: "Output of `~/Applications/Glancy.app/Contents/MacOS/Glancy --diagnose` while Glancy is running (adjust the path to your copy). Check it before pasting: it lists your displays and module states."
+      render: text

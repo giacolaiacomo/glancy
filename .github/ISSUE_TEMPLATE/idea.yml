@@ -1,0 +1,15 @@
+name: Idea
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Glancy to do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does it matter to you?
+      description: The situation where you'd use it. Glancy tries hard to stay at zero CPU when idle, so say if it needs anything running in the background.

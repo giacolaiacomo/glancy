@@ -1,0 +1,9 @@
+.build/
+build/
+*.xcodeproj
+.swiftpm/
+render-out/
+
+# Internal notes (kept locally, not published)
+docs/internal/
+CLAUDE.md

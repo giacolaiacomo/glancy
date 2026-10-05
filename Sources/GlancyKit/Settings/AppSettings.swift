@@ -1,0 +1,73 @@
+import Foundation
+import Observation
+
+/// How the expanded panel opens (SPEC §2 "Open model").
+public enum OpenModel: String, CaseIterable, Codable, Sendable {
+    case click   // hover → peek, click → expanded (default)
+    case hover   // dwell 300 ms with a velocity gate, then expanded
+}
+
+/// The app-wide preferences, persisted in UserDefaults. Fine-grained `@Observable` properties so a
+/// view only re-renders for what it reads.
+@MainActor @Observable
+public final class AppSettings {
+    public var openModel: OpenModel { didSet { save(openModel.rawValue, Key.openModel) } }
+    public var language: AppLanguage {
+        didSet { save(language.rawValue, Key.language); L10n.apply(language) }
+    }
+    public var hideFromCapture: Bool { didSet { save(hideFromCapture, Key.hideFromCapture) } }
+    public var externalPill: Bool { didSet { save(externalPill, Key.externalPill) } }
+    public var disabledModules: Set<ModuleID> {
+        didSet { save(disabledModules.map(\.rawValue).sorted(), Key.disabledModules) }
+    }
+
+    /// The settings page's place (index or a section). Not persisted.
+    @ObservationIgnored public let navigation = SettingsNavigation()
+    /// Live permission statuses for the checklist (observers start with the app, not here).
+    @ObservationIgnored public let permissions: PermissionCenter
+
+    @ObservationIgnored private let defaults: UserDefaults
+
+    enum Key {
+        static let openModel = "openModel"
+        static let language = "language"
+        static let hideFromCapture = "hideFromCapture"
+        static let externalPill = "externalPill"
+        static let disabledModules = "disabledModules"
+        static let optedIn = "optedInModules"
+        static let onboarded = "onboardingShown"
+    }
+
+    /// Opt-in modules (a large permission): off until the user turns them on, existing settings included.
+    public static let defaultDisabled: Set<ModuleID> = [.notifications]
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        permissions = PermissionCenter(defaults: defaults)
+        openModel = defaults.string(forKey: Key.openModel).flatMap(OpenModel.init) ?? .click
+        language = defaults.string(forKey: Key.language).flatMap(AppLanguage.init) ?? .system
+        hideFromCapture = defaults.object(forKey: Key.hideFromCapture) as? Bool ?? true
+        externalPill = defaults.object(forKey: Key.externalPill) as? Bool ?? false
+        let off = defaults.stringArray(forKey: Key.disabledModules) ?? []
+        let optedIn = Set((defaults.stringArray(forKey: Key.optedIn) ?? []).compactMap(ModuleID.init))
+        disabledModules = Set(off.compactMap(ModuleID.init)).union(Self.defaultDisabled.subtracting(optedIn))
+        L10n.apply(language)
+    }
+
+    public func isEnabled(_ module: ModuleID) -> Bool { !disabledModules.contains(module) }
+
+    public func setEnabled(_ module: ModuleID, _ on: Bool) {
+        if on { disabledModules.remove(module) } else { disabledModules.insert(module) }
+        if Self.defaultDisabled.contains(module) {
+            var optedIn = Set(defaults.stringArray(forKey: Key.optedIn) ?? [])
+            if on { optedIn.insert(module.rawValue) } else { optedIn.remove(module.rawValue) }
+            save(optedIn.sorted(), Key.optedIn)
+        }
+    }
+
+    /// True until the first-run welcome has been shown once.
+    public var needsOnboarding: Bool { !defaults.bool(forKey: Key.onboarded) }
+    public func markOnboarded() { defaults.set(true, forKey: Key.onboarded) }
+
+    private func save(_ value: Any, _ key: String) { defaults.set(value, forKey: key) }
+}

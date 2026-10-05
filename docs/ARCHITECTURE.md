@@ -1,0 +1,48 @@
+# Architecture
+
+A short map for contributors. Glancy is one SwiftPM package with no third-party Swift dependencies.
+
+```
+Sources/Glancy/            the executable: calls GlancyApp.run()
+Sources/GlancyKit/         everything else
+  App/                     entry point, AppDelegate, module registry, --self-test, demo data
+  Surface/                 the notch: geometry, panel, shape, states, gestures, multi-display manager
+  Settings/                settings pages (inside the panel), permissions, launch at login
+  Support/                 theme, diagnostics (--diagnose), child-process registry, watchdog
+  Agents/ Calendar/ Media/ HUD/ Power/ Timer/ Shelf/ Clipboard/ Windows/ Notifications/
+                           one folder per module
+  Tiling/                  the window engine used by Windows: registry, placer, planner, history
+Sources/glancy-render/     renders every surface state to PNG off-screen (--demo: made-up data)
+Vendor/mediaremote-adapter BSD-3 now-playing helper, built with cmake and bundled in the app
+hooks/                     the Claude Code hook the Agents module reads
+scripts/                   build-app.sh, lint.sh, render.sh, screenshots.sh, footprint.sh, soak.sh, leaks.sh
+```
+
+## Modules
+
+Each module implements `GlancyModule` (`App/Contracts.swift`):
+
+- `start(hub:)` / `stop()`: begin and end event-driven observation. `stop()` must leave nothing
+  running; tests and `--self-test` check this with `ResourceCensus`.
+- `visibilityChanged(_:)`: collapsed, peeking, expanded on a tab, or hidden (sleep, lock, full screen).
+  Periodic work (a progress bar, a pulse) runs only while visible.
+- `tab` and `homeCard()`: SwiftUI views, built only while the panel is open.
+
+Modules publish to the `ActivityHub`: a `LiveActivity` for the wings (highest priority wins), a
+`PeekEvent` for the short drop-down, or a request to open the panel on their tab.
+
+## The zero-idle rule
+
+A closed notch must cost nothing: no `Timer`, `TimelineView`, polling loop, repeating animation or
+mouse-moved monitor. Everything starts from a system event: file-system sources, EventKit change
+notifications, IOKit power sources, CoreAudio listeners, distributed notifications, Accessibility
+observers. `scripts/lint.sh` fails the build on the usual offenders; `scripts/footprint.sh` measures
+memory, CPU and wake-ups of an idle run.
+
+## Windows
+
+The tiling engine keeps one thread per app for Accessibility calls, so the main thread never waits
+on a slow app. Every action is planned first (`ArrangePlanner`), drawn as a preview, then committed;
+each placement reports whether the window landed exactly, sized itself, or refused. `TilingHistory`
+makes every commit undoable. Tests run against `SampleWindowsBackend`, a synthetic two-display desk,
+so no real window is ever moved by a test.

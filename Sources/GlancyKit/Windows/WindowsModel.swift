@@ -1,0 +1,971 @@
+// Windows — the tab's state. Everything the user does here either changes the *preview* (hover,
+// sweep, arrows, grid, strategy) or *commits* one plan (click, ⏎, drop, Apply, digits). Only the
+// commit paths call `backend.commit`; the preview path never does (tested).
+
+import AppKit
+import Observation
+
+@MainActor @Observable
+final class WindowsModel {
+    enum Mode: Equatable {
+        case browse
+        /// Opened by the hotkey: the selection shows at once and ⏎ closes the panel after placing.
+        case keyboard
+        /// A window is being dragged over the notch; `frame` is where it was before the drag.
+        case drag(window: CGWindowID, frame: CGRect)
+    }
+
+    enum Key: Equatable {
+        case arrow(Direction, shift: Bool)
+        case enter, escape, arrangeAll, undo
+        case digit(Int)
+        /// Tab / ⇧Tab: the next / previous window of the scope becomes the target.
+        case cycle(forward: Bool)
+        /// Space: the target joins (or leaves) the picked windows.
+        case togglePick
+        /// S: swap the two picked windows (rotate when more).
+        case swapPicks
+    }
+
+    /// How a row (or a map window) was clicked.
+    enum Click: Equatable { case plain, toggle, extend }
+
+    enum DragStep: Equatable { case none, cancelled, committed }
+
+    @ObservationIgnored private(set) var backend: WindowsBackend
+    private(set) var trusted: Bool
+    private(set) var visible = false
+    private(set) var mode: Mode = .browse
+    private(set) var displays: [Display] = []
+    private(set) var displayID: String?
+    private(set) var map: ScreenMap?
+    /// The window placing acts on. Only ever a window of the shown display (or the dragged one):
+    /// nil when the frontmost window is on another screen, until one is picked on the map.
+    private(set) var targetID: CGWindowID?
+    /// What arrange acts on (and which windows Tab cycles through).
+    private(set) var scope: WindowsScope = .screen
+    /// The app of the app scope.
+    private(set) var scopeApp: pid_t?
+    /// The window a click would pick right now (pointer on its icon, or on any window with no target).
+    private(set) var pickHover: CGWindowID?
+    /// "Exactly these windows", in pick order (⌘-click, ⇧-click, Space). Two or more = the
+    /// selection scope. Reset whenever the tab opens.
+    private(set) var picks = PickedWindows()
+    /// The list row under the pointer: outlined on the map and on the real screen.
+    private(set) var rowHover: CGWindowID?
+    /// Cells under the pointer (hover, or a sweep in progress), or under the dragged window.
+    private(set) var hoverCell: CellRect?
+    private(set) var selection: KeyboardSelection?
+    private(set) var strategy: ArrangeStrategy?
+    /// What a commit would do right now; drawn on the map and on the real screen.
+    private(set) var preview: ArrangePlan?
+    private(set) var outcome: OutcomeReport?
+    private(set) var busy = false
+    private(set) var canUndo = false
+    var showDiagnostics = false
+    private(set) var probeLines: [String] = []
+    private(set) var probeRunning = false
+    var failedHotkeys: [String] = []
+
+    /// Reported by the views, in Cocoa screen coordinates (drag mode maps the pointer with them).
+    @ObservationIgnored var mapScreenRect: CGRect?
+    /// Where the tab is on screen. Its display is the one the panel is on: the map follows it
+    /// until the user picks another display with the switcher.
+    @ObservationIgnored var contentScreenRect: CGRect? { didSet { panelLaidOut() } }
+    /// The user chose the display with the switcher (or a drag/renderer fixed it).
+    @ObservationIgnored private var displayChosen = false
+    /// The pointer, Cocoa coordinates (tests inject it).
+    @ObservationIgnored var pointer: () -> CGPoint = { NSEvent.mouseLocation }
+    @ObservationIgnored private(set) var hotZone: CGRect?
+    /// The preview changed: draw it on the real screen (nil = nothing to show).
+    @ObservationIgnored var onPreview: ((ArrangePlan?, Display?) -> Void)?
+    /// A list row is hovered: outline that window on the real screen (nil = none).
+    @ObservationIgnored var onHighlight: ((TrackedWindow?, Display?) -> Void)?
+    /// The last thing done was a plain click on the target (not the frontmost window by
+    /// default, not a pick): a ⌘-click then starts the selection from it (Finder's rule).
+    @ObservationIgnored private var targetClicked = false
+    @ObservationIgnored var onRequestClose: (() -> Void)?
+    /// A short message for after the panel has closed (non-exact outcomes of keyboard commits).
+    @ObservationIgnored var onPeek: ((String) -> Void)?
+    @ObservationIgnored var probe: (Bool) async -> [String] = { move in await TilingProbe.run(move: move) }
+    /// The last in-flight commit / undo / probe, so callers (and tests) can await it.
+    @ObservationIgnored private(set) var pending: Task<Void, Never>?
+    /// The cell last placed into, per display: "the focused cell" for the Agents link.
+    @ObservationIgnored private(set) var lastCell: [String: CellRect] = [:]
+    @ObservationIgnored private(set) var lastDirect: HalvesCycle.Last?
+    @ObservationIgnored private var sweeping = false
+    @ObservationIgnored private var observation = 0
+    @ObservationIgnored private var outcomeTask: Task<Void, Never>?
+    @ObservationIgnored private var closeTask: Task<Void, Never>?
+    @ObservationIgnored var outcomeDuration: Duration = .seconds(5)
+    @ObservationIgnored var closeDelay: Duration = .milliseconds(900)
+
+    init(backend: WindowsBackend) {
+        self.backend = backend
+        trusted = backend.isTrusted
+    }
+
+    /// The renderer swaps in the synthetic screen.
+    func replaceBackend(_ b: WindowsBackend) {
+        backend = b
+        trusted = b.isTrusted
+    }
+
+    // MARK: Derived
+
+    var display: Display? { displays.first { $0.id == displayID } ?? map?.display }
+
+    var grid: GridSpec { display.map { backend.grid(for: $0) } ?? map?.grid ?? .default }
+
+    /// The target, only while it is on the shown display (a window moved away by hand stops being
+    /// one: placing it would pull it back across screens).
+    var target: TrackedWindow? { activeTargetID.flatMap { backend.window($0) } }
+
+    var activeTargetID: CGWindowID? {
+        if let d = dragWindowID { return d }
+        guard let id = targetID, map?.windows.contains(where: { $0.id == id }) == true else { return nil }
+        return id
+    }
+
+    /// No window to place: the map asks for one to be picked.
+    var needsPick: Bool { dragWindowID == nil && activeTargetID == nil }
+
+    /// Apps with windows on the shown display, frontmost first.
+    var scopeApps: [ScopeApp] { ScopeRules.apps(on: map?.windows ?? []) }
+
+    var currentScopeApp: ScopeApp? { scopeApps.first { $0.pid == scopeApp } }
+
+    /// Arrange is off in the window scope.
+    var canArrange: Bool { scope != .window }
+
+    /// The list: every tileable window of the shown display, front to back.
+    var listWindows: [TrackedWindow] { ScopeRules.list(map?.windows ?? []) }
+
+    /// The pick-order number shown on a row, the map and the preview.
+    func number(_ id: CGWindowID) -> Int? { picks.number(of: id) }
+
+    /// Numbers for the preview's windows, when it arranges the selection.
+    var previewNumbers: [CGWindowID: Int] {
+        guard scope == .selection, let p = preview, p.kind == .arrange else { return [:] }
+        var out: [CGWindowID: Int] = [:]
+        for m in p.moves { if let n = picks.number(of: m.windowID) { out[m.windowID] = n } }
+        return out
+    }
+
+    var dragWindowID: CGWindowID? { if case let .drag(id, _) = mode { id } else { nil } }
+
+    func name(_ id: CGWindowID) -> String { backend.window(id)?.appName ?? WindowsText.t("Windows") }
+
+    /// The window a swap would displace (drag mode).
+    var swapPartner: CGWindowID? {
+        guard let p = preview, p.kind == .swap, p.moves.count > 1 else { return nil }
+        return p.moves[1].windowID
+    }
+
+    // MARK: Open / close
+
+    /// The Windows tab came on screen. `keyboard`: opened by the hotkey.
+    func open(keyboard: Bool) {
+        visible = true
+        trusted = backend.isTrusted
+        guard trusted else { return }
+        if !backend.isRunning { backend.start() }
+        let dragging = dragWindowID != nil
+        if !dragging {
+            mode = keyboard ? .keyboard : .browse
+            scope = .screen
+            scopeApp = nil
+            displayChosen = false
+        }
+        pickHover = nil
+        picks.clear()
+        targetClicked = false
+        if scope == .selection { scope = .screen }
+        setRowHover(nil)
+        reloadDisplays()
+        reloadMap()
+        if !dragging {
+            targetID = openingTarget()
+            reloadMap()
+        }
+        if mode == .keyboard { startSelection() }
+        observeWindows()
+        recomputePreview()
+        // Fresh frames; the target stays the one captured above.
+        pending = Task { [weak self] in
+            guard let self else { return }
+            await self.backend.refresh()
+            guard self.visible else { return }
+            self.reloadMap()
+            if self.dragWindowID == nil, self.activeTargetID == nil, self.selection == nil {
+                self.targetID = self.openingTarget()
+            }
+            if self.mode == .keyboard, self.selection == nil { self.startSelection() }
+            self.recomputePreview()
+        }
+    }
+
+    /// The tab left the screen (other tab, collapse, sleep).
+    func close() {
+        visible = false
+        mode = .browse
+        hoverCell = nil
+        pickHover = nil
+        selection = nil
+        strategy = nil
+        picks.clear()
+        if scope == .selection { scope = .screen }
+        setRowHover(nil)
+        sweeping = false
+        hotZone = nil
+        mapScreenRect = nil
+        contentScreenRect = nil
+        outcomeTask?.cancel(); outcomeTask = nil
+        closeTask?.cancel(); closeTask = nil
+        // Drop the handle only: a commit or undo in flight still finishes (and resets `busy`).
+        pending = nil
+        outcome = nil
+        setPreview(nil)
+    }
+
+    /// Accessibility was granted while the app runs.
+    func trustChanged() {
+        trusted = backend.isTrusted
+        if trusted, visible { open(keyboard: mode == .keyboard) }
+    }
+
+    private func reloadDisplays() {
+        displays = backend.displays()
+        // A drag shows the display whose notch it reached; otherwise the panel's display.
+        if dragWindowID != nil || displayChosen, let id = displayID, displays.contains(where: { $0.id == id }) { return }
+        // From the keyboard (⌃⌥Space) the panel opens on the notch, but the work is where the
+        // pointer is: show that display, so the ultrawide stays the target when working there.
+        let p = pointer()
+        let chosen = mode == .keyboard ? ScopeRules.display(containing: p, in: displays) : nil
+        displayID = (chosen ?? ScopeRules.panelDisplay(pointer: p, displays: displays))?.id ?? displays.first?.id
+    }
+
+    /// The frontmost window, only when it is on the shown display.
+    private func openingTarget() -> CGWindowID? {
+        guard let d = display else { return nil }
+        return ScopeRules.openingTarget(frontmost: backend.targetWindowID,
+                                        on: backend.screenMap(for: nil, display: d)?.windows ?? [])
+    }
+
+    /// The panel was laid out on a display other than the one guessed at opening (an external
+    /// pill): show that one. Deferred: this arrives during layout.
+    private func panelLaidOut() {
+        guard visible, !displayChosen, mode != .keyboard, dragWindowID == nil, let r = contentScreenRect,
+              let d = ScopeRules.display(containing: CGPoint(x: r.midX, y: r.midY), in: displays),
+              d.id != displayID else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.visible, !self.displayChosen, self.dragWindowID == nil else { return }
+            self.switchDisplay(to: d.id, opening: true)
+        }
+    }
+
+    func reloadMap() {
+        map = backend.screenMap(for: targetID, display: display)
+        if displayID == nil { displayID = map?.display.id }
+        canUndo = backend.canUndo
+        // Picked windows that closed or left the display drop out.
+        let present = Set(listWindows.map(\.id))
+        if picks.ids.contains(where: { !present.contains($0) }) {
+            picks.keep(only: present)
+            syncSelectionScope()
+        }
+        if let r = rowHover, !present.contains(r) { setRowHover(nil) }
+    }
+
+    /// One observation chain per opening: a chain from an earlier opening stops at its next fire.
+    private func observeWindows(generation: Int? = nil) {
+        if generation == nil { observation += 1 }
+        let gen = generation ?? observation
+        backend.onWindowsChange { [weak self] in
+            guard let self, self.visible, gen == self.observation else { return }
+            self.reloadMap()
+            // Plans carry the windows' current frames: a preview must not go stale before Apply.
+            self.recomputePreview()
+            self.observeWindows(generation: gen)
+        }
+    }
+
+    // MARK: Display pager
+
+    /// The switcher: show the next / previous display and target its frontmost window.
+    func showDisplay(offset: Int) {
+        guard displays.count > 1, let i = displays.firstIndex(where: { $0.id == displayID }) else { return }
+        displayChosen = true
+        switchDisplay(to: displays[(i + offset + displays.count) % displays.count].id, opening: false)
+    }
+
+    /// `opening`: the frontmost window only if it is there (as when the tab opens); otherwise the
+    /// frontmost window of that display.
+    private func switchDisplay(to id: String, opening: Bool) {
+        displayID = id
+        hoverCell = nil
+        pickHover = nil
+        selection = nil
+        clearPicks(recompute: false)
+        reloadMap()
+        if opening {
+            targetID = openingTarget()
+        } else {
+            targetID = ScopeRules.frontmost(preferring: backend.targetWindowID, on: map?.windows ?? [])
+        }
+        if scope == .app { pickScopeApp(keepCurrent: true) }
+        reloadMap()
+        if mode == .keyboard { startSelection() }
+        recomputePreview()
+    }
+
+    // MARK: Scope
+
+    /// Picking the app scope again moves on to the next app.
+    func setScope(_ s: WindowsScope) {
+        if s == .selection {
+            guard picks.count >= 2 else { return }
+            scope = .selection
+            hoverCell = nil
+            recomputePreview()
+            return
+        }
+        if s == .app, scope == .app { nextApp(); return }
+        // Another scope: the picked windows are let go (numbers only mean something in the selection).
+        clearPicks(recompute: false)
+        scope = s
+        if s == .app { pickScopeApp(keepCurrent: false) }
+        if s == .window { strategy = nil }
+        hoverCell = nil
+        recomputePreview()
+    }
+
+    func nextApp() {
+        let apps = scopeApps
+        guard scope == .app, !apps.isEmpty else { return }
+        let i = apps.firstIndex { $0.pid == scopeApp } ?? -1
+        setScopeApp(apps[(i + 1) % apps.count].pid)
+    }
+
+    func setScopeApp(_ pid: pid_t) {
+        clearPicks(recompute: false)
+        scope = .app
+        scopeApp = pid
+        if target?.pid != pid { targetID = ScopeRules.frontmost(preferring: nil, on: map?.windows ?? [], pid: pid) }
+        hoverCell = nil
+        if selection != nil || mode == .keyboard { startSelection() }
+        recomputePreview()
+    }
+
+    /// The target's app, else the frontmost app's when it has windows here, else the first app here.
+    private func pickScopeApp(keepCurrent: Bool) {
+        let apps = scopeApps
+        if keepCurrent, let a = scopeApp, apps.contains(where: { $0.pid == a }) {
+            // Same app on the new display.
+        } else if let t = target, apps.contains(where: { $0.pid == t.pid }) {
+            scopeApp = t.pid
+        } else if let f = backend.targetWindowID.flatMap({ backend.window($0) }), apps.contains(where: { $0.pid == f.pid }) {
+            scopeApp = f.pid
+        } else {
+            scopeApp = apps.first?.pid
+        }
+        if let a = scopeApp, target?.pid != a {
+            targetID = ScopeRules.frontmost(preferring: nil, on: map?.windows ?? [], pid: a)
+        }
+    }
+
+    /// A click on a window of the map (or its row): it becomes the target, and the only window
+    /// acted on — the picked ones are let go. Nothing moves. `keepPicks`: Tab, which only moves
+    /// the target (Space then picks it).
+    func select(_ id: CGWindowID, keepPicks: Bool = false) {
+        guard dragWindowID == nil, let w = map?.windows.first(where: { $0.id == id }), w.isTileable else { return }
+        if !keepPicks {
+            clearPicks(recompute: false)
+            targetClicked = true
+        }
+        targetID = id
+        if scope == .app { scopeApp = w.pid }
+        pickHover = nil
+        hoverCell = nil
+        if selection != nil || mode == .keyboard { startSelection() }
+        recomputePreview()
+    }
+
+    // MARK: Picking (the list)
+
+    /// A row (or a map window) clicked: plain = only it; ⌘ = add / remove; ⇧ = a range.
+    func click(_ id: CGWindowID, _ how: Click) {
+        switch how {
+        case .plain: select(id)
+        case .toggle: togglePick(id)
+        case .extend: extendPick(to: id)
+        }
+    }
+
+    /// ⌘-click / Space. Nothing moves.
+    func togglePick(_ id: CGWindowID) {
+        guard dragWindowID == nil, listWindows.contains(where: { $0.id == id }) else { return }
+        picks.toggle(id, seed: targetClicked ? activeTargetID : nil)
+        pickChanged(focus: picks.contains(id) ? id : picks.ids.last)
+    }
+
+    /// ⇧-click: from the last picked (else the clicked target) to this row, in list order.
+    func extendPick(to id: CGWindowID) {
+        guard dragWindowID == nil, listWindows.contains(where: { $0.id == id }) else { return }
+        picks.extend(to: id, in: listWindows.map(\.id), seed: targetClicked ? activeTargetID : nil)
+        pickChanged(focus: id)
+    }
+
+    /// Swap the two picked windows (with more, #1 goes last and the rest move up).
+    func rotatePicks() {
+        guard picks.count >= 2 else { return }
+        picks.rotate()
+        recomputePreview()
+    }
+
+    func clearPicks() { clearPicks(recompute: true) }
+
+    private func clearPicks(recompute: Bool) {
+        targetClicked = false
+        guard !picks.isEmpty else { return }
+        picks.clear()
+        syncSelectionScope()
+        if recompute { recomputePreview() }
+    }
+
+    private func pickChanged(focus: CGWindowID?) {
+        if let focus { targetID = focus }
+        targetClicked = false
+        pickHover = nil
+        hoverCell = nil
+        syncSelectionScope()
+        if mode == .keyboard || selection != nil { startSelection() }
+        recomputePreview()
+    }
+
+    /// Two or more picked ⇔ the selection scope. Leaving it drops its arrangement preview.
+    private func syncSelectionScope() {
+        if picks.count >= 2 {
+            if scope != .selection { scope = .selection; selection = nil }
+        } else if scope == .selection {
+            scope = .screen
+            strategy = nil
+        }
+    }
+
+    /// The pointer is over a list row (nil = left the list).
+    func hoverRow(_ id: CGWindowID?) {
+        guard id != rowHover else { return }
+        setRowHover(id)
+    }
+
+    /// Also clears (open / close / the window left): tells the overlay only when something changed.
+    private func setRowHover(_ id: CGWindowID?) {
+        guard id != rowHover else { return }
+        rowHover = id
+        onHighlight?(id.flatMap { backend.window($0) }, id == nil ? nil : display)
+    }
+
+    // MARK: Grid and strategy (preview only)
+
+    /// A grid preset. With windows picked it also previews them in it at once (one per cell when
+    /// they fill it exactly: two picked + 2×1 = side by side, + 1×2 = stacked).
+    func choosePreset(_ g: GridSpec) {
+        setGrid(g)
+        guard scope == .selection, canArrange else { return }
+        if strategy == nil { strategy = picks.count == grid.cellCount ? .cells : backend.defaultStrategy }
+        hoverCell = nil
+        selection = nil
+        recomputePreview()
+    }
+
+    func setGrid(_ g: GridSpec) {
+        guard let d = display, g.clamped() != grid else { return }
+        backend.setGrid(g, for: d)
+        selection?.clamp(to: grid)
+        hoverCell = nil
+        reloadMap()
+        recomputePreview()
+    }
+
+    func adjustGrid(cols: Int = 0, rows: Int = 0) {
+        var g = grid
+        g.cols = max(1, min(12, g.cols + cols))
+        g.rows = max(1, min(8, g.rows + rows))
+        setGrid(g)
+    }
+
+    /// Picking a chip previews; picking it again clears. Apply commits.
+    func choose(_ s: ArrangeStrategy?) {
+        guard canArrange || s == nil else { return }
+        strategy = strategy == s ? nil : s
+        hoverCell = nil
+        recomputePreview()
+    }
+
+    var arrangementPreview: ArrangePlan? {
+        guard strategy != nil, hoverCell == nil, let p = preview, p.kind == .arrange else { return nil }
+        return p
+    }
+
+    func apply() {
+        guard let p = arrangementPreview else { return }
+        commit(p, label: strategy.map(WindowsText.strategy))
+    }
+
+    // MARK: Pointer
+
+    /// `pick`: the window a click would pick there (no cell preview over it).
+    func hover(_ c: GridCoord?, pick: CGWindowID? = nil) {
+        guard !sweeping, dragWindowID == nil else { return }
+        if pickHover != pick { pickHover = pick }
+        // Nothing to place (or the pointer is on a window to pick, or a selection is being
+        // arranged): no cell preview.
+        let cell = pick != nil || needsPick || scope == .selection ? nil : c.map { CellRect(col: $0.col, row: $0.row) }
+        guard cell != hoverCell else { return }
+        hoverCell = cell
+        recomputePreview()
+    }
+
+    func sweep(from a: GridCoord, to b: GridCoord) {
+        guard dragWindowID == nil, !needsPick, scope != .selection else { return }
+        pickHover = nil
+        sweeping = true
+        let cell = CellRect.spanning(a, b)
+        guard cell != hoverCell else { return }
+        hoverCell = cell
+        recomputePreview()
+    }
+
+    /// Button up after a click or a sweep: place the target there.
+    func endSweep() {
+        sweeping = false
+        guard let cell = hoverCell else { return }
+        place(cell)
+    }
+
+    // MARK: Keyboard
+
+    /// Returns true when the key was ours.
+    @discardableResult
+    func handle(_ key: Key) -> Bool {
+        guard trusted else { return false }
+        switch key {
+        case let .arrow(d, shift):
+            guard map != nil else { return true }
+            strategy = nil
+            hoverCell = nil
+            if selection == nil {
+                startSelection()
+            } else if shift {
+                selection?.extend(d, grid: grid)
+            } else {
+                selection?.move(d, grid: grid)
+            }
+            recomputePreview()
+            return true
+        case .enter:
+            if let p = arrangementPreview {
+                commit(p, label: strategy.map(WindowsText.strategy), closeAfter: true)
+            } else if let s = selection {
+                place(s.rect, closeAfter: true)
+            }
+            return true
+        case .escape:
+            // The picked windows go first, then the preview, then the panel.
+            if !picks.isEmpty {
+                clearPicks()
+            } else if strategy != nil || selection != nil || hoverCell != nil {
+                strategy = nil; selection = nil; hoverCell = nil
+                recomputePreview()
+            } else {
+                onRequestClose?()
+            }
+            return true
+        case let .cycle(forward):
+            let ids = ScopeRules.candidates(scope, app: scopeApp, on: map?.windows ?? [])
+            if let id = ScopeRules.cycle(from: activeTargetID, in: ids, forward: forward) { select(id, keepPicks: true) }
+            return true
+        case .togglePick:
+            if let id = activeTargetID { togglePick(id) }
+            return true
+        case .swapPicks:
+            rotatePicks()
+            return true
+        case .arrangeAll:
+            guard canArrange else { return true }
+            selection = nil
+            if strategy == nil { choose(backend.defaultStrategy) }
+            return true
+        case .undo:
+            undo()
+            return true
+        case let .digit(n):
+            let layouts = backend.layouts
+            guard n >= 1, n <= layouts.count else { return true }
+            let plans = backend.planLayout(layouts[n - 1])
+            commitAll(plans, label: layouts[n - 1].name)
+            return true
+        }
+    }
+
+    private func startSelection() {
+        // Nothing to place: Tab picks a window first.
+        guard let d = display, let t = target else { selection = nil; return }
+        let frame: CGRect? = t.frame
+        selection = KeyboardSelection.start(for: frame, grid: grid, usable: d.usableFrame)
+    }
+
+    // MARK: Drag mode
+
+    /// The notch took over a window drag (DragMachine said `.open`).
+    func beginDrag(window: CGWindowID, frame: CGRect, display: Display?, hotZone: CGRect) {
+        mode = .drag(window: window, frame: frame)
+        targetID = window
+        if let display { displayID = display.id }
+        self.hotZone = hotZone
+        hoverCell = nil
+        strategy = nil
+        selection = nil
+        mapScreenRect = nil
+        contentScreenRect = nil
+    }
+
+    /// The cell under a screen point, when the point is on the map.
+    func cell(atScreen p: CGPoint) -> GridCoord? {
+        guard let rect = mapScreenRect, rect.contains(p), let d = display else { return nil }
+        let proj = MapProjection(display: d.frame, usable: d.usableFrame, size: rect.size)
+        return proj.cell(at: CGPoint(x: p.x - rect.minX, y: rect.maxY - p.y), grid: grid)
+    }
+
+    /// Pointer moved during an active drag (Cocoa point).
+    @discardableResult
+    func dragMoved(to p: CGPoint) -> DragStep {
+        guard dragWindowID != nil else { return .none }
+        if let c = cell(atScreen: p) {
+            let cell = CellRect(col: c.col, row: c.row)
+            if cell != hoverCell { hoverCell = cell; recomputePreview() }
+            return .none
+        }
+        // Off the map: inside the panel (or still at the notch) just clears; beyond it cancels.
+        if let content = contentScreenRect {
+            let zone = content.union(hotZone ?? content).insetBy(dx: -24, dy: -24)
+            if !zone.contains(p) { cancelDrag(); return .cancelled }
+        }
+        if hoverCell != nil { hoverCell = nil; recomputePreview() }
+        return .none
+    }
+
+    /// Button released during an active drag.
+    @discardableResult
+    func dragEnded(at p: CGPoint) -> DragStep {
+        guard case let .drag(id, frame) = mode else { return .none }
+        if dragMoved(to: p) == .cancelled { return .cancelled }
+        guard let cell = hoverCell, let d = display,
+              let plan = backend.planDrop(id, on: cell, display: d, grid: grid, originalFrame: frame) else {
+            cancelDrag()
+            return .cancelled
+        }
+        mode = .browse
+        lastCell[d.id] = cell
+        commit(plan, closeAfterIfExact: true)
+        return .committed
+    }
+
+    func cancelDrag() {
+        guard dragWindowID != nil else { return }
+        mode = .browse
+        hoverCell = nil
+        hotZone = nil
+        setPreview(nil)
+    }
+
+    // MARK: Preview
+
+    func recomputePreview() {
+        guard visible, trusted, let d = display else { setPreview(nil); return }
+        let g = grid
+        var plan: ArrangePlan?
+        if case let .drag(id, frame) = mode {
+            plan = hoverCell.flatMap { backend.planDrop(id, on: $0, display: d, grid: g, originalFrame: frame) }
+        } else if let cell = hoverCell {
+            plan = activeTargetID.flatMap { backend.planPlace($0, in: cell, on: d, grid: g) }
+        } else if let s = strategy, canArrange {
+            let ids = ScopeRules.arrangeIDs(scope, app: scopeApp, on: map?.windows ?? [], picked: picks.ids)
+            plan = ids?.isEmpty == true ? nil : backend.planArrange(on: d, strategy: s, grid: g, windowIDs: ids)
+            // The selection goes in pick order: #1 takes the first cell in reading order.
+            if scope == .selection, let p = plan, let ids { plan = ReadingOrder.assign(p, order: ids) }
+        } else if let sel = selection {
+            plan = activeTargetID.flatMap { backend.planPlace($0, in: sel.rect, on: d, grid: g) }
+        }
+        setPreview(plan)
+    }
+
+    private func setPreview(_ p: ArrangePlan?) {
+        guard p != preview else { return }
+        preview = p
+        onPreview?(p, p == nil ? nil : display)
+    }
+
+    // MARK: Commit
+
+    func place(_ cell: CellRect, closeAfter: Bool = false) {
+        guard let t = activeTargetID, let d = display, let plan = backend.planPlace(t, in: cell, on: d, grid: grid) else { return }
+        lastCell[d.id] = cell
+        commit(plan, closeAfter: closeAfter)
+    }
+
+    func commit(_ plan: ArrangePlan, label: String? = nil, closeAfter: Bool = false, closeAfterIfExact: Bool = false) {
+        commitAll([plan], label: label, closeAfter: closeAfter, closeAfterIfExact: closeAfterIfExact)
+    }
+
+    private func commitAll(_ plans: [ArrangePlan], label: String?, closeAfter: Bool = false, closeAfterIfExact: Bool = false) {
+        let plans = plans.filter { !$0.moves.isEmpty }
+        guard !busy, !plans.isEmpty else { return }
+        busy = true
+        hoverCell = nil
+        strategy = nil
+        sweeping = false
+        setPreview(nil)
+        pending = Task { [weak self] in
+            guard let self else { return }
+            var results: [PlacementResult] = []
+            for p in plans { results += await self.backend.commit(p, label: label) }
+            self.finish(results, closeAfter: closeAfter, closeAfterIfExact: closeAfterIfExact)
+        }
+    }
+
+    private func finish(_ results: [PlacementResult], closeAfter: Bool, closeAfterIfExact: Bool) {
+        busy = false
+        let report = OutcomeReport(results: results, name: name)
+        canUndo = backend.canUndo
+        reloadMap()
+        recomputePreview()
+        show(report)
+        if closeAfter || (closeAfterIfExact && report.allExact) {
+            if !report.allExact { onPeek?(report.line) }
+            closeTask?.cancel()
+            let delay = closeDelay
+            closeTask = Task { [weak self] in
+                try? await Task.sleep(for: delay)
+                guard let self, !Task.isCancelled, self.visible else { return }
+                self.onRequestClose?()
+            }
+        }
+    }
+
+    private func show(_ report: OutcomeReport) {
+        outcome = report
+        outcomeTask?.cancel()
+        guard visible else { return }
+        let d = outcomeDuration
+        outcomeTask = Task { [weak self] in
+            try? await Task.sleep(for: d)
+            guard let self, !Task.isCancelled else { return }
+            self.outcome = nil
+        }
+    }
+
+    func undo() {
+        guard backend.canUndo, !busy else { return }
+        busy = true
+        setPreview(nil)
+        pending = Task { [weak self] in
+            guard let self else { return }
+            let results = await self.backend.undo()
+            self.busy = false
+            self.canUndo = self.backend.canUndo
+            self.reloadMap()
+            self.recomputePreview()
+            let report = OutcomeReport(results: results, name: self.name)
+            self.show(results.isEmpty || report.allExact
+                      ? OutcomeReport(results: [], name: self.name).with(line: WindowsText.t("Undone"))
+                      : report)
+        }
+    }
+
+    // MARK: Direct hotkeys (no surface)
+
+    /// Acts on the frontmost window; returns the line to show when it did not land exactly.
+    @discardableResult
+    func direct(_ action: DirectAction) async -> String? {
+        if action == .undo {
+            guard backend.canUndo else { return nil }
+            let r = await backend.undo()
+            canUndo = backend.canUndo
+            let report = OutcomeReport(results: r, name: name)
+            return report.allExact ? nil : report.line
+        }
+        guard let id = backend.targetWindowID, let w = backend.window(id),
+              let d = ScreenSpace.bestIndex(for: w.frame, among: backend.displays().map(\.frame)).map({ backend.displays()[$0] })
+        else { return nil }
+        let g = backend.grid(for: d)
+        var plan: ArrangePlan?
+        var step = 0
+        switch action {
+        case .leftHalf, .rightHalf:
+            step = HalvesCycle.nextStep(after: lastDirect, windowID: id, action: action, current: w.frame)
+            plan = backend.planPlace(id, in: HalvesCycle.cell(for: action, step: step), on: d, grid: HalvesCycle.grid(like: g))
+        case .maximize:
+            plan = backend.planPlace(id, in: .all(g), on: d, grid: g)
+        case .restore:
+            guard let initial = backend.initialFrame(for: id) else { return WindowsText.t("Nothing to restore") }
+            plan = ArrangePlan(kind: .restore, displayID: d.id, usable: d.usableFrame, grid: g,
+                               moves: [PlannedMove(windowID: id, from: w.frame, to: initial, cell: nil)])
+        case .fit:
+            plan = backend.planFit(id)
+        case .undo:
+            break
+        }
+        guard let plan else { return nil }
+        let results = await backend.commit(plan, label: nil)
+        if action == .leftHalf || action == .rightHalf, let r = results.first {
+            lastDirect = HalvesCycle.Last(windowID: id, action: action, step: step, frame: r.landed ?? r.requested)
+        } else {
+            lastDirect = nil
+        }
+        canUndo = backend.canUndo
+        let report = OutcomeReport(results: results, name: name)
+        return report.allExact ? nil : report.line
+    }
+
+    // MARK: Arrange shortcuts (no surface)
+
+    /// Arranges the display under the pointer with `strategy` and commits at once (undoable with
+    /// the undo hotkey). `appOnly`: only the front app's windows there. Never touches another
+    /// display. Returns the line for the peek.
+    func arrangeShortcut(_ strategy: ArrangeStrategy, appOnly: Bool) async -> String {
+        guard backend.isTrusted, backend.isRunning else { return WindowsText.t("Windows needs Accessibility") }
+        guard !busy else { return WindowsText.t("Busy — try again") }
+        let all = backend.displays()
+        guard let d = ScopeRules.display(containing: pointer(), in: all) ?? all.first,
+              let screen = backend.screenMap(for: nil, display: d) else { return WindowsText.t("Nothing to arrange here") }
+        var ids: [CGWindowID]?
+        if appOnly {
+            guard let front = backend.targetWindowID.flatMap({ backend.window($0) }) else {
+                return WindowsText.t("No app in front")
+            }
+            ids = ScopeRules.arrangeIDs(.app, app: front.pid, on: screen.windows)
+            if ids?.isEmpty == true { return WindowsText.f("No %@ windows on this display", front.appName) }
+        }
+        let plan = backend.planArrange(on: d, strategy: strategy, grid: backend.grid(for: d), windowIDs: ids)
+        guard !plan.moves.isEmpty else { return WindowsText.t("Nothing to arrange here") }
+        busy = true
+        let results = await backend.commit(plan, label: WindowsText.strategy(strategy))
+        busy = false
+        canUndo = backend.canUndo
+        if visible { reloadMap(); recomputePreview() }
+        var line = WindowsText.strategy(strategy) + " · " + OutcomeReport(results: results, name: name).line
+        if !plan.untouched.isEmpty { line += " · " + WindowsText.f("%d left", plan.untouched.count) }
+        return line
+    }
+
+    // MARK: Agents link
+
+    /// Arranges exactly these windows on the target window's display (else the first window's).
+    @discardableResult
+    func layOut(windowIDs: [CGWindowID]) async -> [PlacementResult] {
+        guard let plan = planLayOut(windowIDs: windowIDs) else { return [] }
+        let r = await backend.commit(plan, label: WindowsText.t("Arrange"))
+        canUndo = backend.canUndo
+        return r
+    }
+
+    /// The plan behind `layOut`: these windows (unknown or untileable ones dropped — minimized,
+    /// another Space — duplicates once) on the
+    /// target window's display (else the first window's), grid grown when they do not fit.
+    /// `strategy` nil = the default. `readingOrder`: the first ID gets the first cell.
+    func planLayOut(windowIDs: [CGWindowID], strategy: ArrangeStrategy? = nil, readingOrder: Bool = false) -> ArrangePlan? {
+        var seen = Set<CGWindowID>()
+        let ids = windowIDs.filter { backend.window($0)?.isTileable == true && seen.insert($0).inserted }
+        let all = backend.displays()
+        let anchor = backend.targetWindowID.flatMap { backend.window($0) } ?? ids.first.flatMap { backend.window($0) }
+        guard !ids.isEmpty, let a = anchor,
+              let d = ScreenSpace.bestIndex(for: a.frame, among: all.map(\.frame)).map({ all[$0] }) else { return nil }
+        var g = backend.grid(for: d)
+        if ids.count > g.cellCount { g = Arrange.bestGrid(for: ids.count, fitting: d.usableFrame, like: g) }
+        let plan = backend.planArrange(on: d, strategy: strategy ?? backend.defaultStrategy, grid: g, windowIDs: ids)
+        guard !plan.moves.isEmpty else { return nil }
+        return readingOrder ? ReadingOrder.assign(plan, order: ids) : plan
+    }
+
+    /// Another module committed or undid through the backend: refresh the Undo state.
+    func backendChanged() { canUndo = backend.canUndo }
+
+    /// Puts a window into "the focused cell": the cell last placed into on the target window's
+    /// display, else the cells the focused window covers (which then swaps out).
+    @discardableResult
+    func place(windowID: CGWindowID, inFocusedCell cell: CellRect? = nil) async -> PlacementResult? {
+        let all = backend.displays()
+        let focused = backend.targetWindowID.flatMap { backend.window($0) }
+        guard let anchor = focused ?? backend.window(windowID),
+              let d = ScreenSpace.bestIndex(for: anchor.frame, among: all.map(\.frame)).map({ all[$0] }) else { return nil }
+        let g = backend.grid(for: d)
+        let target = cell ?? lastCell[d.id]
+            ?? focused.map { Geometry.nearestCell(for: $0.frame, in: g, on: d.usableFrame) }
+            ?? CellRect.all(g)
+        guard let plan = backend.planDrop(windowID, on: target, display: d, grid: g, originalFrame: nil) else { return nil }
+        let r = await backend.commit(plan, label: nil)
+        canUndo = backend.canUndo
+        return r.first { $0.windowID == windowID }
+    }
+
+    // MARK: Diagnostics
+
+    func runProbe(move: Bool) {
+        guard !probeRunning else { return }
+        probeRunning = true
+        probeLines = []
+        pending = Task { [weak self] in
+            guard let self else { return }
+            let lines = await self.probe(move)
+            self.probeLines = lines
+            self.probeRunning = false
+        }
+    }
+
+    // MARK: Renderer
+
+    func setProbeLines(_ lines: [String]) { probeLines = lines }
+
+    func prepare(mode: Mode, display: String?, hover: CellRect?, selection: KeyboardSelection?,
+                 strategy: ArrangeStrategy?, outcome: [PlacementResult]?, scope: WindowsScope = .screen,
+                 switched: Bool = false, pick: CGWindowID? = nil, picked: [CGWindowID] = [], rowHover: CGWindowID? = nil) {
+        visible = true
+        trusted = backend.isTrusted
+        self.mode = mode
+        displayChosen = true
+        displays = backend.displays()
+        displayID = display ?? displays.first?.id
+        reloadMap()
+        // As the tab would: the frontmost window only on its own display; `switched` = as after the switcher.
+        targetID = dragWindowID ?? (switched ? ScopeRules.frontmost(preferring: backend.targetWindowID, on: map?.windows ?? [])
+                                    : openingTarget())
+        self.scope = .screen
+        scopeApp = nil
+        picks = PickedWindows()
+        if scope != .screen { setScope(scope) }
+        reloadMap()
+        if !picked.isEmpty {
+            picks = PickedWindows(picked)
+            targetID = picked.last
+            syncSelectionScope()
+        }
+        self.rowHover = rowHover
+        pickHover = pick
+        hoverCell = hover
+        self.selection = selection
+        self.strategy = strategy
+        recomputePreview()
+        self.outcome = outcome.map { OutcomeReport(results: $0, name: name) }
+        if outcome != nil { canUndo = true }
+    }
+}
+
+extension OutcomeReport {
+    func with(line: String) -> OutcomeReport { OutcomeReport(badges: badges, line: line, allExact: allExact) }
+
+    init(badges: [CGWindowID: PlacementOutcome], line: String, allExact: Bool) {
+        self.badges = badges; self.line = line; self.allExact = allExact
+    }
+}

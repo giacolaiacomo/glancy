@@ -1,0 +1,4 @@
+# scripts/lint.sh allow-list: one "path:pattern" per line, each with the reason above it.
+# Only code that runs while the surface is visible (expanded) may appear here.
+# The working pulse: driven by AgentsModel.pulse, which is true only while the panel is expanded.
+Sources/GlancyKit/Agents/AgentsViews.swift:repeatForever

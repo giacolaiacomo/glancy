@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode (Swift 6.2 or later)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Lint (no timers or polling while collapsed)
+        run: scripts/lint.sh
+      - name: Build (0 warnings)
+        run: |
+          swift build 2>&1 | tee build.log
+          ! grep -q "warning:" build.log
+      - name: Test
+        # CI=true skips the few tests that read this Mac's real TCC/MediaRemote state or need a tight
+        # main-thread budget (see Tests/GlancyKitTests/CIEnvironment.swift).
+        run: swift test
+      - name: Self-test
+        run: .build/debug/Glancy --self-test
+      - name: App bundle (the same script Homebrew and install.sh use), ad-hoc signed
+        env:
+          GLANCY_SIGN_IDENTITY: "-"
+        run: |
+          scripts/build-app.sh build/Glancy.app
+          build/Glancy.app/Contents/MacOS/Glancy --self-test

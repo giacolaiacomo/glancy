@@ -1,0 +1,3 @@
+import GlancyKit
+
+GlancyApp.run()

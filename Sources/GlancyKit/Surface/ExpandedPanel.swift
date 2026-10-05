@@ -92,7 +92,7 @@ private struct TabBand: View {
     private var allItems: [Item] {
         var list = [Item(id: "home", symbol: "house", title: tr("Home"),
                          selected: !model.showingSettings && model.selectedTab == nil) { model.select(tab: nil) }]
-        for tab in context.tabs {
+        for tab in context.stripTabs {
             list.append(Item(id: tab.module.rawValue, symbol: tab.symbol, title: tr(SurfaceContext.name(tab.module)),
                              selected: !model.showingSettings && model.selectedTab == tab.module) {
                 model.select(tab: tab.module)

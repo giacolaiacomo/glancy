@@ -82,7 +82,7 @@ enum Render {
         }
         shot("05-expanded-home", live) { $0.expand(tab: nil) }
         shot("05-expanded-home-empty", context(false, [])) { $0.expand(tab: nil) }
-        for (i, tab) in live.tabs.enumerated() {
+        for (i, tab) in live.stripTabs.enumerated() {
             shot("06-tab-\(i + 1)-\(tab.module.rawValue)", live) { $0.expand(tab: tab.module) }
         }
         // Windows tab states on a synthetic two-display Mac (no Accessibility needed here).
@@ -90,6 +90,19 @@ enum Render {
             for state in WindowsModule.RenderState.allCases {
                 windows.prepareForRender(state)
                 shot("09-windows-\(state.rawValue)", live) { $0.expand(tab: .windows) }
+            }
+        }
+        // Command bar: empty (recents), a calculation, apps, currency (fixed rates), units.
+        if let command = modules.compactMap({ $0 as? CommandModule }).first {
+            let it = settings.language == .it
+            let states: [(String, String)] = [("empty", ""), ("calc", it ? "12% di 340" : "12% of 340"), ("apps", "saf"),
+                                              ("currency", it ? "100 dollari in euro" : "100 usd to eur"),
+                                              ("units", it ? "3 ore in min" : "5 km in mi"), ("hex", "0xff + 1")]
+            command.prepareForRender(query: "", history: false)
+            shot("11-command-first", live) { $0.expand(tab: .command) }
+            for (name, query) in states {
+                command.prepareForRender(query: query)
+                shot("11-command-\(name)", live) { $0.expand(tab: .command) }
             }
         }
         // Notifications (opt-in, off by default): turned on for these shots only, synthetic data.

@@ -57,6 +57,7 @@ public final class SurfaceManager {
         escape.onPress = { [weak self] in if SurfaceKeyFocus.escapeInterceptor?() != true { self?.closeAll() } }
         context.hub.onOpenRequest = { [weak self] tab in self?.open(tab: tab) }
         context.hub.onCloseRequest = { [weak self] in self?.closeAll() }
+        SurfaceRoute.openSettings = { [weak self] route in self?.openSettings(route) }
         SurfaceKeyFocus.handler = { [weak self] on in
             guard let self else { return }
             if on { self.surfaces.values.first { $0.model.expanded }?.setKeyFocus(true) }
@@ -79,6 +80,7 @@ public final class SurfaceManager {
         settleTask?.cancel(); settleTask = nil
         context.hub.onOpenRequest = nil
         context.hub.onCloseRequest = nil
+        SurfaceRoute.openSettings = nil
         SurfaceKeyFocus.handler = nil
         SurfaceKeyFocus.reset()
         removeClickMonitor()
@@ -190,7 +192,7 @@ public final class SurfaceManager {
     func open(_ surface: SurfaceController) {
         for s in surfaces.values where s !== surface && s.model.expanded { s.collapse() }
         let tab = tabToOpen(last: surface.model.lastTab, closedAt: surface.model.closedAt, now: .now,
-                            available: context.tabs.map(\.module))
+                            available: context.stripTabs.map(\.module))
         surface.expand(tab: tab)
     }
 
@@ -201,6 +203,15 @@ public final class SurfaceManager {
         guard let target else { return }
         for s in surfaces.values where s !== target && s.model.expanded { s.collapse() }
         target.expand(tab: tab)
+    }
+
+    /// Opens the panel (or keeps it open) on Settings, at the index or a section.
+    func openSettings(_ route: SettingsRoute?) {
+        let target = surfaces.values.first { $0.model.expanded }
+        if target == nil { open(tab: nil) }
+        guard let surface = target ?? surfaces.values.first(where: { $0.model.expanded }) else { return }
+        context.settings.navigation.go(route ?? .index, animated: false)
+        if !surface.model.showingSettings { surface.model.toggleSettings() }
     }
 
     func close(_ surface: SurfaceController) { surface.collapse() }

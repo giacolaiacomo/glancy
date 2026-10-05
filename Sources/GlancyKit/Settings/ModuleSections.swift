@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 enum SettingsCatalog {
     static func hasSection(_ id: ModuleID) -> Bool {
-        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power].contains(id)
+        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power, .command].contains(id)
     }
 
     static func generalSummary(_ s: AppSettings) -> String {
@@ -56,7 +56,11 @@ enum SettingsCatalog {
             return m.hotkeys.enabled ? WindowsSection.summary(m.hotkeys) : tr("Shortcuts off")
         case .agents:
             return FileManager.default.fileExists(atPath: AgentsModule.defaultLogURL.path) ? tr("Hook log found") : tr("No hook log")
-        case .notifications, .command, .control, .notes:
+        case .command:
+            guard let m = context.module(CommandModule.self) else { return "" }
+            let key = m.model.settings.hotkey
+            return key.modifiers == 0 ? tr("None") : key.description
+        case .notifications, .control, .notes:
             return ""
         }
     }
@@ -111,7 +115,8 @@ struct ModuleSection: View {
         case .clipboard: if let m = context.module(ClipboardModule.self) { ClipboardSection(module: m, context: context) }
         case .windows: if let m = context.module(WindowsModule.self) { WindowsSection(module: m, context: context) }
         case .agents: AgentsSection()
-        case .notifications, .command, .control, .notes: EmptyView()
+        case .command: if let m = context.module(CommandModule.self) { CommandSection(module: m, context: context) }
+        case .notifications, .control, .notes: EmptyView()
         }
     }
 }
@@ -448,6 +453,9 @@ enum GlancyHotkeys {
         var out: [HotkeyBinding] = []
         if let c = context.module(ClipboardModule.self), context.settings.isEnabled(.clipboard) {
             out.append(HotkeyBinding(id: "clipboard", title: tr("Clipboard"), hotkey: c.model.settings.hotkey))
+        }
+        if let c = context.module(CommandModule.self), context.settings.isEnabled(.command) {
+            out.append(HotkeyBinding(id: "command", title: CommandText.t("Command bar"), hotkey: c.model.settings.hotkey))
         }
         if let w = context.module(WindowsModule.self), context.settings.isEnabled(.windows), w.hotkeys.enabled {
             for a in WindowsSection.actions + WindowsSection.arrangeActions {

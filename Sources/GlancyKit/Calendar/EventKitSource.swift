@@ -18,8 +18,14 @@ public final class EventKitSource: CalendarEventSource {
         }
     }
 
+    /// Asking without the usage string kills the process (an unbundled `swift run Glancy`, tests).
+    public nonisolated static var usable: Bool {
+        Bundle.main.object(forInfoDictionaryKey: "NSCalendarsFullAccessUsageDescription") != nil
+    }
+
     public func requestAccess() async -> Bool {
-        (try? await store.requestFullAccessToEvents()) ?? false
+        guard Self.usable else { return false }
+        return (try? await store.requestFullAccessToEvents()) ?? false
     }
 
     static func rgb(_ cg: CGColor?) -> CalendarRGB {

@@ -78,7 +78,52 @@ struct ModuleLifecycleTests {
             WindowsModule(engine: TilingEngine(configURL: nil), hotkeysURL: nil),
             HUDModule(settings: HUDSettings(defaults: defaults()), usesHardware: false),
             PowerModule(settings: PowerSettings(defaults: defaults())),
+            // Wave 4 (and Notifications), with fakes: no TCC, no system toggles, no network.
+            NotificationsModule(databaseURL: tempDir("notifications").appendingPathComponent("db"),
+                                settings: NotificationsSettings(defaults: defaults())),
+            NotesModule(store: NotesStore(directory: tempDir("notes")), settings: NotesSettings(defaults: defaults()),
+                        voiceSystem: .sample),
+            ControlModule(actions: FakeSystemActions(), settings: ControlSettings(defaults: defaults()), scheduler: FakeScheduler(),
+                          stats: StatsSampler(source: FakeStatsSource(), interval: .milliseconds(10))),
+            MonitorModule(source: FakeMonitorSource(), actions: FakeMonitorActions(), settings: MonitorSettings(defaults: defaults()),
+                          engine: ProcessEngine(numer: 1, denom: 1)),
+            CommandModule(settings: CommandSettings(defaults: defaults()), history: PaletteHistory(url: nil),
+                          apps: AppIndex(folders: [tempDir("apps")], extras: []), rates: CurrencyRates(cacheURL: nil)),
         ]
+    }
+
+    @Test func coversEveryModuleTheAppShips() {
+        #expect(Set(Self.makeAll().map(\.id)) == Set(ModuleID.allCases))
+    }
+
+    /// Disable → enable a module (start, stop, start) must never register its hot keys twice or
+    /// keep one after stop. Synchronous on the main actor (no other test can interleave), with the
+    /// manager suspended so the count never depends on what the installed Glancy holds.
+    @Test func startStopStartNeverDoublesHotkeys() {
+        let manager = HotkeyManager.shared
+        let wasSuspended = manager.isSuspended
+        manager.setSuspended(true)
+        defer { manager.setSuspended(wasSuspended) }
+        var owners: [ModuleID: Int] = [:]
+        for m in Self.makeAll() {
+            let hub = ActivityHub()
+            let base = manager.tokenCount
+            m.start(hub: hub)
+            m.start(hub: hub)
+            let once = manager.tokenCount
+            owners[m.id] = once - base
+            m.stop()
+            #expect(manager.tokenCount == base, "\(m.id) keeps hot keys after stop")
+            m.start(hub: hub)
+            #expect(manager.tokenCount == once, "\(m.id) registers \(manager.tokenCount - once) hot keys more on restart")
+            m.stop()
+            m.stop()   // a second stop is harmless
+            #expect(manager.tokenCount == base, "\(m.id) keeps hot keys after the second stop")
+        }
+        // Not vacuous: the modules with default hot keys did register them.
+        // (Calendar's join key is registered only while a meeting can be joined.)
+        #expect(owners[.windows, default: 0] >= 19 && owners[.notes] == 2 && owners[.command] == 1 && owners[.clipboard] == 1,
+                "\(owners)")
     }
 
     static let fanOut: [SurfaceVisibility] = [.collapsed, .expanded(nil), .hidden, .collapsed]

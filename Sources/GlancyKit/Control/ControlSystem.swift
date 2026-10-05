@@ -62,8 +62,9 @@ public protocol SystemActions: AnyObject {
     func screenshot(_ target: ScreenshotTarget)
     func trashSummary() async -> Result<TrashSummary, ScriptOutcome>
     func emptyTrash() async -> ScriptOutcome
-    /// Names of the volumes "Eject all" would eject.
-    func ejectableVolumes() -> [String]
+    /// Names of the volumes "Eject all" would eject. Async: reading mounted volumes can block on a
+    /// network share that went away, so the live one reads them off the main thread.
+    func ejectableVolumes() async -> [String]
     /// Returns how many were ejected and how many refused (in use).
     func ejectAll() async -> (ejected: Int, failed: Int)
     /// Shows the system colour loupe; `done` gets nil when cancelled.
@@ -81,7 +82,6 @@ public protocol SystemActions: AnyObject {
 public final class LiveSystemActions: SystemActions {
     private var assertion: IOPMAssertionID = 0
     private var sampler: NSColorSampler?
-    private static let scriptQueue = DispatchQueue(label: "ai.glancy.control.script", qos: .userInitiated)
 
     public init() {}
 
@@ -194,13 +194,15 @@ public final class LiveSystemActions: SystemActions {
         await Self.run("tell application \"Finder\" to empty trash")
     }
 
-    public func ejectableVolumes() -> [String] {
-        Self.ejectable().map { (try? $0.resourceValues(forKeys: [.volumeNameKey]))?.volumeName ?? $0.lastPathComponent }
+    public func ejectableVolumes() async -> [String] {
+        await Task.detached(priority: .userInitiated) {
+            Self.ejectable().map { (try? $0.resourceValues(forKeys: [.volumeNameKey]))?.volumeName ?? $0.lastPathComponent }
+        }.value
     }
 
     public func ejectAll() async -> (ejected: Int, failed: Int) {
-        let urls = Self.ejectable()
-        return await Task.detached(priority: .userInitiated) {
+        await Task.detached(priority: .userInitiated) {
+            let urls = Self.ejectable()
             var ok = 0, bad = 0
             for url in urls {
                 do { try NSWorkspace.shared.unmountAndEjectDevice(at: url); ok += 1 } catch { bad += 1 }
@@ -265,9 +267,8 @@ public final class LiveSystemActions: SystemActions {
 
     static func runReturning(_ source: String) async -> (ScriptOutcome, String?) {
         await withCheckedContinuation { (k: CheckedContinuation<(ScriptOutcome, String?), Never>) in
-            scriptQueue.async {
-                var err: NSDictionary?
-                let result = NSAppleScript(source: source)?.executeAndReturnError(&err)
+            AppleScriptRunner.queue.async {
+                let (result, err) = AppleScriptRunner.execute(source)
                 if let err {
                     let code = (err[NSAppleScript.errorNumber] as? Int) ?? 0
                     // -1743 not authorised; -1744 would require consent (prompt dismissed).

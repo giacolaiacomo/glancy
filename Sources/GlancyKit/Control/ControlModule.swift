@@ -94,7 +94,10 @@ public final class ControlModule: GlancyModule {
         model.wifi = actions.wifiPower()
         model.desktopIconsHidden = actions.finderFlag(.desktopIcons)
         model.hiddenFilesShown = actions.finderFlag(.hiddenFiles)
-        model.ejectable = actions.ejectableVolumes()
+        Task { [weak self] in
+            guard let self else { return }
+            model.ejectable = await actions.ejectableVolumes()
+        }
     }
 
     // MARK: Keep awake
@@ -342,15 +345,19 @@ public final class ControlModule: GlancyModule {
     }
 
     public func ejectAll() {
-        model.ejectable = actions.ejectableVolumes()
-        guard !model.ejectable.isEmpty else { flash(ControlText.t("Nothing to eject"), symbol: "eject"); return }
         guard !model.busy.contains(.eject) else { return }
         model.busy.insert(.eject)
         Task { [weak self] in
             guard let self else { return }
+            model.ejectable = await actions.ejectableVolumes()
+            guard !model.ejectable.isEmpty else {
+                model.busy.remove(.eject)
+                flash(ControlText.t("Nothing to eject"), symbol: "eject")
+                return
+            }
             let (ok, bad) = await actions.ejectAll()
             model.busy.remove(.eject)
-            model.ejectable = actions.ejectableVolumes()
+            model.ejectable = await actions.ejectableVolumes()
             if bad > 0 {
                 flash(L10n.tr("%d ejected, %d in use", ok, bad), symbol: "exclamationmark.triangle")
             } else {

@@ -154,4 +154,6 @@ public final class HotkeyManager {
 
     /// Hot keys currently registered (diagnostics).
     public var registeredCount: Int { refs.count }
+    /// Live tokens, suspended ones included (tests: a restarted module must not register twice).
+    var tokenCount: Int { combos.count }
 }

@@ -44,6 +44,9 @@ public enum L10n {
         italian.merge(table) { _, new in new }
     }
 
+    /// Every Italian string registered so far (tests check placeholders against the English key).
+    static var italianTable: [String: String] { italian }
+
     public static func tr(_ s: String) -> String {
         current == "it" ? italian[s] ?? s : s
     }

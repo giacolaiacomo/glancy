@@ -36,7 +36,7 @@ final class OutputDeviceWatcher {
         stop()
         self.onChange = onChange
         onChange(Self.currentName())
-        let b: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        let b: AudioObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
             let name = OutputDeviceWatcher.currentName()
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onChange?(name) } }
         }

@@ -156,7 +156,7 @@ public final class PermissionCenter {
             asking = .calendar
             let requester = calendarRequester
             Task { [weak self] in
-                if let requester { await requester() } else { _ = try? await EKEventStore().requestFullAccessToEvents() }
+                if let requester { await requester() } else if EventKitSource.usable { _ = try? await EKEventStore().requestFullAccessToEvents() }
                 self?.asking = nil
                 self?.refresh()
             }

@@ -73,7 +73,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let permissions = context.settings.permissions
         permissions.calendarRequester = { [weak self] in
             guard let self, let calendar = self.runningModule(CalendarModule.self) else {
-                _ = try? await EKEventStore().requestFullAccessToEvents()
+                if EventKitSource.usable { _ = try? await EKEventStore().requestFullAccessToEvents() }
                 return
             }
             await calendar.requestAccess()

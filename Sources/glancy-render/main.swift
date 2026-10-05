@@ -104,6 +104,24 @@ enum Render {
             shot("10-notifications-peek", ctx)
             settings.setEnabled(.notifications, false)
         }
+        // Control: synthetic states (no assertion, no camera, nothing toggled), then the keep-awake
+        // wing and the colour peek with Control alone on a hub.
+        if let control = modules.compactMap({ $0 as? ControlModule }).first {
+            let ctx = context(true)
+            for state in ControlModule.RenderState.allCases {
+                control.prepareForRender(state)
+                shot("11-control-\(state.rawValue)", ctx) { $0.expand(tab: .control) }
+            }
+            let hub = ActivityHub()
+            control.stop()
+            control.start(hub: hub)
+            control.prepareForRender(.awake)
+            let solo = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [control])
+            shot("11-control-wing", solo)
+            shot("11-control-home", solo) { $0.expand(tab: nil) }
+            control.showSampleColorPeek()
+            shot("11-control-peek-color", solo)
+        }
         // Settings: the index, every section, and the first-run welcome. Permission statuses are
         // fixed (a mix of every state) so nothing is asked of macOS.
         let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,

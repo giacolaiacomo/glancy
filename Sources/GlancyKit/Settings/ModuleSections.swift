@@ -6,6 +6,7 @@ import SwiftUI
 enum SettingsCatalog {
     static func hasSection(_ id: ModuleID) -> Bool {
         [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power].contains(id)
+            || id == .control
     }
 
     static func generalSummary(_ s: AppSettings) -> String {
@@ -56,7 +57,9 @@ enum SettingsCatalog {
             return m.hotkeys.enabled ? WindowsSection.summary(m.hotkeys) : tr("Shortcuts off")
         case .agents:
             return FileManager.default.fileExists(atPath: AgentsModule.defaultLogURL.path) ? tr("Hook log found") : tr("No hook log")
-        case .notifications, .command, .control, .notes:
+        case .control:
+            return context.module(ControlModule.self).map { ControlText.summary($0.settings) } ?? ""
+        case .notifications, .command, .notes:
             return ""
         }
     }
@@ -111,7 +114,8 @@ struct ModuleSection: View {
         case .clipboard: if let m = context.module(ClipboardModule.self) { ClipboardSection(module: m, context: context) }
         case .windows: if let m = context.module(WindowsModule.self) { WindowsSection(module: m, context: context) }
         case .agents: AgentsSection()
-        case .notifications, .command, .control, .notes: EmptyView()
+        case .control: if let m = context.module(ControlModule.self) { ControlSection(module: m) }
+        case .notifications, .command, .notes: EmptyView()
         }
     }
 }

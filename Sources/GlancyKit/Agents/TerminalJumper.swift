@@ -18,21 +18,11 @@ enum TerminalJumper {
         case notFound
     }
 
-    /// Terminals and editors that run Claude Code, by bundle id.
-    static let knownApps: [String: String] = [
-        "com.apple.Terminal": "Terminal",
-        "com.googlecode.iterm2": "iTerm2",
-        "com.mitchellh.ghostty": "Ghostty",
-        "dev.warp.Warp-Stable": "Warp",
-        "dev.warp.Warp": "Warp",
-        "com.microsoft.VSCode": "VS Code",
-        "com.microsoft.VSCodeInsiders": "VS Code Insiders",
-        "com.todesktop.230313mzl4w4u92": "Cursor",
-        "dev.zed.Zed": "Zed",
-        "net.kovidgoyal.kitty": "kitty",
-        "org.alacritty": "Alacritty",
-        "com.github.wez.wezterm": "WezTerm",
-    ]
+    /// Terminals and editors that run coding agents, by bundle id (the agents' own apps are
+    /// reached by `AgentJump`, not by searching their windows).
+    static let knownApps: [String: String] = AgentHost.apps
+        .filter { $0.value.kind == .terminal || $0.value.kind.isEditor }
+        .mapValues(\.name)
 
     static var isTrusted: Bool { AXIsProcessTrusted() }
 
@@ -42,6 +32,13 @@ enum TerminalJumper {
         let label: String
         /// The board row it belongs to (window resolution keys its answer by it).
         var rowID: String = ""
+        /// How a click reaches the session (a terminal by default).
+        var plan: AgentJumpPlan = .terminal(processNames: ["claude"])
+        /// The agent's process names, for the process-tree lookup.
+        var processNames: Set<String> {
+            if case .terminal(let names) = plan { return names }
+            return ["claude"]
+        }
     }
 
     /// A session's terminal window, as the window registry keys it.
@@ -70,7 +67,7 @@ enum TerminalJumper {
             $0.bundleIdentifier.map { knownApps[$0] != nil } ?? false
         }
         guard !running.isEmpty else { return nil }
-        let hosts = hostApps(forPaths: [t.projectPath, t.cwd], among: Set(running.map(\.processIdentifier)))
+        let hosts = hostApps(forPaths: [t.projectPath, t.cwd], among: Set(running.map(\.processIdentifier)), names: t.processNames)
         let zOrder = frontToBackPIDs()
         let ordered = running.sorted { a, b in
             let ha = hosts.contains(a.processIdentifier), hb = hosts.contains(b.processIdentifier)
@@ -117,7 +114,8 @@ enum TerminalJumper {
         let running = knownRunning()
         guard !running.isEmpty else { return [:] }
         let paths = Set(targets.flatMap { [$0.projectPath, $0.cwd] }.filter { !$0.isEmpty })
-        let hostsByPath = claudeHosts(among: Set(running.map(\.processIdentifier)), cwds: paths)
+        let names = targets.reduce(into: Set<String>()) { $0.formUnion($1.processNames) }
+        let hostsByPath = claudeHosts(among: Set(running.map(\.processIdentifier)), cwds: paths, names: names)
         let windowsByApp = running.map { ($0.processIdentifier, axWindows(of: $0.processIdentifier)) }
         var candidates: [Candidate] = []
         for t in targets {
@@ -264,18 +262,18 @@ enum TerminalJumper {
 
     // MARK: Processes (libproc)
 
-    /// PIDs of known apps that host a `claude` process whose working directory is one of `paths`.
-    static func hostApps(forPaths paths: [String], among appPIDs: Set<pid_t>) -> Set<pid_t> {
+    /// PIDs of known apps that host an agent process (`names`) whose working directory is one of `paths`.
+    static func hostApps(forPaths paths: [String], among appPIDs: Set<pid_t>, names: Set<String> = ["claude"]) -> Set<pid_t> {
         let wanted = Set(paths.filter { !$0.isEmpty })
-        return claudeHosts(among: appPIDs, cwds: wanted).values.reduce(into: Set<pid_t>()) { $0.formUnion($1) }
+        return claudeHosts(among: appPIDs, cwds: wanted, names: names).values.reduce(into: Set<pid_t>()) { $0.formUnion($1) }
     }
 
-    /// One pass over every process: working directory of each `claude` process → the known apps
-    /// hosting it. `cwds` limits the folders looked at (nil = all).
-    static func claudeHosts(among appPIDs: Set<pid_t>, cwds: Set<String>? = nil) -> [String: Set<pid_t>] {
+    /// One pass over every process: working directory of each agent process (`names`: claude,
+    /// codex, opencode) → the apps hosting it. `cwds` limits the folders looked at (nil = all).
+    static func claudeHosts(among appPIDs: Set<pid_t>, cwds: Set<String>? = nil, names: Set<String> = ["claude"]) -> [String: Set<pid_t>] {
         var hosts: [String: Set<pid_t>] = [:]
         for pid in allPIDs() {
-            guard let cwd = processCWD(pid), cwds?.contains(cwd) ?? true, isClaude(pid) else { continue }
+            guard let cwd = processCWD(pid), cwds?.contains(cwd) ?? true, isAgent(pid, names: names) else { continue }
             var p = pid
             for _ in 0..<32 {
                 guard let parent = parentPID(p), parent > 1 else { break }
@@ -302,14 +300,39 @@ enum TerminalJumper {
 
     /// Claude Code's native binary is named after its version (…/claude/versions/2.1.289) and
     /// launched as `claude`: match argv[0] or the executable path.
-    static func isClaude(_ pid: pid_t) -> Bool {
-        if processName(pid) == "claude" { return true }
+    static func isClaude(_ pid: pid_t) -> Bool { isAgent(pid, names: ["claude"]) }
+
+    /// An agent's process: its name, executable or argv[0] is one of `names` (claude, codex, opencode).
+    static func isAgent(_ pid: pid_t, names: Set<String>) -> Bool {
+        if let n = processName(pid), names.contains(n) { return true }
         var path = [CChar](repeating: 0, count: 4096)
         if proc_pidpath(pid, &path, UInt32(path.count)) > 0 {
             let p = String(decoding: path.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
-            if p.hasSuffix("/claude") || p.contains("/claude/versions/") { return true }
+            if names.contains((p as NSString).lastPathComponent) { return true }
+            if names.contains("claude"), p.contains("/claude/versions/") { return true }
         }
-        return argv0(pid).map { ($0 as NSString).lastPathComponent == "claude" } ?? false
+        return argv0(pid).map { names.contains(($0 as NSString).lastPathComponent) } ?? false
+    }
+
+    /// The app (bundle id) hosting each folder's agent process: the first ancestor that is a
+    /// running app with a bundle id. One pass over every process; read-only.
+    static func hostBundles(cwds: Set<String>, names: Set<String>) -> [String: String] {
+        var apps: [pid_t: String] = [:]
+        for a in NSWorkspace.shared.runningApplications {
+            if let b = a.bundleIdentifier { apps[a.processIdentifier] = b }
+        }
+        let ownPID = getpid()
+        var out: [String: String] = [:]
+        for pid in allPIDs() {
+            guard let cwd = processCWD(pid), cwds.contains(cwd), out[cwd] == nil, isAgent(pid, names: names) else { continue }
+            var p = pid
+            for _ in 0..<32 {
+                guard let parent = parentPID(p), parent > 1, parent != ownPID else { break }
+                if let b = apps[parent] { out[cwd] = b; break }
+                p = parent
+            }
+        }
+        return out
     }
 
     /// argv[0] via KERN_PROCARGS2 (own-user processes only).

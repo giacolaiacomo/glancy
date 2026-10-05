@@ -127,7 +127,14 @@ The Agents module reads a log written by a tiny Claude Code hook. Glancy never e
 }
 ```
 
-The hook appends one line per event to `~/.claude/hooks/data/cc-dashboard/events.jsonl`: time, event, session id, working folder, tool name and the first 200 characters of your prompt. It prints nothing, always exits 0 and can't block Claude Code. It needs `jq`, which macOS 15 and later include (`brew install jq` on macOS 14). New sessions show up in the notch as soon as they start.
+The hook appends one line per event to `~/.claude/hooks/data/cc-dashboard/events.jsonl`: time, event, session id, working folder, tool name, the first 200 characters of your prompt, and which app the session runs in (the app's bundle id, `TERM_PROGRAM` and Claude Code's entry point, so a session in VS Code opens VS Code and one in Terminal opens Terminal). It prints nothing, always exits 0 and can't block Claude Code. It needs `jq`, which macOS 15 and later include (`brew install jq` on macOS 14). New sessions show up in the notch as soon as they start. The same hook fires in the terminal, in the VS Code and Cursor extensions and in the Claude app. An older copy of the hook still works: the app is then found from the process tree when you open the notch.
+
+### Codex and OpenCode
+
+Nothing to set up; each source can be turned off in Settings → Agents.
+
+- **Codex** (CLI, Codex app, VS Code extension): Glancy follows the session files Codex already writes in `~/.codex/sessions/`, read-only. It sees when a turn runs, finishes, fails, or waits for your answer or approval. A click opens the session in the Codex app, in VS Code, or brings its terminal forward. Your `config.toml` (and its `notify` command) is never touched.
+- **OpenCode**: Glancy reads OpenCode's own database (`~/.local/share/opencode/opencode.db`, read-only) for working / done / failed. To also see when it waits for a permission, click **Install** in Settings → Agents → OpenCode: it copies [`hooks/glancy-opencode.js`](hooks/glancy-opencode.js) to `~/.config/opencode/plugins/glancy.js` (your `opencode.json` is not edited; a different file already there is kept as a backup). **Uninstall** removes it.
 
 ## Permissions
 
@@ -147,6 +154,8 @@ Every permission is optional: without one, its module just does less. Settings �
 Glancy makes **no network requests**, has no telemetry, no account and no update check. What it reads, all locally:
 
 - **Claude Code:** the hook log above, read-only, from the end. Glancy never writes to it and never runs Claude.
+- **Codex:** the session files in `~/.codex/sessions/`, read-only (only the session's folder, state, first prompt, last tool and last reply are kept, in memory).
+- **OpenCode:** its database, opened read-only; and, if you install the plugin, the event log it writes to `~/Library/Application Support/Glancy/agents/`.
 - **Calendar:** your events through EventKit, in memory.
 - **Media:** the system's now-playing information through [mediaremote-adapter](https://github.com/ungive/mediaremote-adapter), a small helper (bundled, run with the system Perl) that prints what's playing; or AppleScript for Music and Spotify as a fallback.
 - **Clipboard:** what you copy, kept in `~/Library/Application Support/Glancy/clipboard/` (owner-only permissions), skipping concealed items and password managers. Clear it any time.

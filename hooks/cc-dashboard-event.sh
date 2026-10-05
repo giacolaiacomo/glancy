@@ -3,7 +3,9 @@
 #   ~/.claude/hooks/data/cc-dashboard/events.jsonl   (rotated to .1 at ~5 MB)
 # Read-only observer: prints nothing (no decision) and always exits 0, so it can never block Claude Code.
 # Keeps only: time, event name, session id, working folder, tool name, subagent type, the first 200
-# characters of the prompt, and the start/end source/reason. Needs jq (built into macOS 15+, or brew install jq).
+# characters of the prompt, the start/end source/reason, and which app the session runs in (the app's
+# bundle id, TERM_PROGRAM and Claude Code's entry point: Terminal vs VS Code vs the Claude app).
+# Needs jq (built into macOS 15+, or brew install jq). Older Glancy versions ignore the added fields.
 OUT="$HOME/.claude/hooks/data/cc-dashboard/events.jsonl"
 JQ="$(command -v jq || true)"
 for c in /usr/bin/jq /opt/homebrew/bin/jq /usr/local/bin/jq; do [ -z "$JQ" ] && [ -x "$c" ] && JQ="$c"; done
@@ -22,6 +24,9 @@ fi
   prompt: ((.prompt // "") | tostring | .[0:200]),
   source: .source,
   reason: .reason,
-  stop_hook_active: .stop_hook_active
+  stop_hook_active: .stop_hook_active,
+  host_bundle: env.__CFBundleIdentifier,
+  term_program: env.TERM_PROGRAM,
+  entrypoint: env.CLAUDE_CODE_ENTRYPOINT
 } | with_entries(select(.value != null))' >> "$OUT" 2>/dev/null
 exit 0

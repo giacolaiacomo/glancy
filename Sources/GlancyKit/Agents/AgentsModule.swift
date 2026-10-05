@@ -1,19 +1,36 @@
 import SwiftUI
 
-/// Claude Code sessions in the notch (SPEC §3 Agents). Source: the cc-dashboard hook log.
+/// Coding agents in the notch (SPEC §3 Agents): Claude Code (hook log), Codex (session rollouts)
+/// and OpenCode (its database, plus an optional plugin), wherever they run — a terminal, VS Code,
+/// Cursor, the Codex app. One board, one state machine; each source can be turned off.
 public final class AgentsModule: GlancyModule {
     public nonisolated static let defaultLogURL = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".claude/hooks/data/cc-dashboard/events.jsonl")
 
     public let id = ModuleID.agents
     public let model = AgentsModel()
-    private let reader: JSONLTailReader
+    /// Every source this module can read, in display order.
+    let sources: [any AgentSource]
+    private let defaults: UserDefaults
     private var running = false
+    /// Sources started in this run (turning one off stops it at once).
+    private var started = Set<AgentKind>()
     private var keyMonitor: Any?
     private var onAgentsOrHome = false
 
-    public init(logURL: URL = AgentsModule.defaultLogURL) {
-        reader = JSONLTailReader(url: logURL)
+    /// The real sources: the Claude hook log, ~/.codex/sessions, OpenCode's data folder.
+    public convenience init() {
+        self.init(sources: [ClaudeHookSource(logURL: Self.defaultLogURL), CodexSource(), OpenCodeSource()])
+    }
+
+    /// Claude Code only, from `logURL` (isolated runs, tests, the demo): nothing else of the user's is read.
+    public convenience init(logURL: URL) {
+        self.init(sources: [ClaudeHookSource(logURL: logURL)])
+    }
+
+    init(sources: [any AgentSource], defaults: UserDefaults = .standard) {
+        self.sources = sources
+        self.defaults = defaults
     }
 
     /// The tiler for ⌥-click and "Lay out sessions" (the Windows module), wired in Modules.make().
@@ -22,21 +39,57 @@ public final class AgentsModule: GlancyModule {
         set { model.tiling = newValue }
     }
 
+    // MARK: Sources
+
+    static let disabledKey = "agents.disabledSources"
+
+    public var availableSources: [AgentKind] { sources.map(\.kind) }
+
+    public func isSourceEnabled(_ kind: AgentKind) -> Bool {
+        !(defaults.stringArray(forKey: Self.disabledKey) ?? []).contains(kind.rawValue)
+    }
+
+    /// Turns one source on or off (remembered). Off: its watcher stops and its rows go at once.
+    public func setSource(_ kind: AgentKind, enabled: Bool) {
+        var off = Set(defaults.stringArray(forKey: Self.disabledKey) ?? [])
+        if enabled { off.remove(kind.rawValue) } else { off.insert(kind.rawValue) }
+        defaults.set(off.sorted(), forKey: Self.disabledKey)
+        guard running, let source = sources.first(where: { $0.kind == kind }) else { return }
+        if enabled, !started.contains(kind) {
+            startSource(source)
+        } else if !enabled, started.contains(kind) {
+            source.stop()
+            started.remove(kind)
+            model.removeSource(kind)
+        }
+    }
+
+    /// One line per source for Settings → Agents.
+    public func sourceStatus(_ kind: AgentKind) -> AgentSourceStatus {
+        guard isSourceEnabled(kind) else { return AgentSourceStatus(.off, AgentsText.t("Off")) }
+        return sources.first { $0.kind == kind }?.status() ?? AgentSourceStatus(.missing, "")
+    }
+
+    /// The OpenCode plugin's installer (Settings → Agents), nil when OpenCode is not a source here.
+    var openCodeInstaller: OpenCodePluginInstaller? {
+        (sources.first { $0.kind == .opencode } as? OpenCodeSource)?.installer
+    }
+
     public func start(hub: ActivityHub) {
         guard !running else { return }
         running = true
         model.hub = hub
         model.onWantsKeys = { [weak self] on in self?.wantsKeys(on) }
-        // Parsing happens on the reader queue. The launch rebuild (thousands of lines) also runs
-        // the state machine there, one line at a time; main only adopts the result. Then FIFO onto
-        // main, in file order, so live batches always land after the rebuild.
-        reader.start({ [weak self] events, _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver { $0.ingest(events, rebuild: false) } } }
-        }, rebuild: { [weak self] lines in
-            var store = AgentSessionStore()
-            AgentEventParser.drain(&lines) { store.apply($0) }
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver { $0.adopt(store) } } }
-        })
+        for source in sources where isSourceEnabled(source.kind) { startSource(source) }
+        model.refresh()   // sessions already held (the renderer's sample) reach the wings
+    }
+
+    private func startSource(_ source: any AgentSource) {
+        started.insert(source.kind)
+        source.start { [weak self] kind, update in
+            guard let self, self.started.contains(kind) else { return }   // turned off meanwhile
+            self.deliver { $0.apply(update, from: kind) }
+        }
     }
 
     /// Drops batches that were already queued for main when `stop()` ran.
@@ -47,7 +100,8 @@ public final class AgentsModule: GlancyModule {
     public func stop() {
         guard running else { return }
         running = false
-        reader.stop()
+        for source in sources where started.contains(source.kind) { source.stop() }
+        started = []
         model.endTiling()
         model.onWantsKeys = nil
         wantsKeys(false)
@@ -97,10 +151,13 @@ public final class AgentsModule: GlancyModule {
     }
 
     public var tab: PanelTab? {
-        PanelTab(module: .agents, symbol: "terminal", title: LocalizedStringKey(AgentsText.t("Agents"))) { [model] in
+        PanelTab(module: .agents, symbol: Self.symbol, title: LocalizedStringKey(AgentsText.t("Agents"))) { [model] in
             AnyView(AgentsBoard(model: model))
         }
     }
+
+    /// The tab's glyph: agents of every kind, not only terminals (SF Symbols 1, macOS 14 ok).
+    public static let symbol = "sparkles"
 
     public func homeCard() -> AnyView? {
         model.highlights(limit: 1).isEmpty ? nil : AnyView(AgentsHomeCard(model: model))
@@ -131,6 +188,52 @@ extension AgentsModule {
             model.prepareTilingForRender(trusted: true, preview: nil, undo: true,
                                          note: "3 exact · \(model.sessions.first?.label ?? "api") kept 800×600")
         }
+    }
+}
+
+extension AgentsModule {
+    /// A module with no source, seeded with made-up sessions from every source (renderer): Claude
+    /// Code in Terminal and in VS Code, the Codex CLI and the Codex app, OpenCode. Nothing of the
+    /// user's is read.
+    public static func renderSample(now: Date = .now) -> AgentsModule {
+        let m = AgentsModule(sources: [])
+        m.seedSample(now: now)
+        return m
+    }
+
+    func seedSample(now: Date) {
+        func e(_ ago: Double, _ k: AgentEvent.Kind, _ sid: String, _ folder: String, _ agent: AgentKind, _ host: AgentHost,
+               tool: String? = nil, prompt: String? = nil, message: String? = nil, title: String? = nil) -> AgentEvent {
+            AgentEvent(ts: now.addingTimeInterval(-ago), kind: k, sessionID: sid, cwd: "/Users/demo/Projects/\(folder)",
+                       toolName: tool, prompt: prompt, agent: agent, host: host, message: message, title: title)
+        }
+        let terminal = AgentHost(kind: .terminal, bundleID: "com.apple.Terminal")
+        let vscode = AgentHost(kind: .vscode, bundleID: "com.microsoft.VSCode")
+        let ghostty = AgentHost(kind: .terminal, bundleID: "com.mitchellh.ghostty")
+        let codexApp = AgentHost(kind: .codexApp, bundleID: "com.openai.codex")
+        let iterm = AgentHost(kind: .terminal, bundleID: "com.googlecode.iterm2")
+        let events = [
+            e(400, .sessionStart, "s-api", "api", .claudeCode, terminal),
+            e(390, .userPromptSubmit, "s-api", "api", .claudeCode, terminal, prompt: "Run the migrations on staging"),
+            e(40, .postToolUse, "s-api", "api", .claudeCode, terminal, tool: "Read"),
+            e(20, .permissionRequest, "s-api", "api", .claudeCode, terminal, tool: "Bash"),
+            e(900, .sessionStart, "s-web", "web-app", .claudeCode, vscode),
+            e(880, .userPromptSubmit, "s-web", "web-app", .claudeCode, vscode, prompt: "Add dark mode to the settings page"),
+            e(8, .postToolUse, "s-web", "web-app", .claudeCode, vscode, tool: "Edit"),
+            e(300, .sessionStart, "codex:cli", "cli-tools", .codex, ghostty),
+            e(290, .userPromptSubmit, "codex:cli", "cli-tools", .codex, ghostty, prompt: "Port the config parser to the new format"),
+            e(5, .postToolUse, "codex:cli", "cli-tools", .codex, ghostty, tool: "exec_command"),
+            e(1500, .sessionStart, "codex:app", "docs-site", .codex, codexApp),
+            e(1490, .userPromptSubmit, "codex:app", "docs-site", .codex, codexApp, prompt: "Write the install page"),
+            e(1200, .postToolUse, "codex:app", "docs-site", .codex, codexApp, tool: "apply_patch"),
+            e(70, .stop, "codex:app", "docs-site", .codex, codexApp, message: "Install page written; three files changed."),
+            e(700, .sessionStart, "ses_mobile", "mobile", .opencode, iterm, title: "Flaky login test"),
+            e(690, .userPromptSubmit, "ses_mobile", "mobile", .opencode, iterm, prompt: "Fix the flaky login test"),
+            e(240, .postToolUse, "ses_mobile", "mobile", .opencode, iterm, tool: "bash"),
+            e(200, .stop, "ses_mobile", "mobile", .opencode, iterm, message: "The test waited on a stale cookie; fixed and green."),
+        ]
+        model.ingest(events, rebuild: true)
+        model.prepareTilingForRender(trusted: true, preview: nil, undo: false, note: nil)
     }
 }
 
@@ -167,9 +270,48 @@ extension AgentsModule {
                     pad(tool, 22), pad(String(s.id.prefix(8)), 9), String((s.lastPrompt ?? "").prefix(48))].joined(separator: " ") + "\n"
         }
         out += "accessibility trusted: \(TerminalJumper.isTrusted)\n"
+        let hosts = TerminalJumper.hostBundles(cwds: Set(store.live.flatMap { [$0.cwd, $0.projectPath] }), names: ["claude"])
+        for s in store.live {
+            let host = s.host.map { "\($0.kind.rawValue) \($0.bundleID ?? "")" } ?? "from process tree: \(hosts[s.cwd] ?? hosts[s.projectPath] ?? "none")"
+            out += "host \(s.label): \(host)\n"
+        }
         for s in store.live {
             let hosts = TerminalJumper.hostNames(projectPath: s.projectPath, cwd: s.cwd)
             out += "jump target \(s.label): \(hosts.isEmpty ? "no claude process found (would activate front-most terminal)" : hosts.joined(separator: ", "))\n"
+        }
+        return out
+    }
+}
+
+extension AgentsModule {
+    /// Codex rollouts and OpenCode's database read the way launch reads them, as a table.
+    /// Read-only (nothing under ~/.codex or OpenCode's folders is written).
+    public nonisolated static func debugSourcesSnapshot(now: Date = .now) -> String {
+        final class Box: @unchecked Sendable { var store: AgentSessionStore?; var events: [AgentEvent] = [] }
+        let box = Box()
+        // Seen from just after the last write, so a Mac where Codex last ran days ago still shows rows.
+        let codex = CodexSessionsReader(root: CodexSource.defaultRoot, forgetAfter: 3 * 86400)
+        let latest = codex.recentRolloutsAll().first?.1 ?? now
+        codex.now = { latest.addingTimeInterval(60) }
+        codex.start { if case .rebuilt(let s) = $0 { box.store = s } }
+        codex.sync()
+        codex.stop()
+        var store = box.store ?? AgentSessionStore()
+        let db = OpenCodeSource.defaultDataFolder.appendingPathComponent("opencode.db").path
+        var seen: [String: OpenCodeSnapshot.Seen] = [:]
+        let rows = OpenCodeDatabase.recentSessions(db: db, since: now.addingTimeInterval(-365 * 86400), limit: 12) ?? []
+        for e in OpenCodeSnapshot.events(rows.reversed(), seen: &seen) { store.apply(e) }
+        // No expiry here: old OpenCode rows stay visible in this snapshot.
+        func pad(_ s: String, _ n: Int) -> String {
+            s.count > n ? String(s.prefix(n - 1)) + "…" : s + String(repeating: " ", count: n - s.count)
+        }
+        var out = "codex rollouts followed: \(codex.trackedCount)  opencode rows: \(rows.count)\n"
+        for s in store.board {
+            let host = s.host.map { "\($0.kind.rawValue)\($0.bundleID.map { "(\($0))" } ?? "")" } ?? "-"
+            out += [pad(s.agent.rawValue, 9), pad(s.label, 22), pad(s.state.rawValue, 8), pad(host, 34),
+                    pad(s.lastTool ?? "-", 18), pad(s.title ?? "-", 40), String((s.lastMessage ?? "").prefix(40))]
+                .joined(separator: " ") + "\n"
+            out += "    plan: \(AgentJump.plan(for: s))\n"
         }
         return out
     }

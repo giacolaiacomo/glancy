@@ -26,7 +26,8 @@ public final class AgentsModel {
     /// Last jump result for the row that was clicked (shown in its tooltip / footer).
     public private(set) var jumpNote: (rowID: String, text: String)?
 
-    @ObservationIgnored public private(set) var store = AgentSessionStore()
+    /// One store per source (Claude Code, Codex, OpenCode), read merged.
+    @ObservationIgnored public private(set) var store = AgentStores()
     @ObservationIgnored weak var hub: ActivityHub?
     @ObservationIgnored var now: () -> Date = { .now }
     @ObservationIgnored private var wakeTask: Task<Void, Never>?
@@ -54,7 +55,14 @@ public final class AgentsModel {
     @ObservationIgnored weak var tiling: (any AgentsTiling)?
     @ObservationIgnored let windowCache = TerminalWindowCache()
     @ObservationIgnored var axTrusted: () -> Bool = { TerminalJumper.isTrusted }
-    @ObservationIgnored var jumper: (TerminalJumper.Target) async -> TerminalJumper.Outcome = { await TerminalJumper.jump($0) }
+    @ObservationIgnored var jumper: (TerminalJumper.Target) async -> TerminalJumper.Outcome = { await AgentJump.perform($0) }
+    /// Process-tree host lookup (folder → app bundle id) for sessions whose source did not say.
+    @ObservationIgnored var hostLookup: @Sendable (Set<String>, Set<String>) -> [String: String] = {
+        TerminalJumper.hostBundles(cwds: $0, names: $1)
+    }
+    /// Rows already looked up (bounded by the live sessions), and the lookup in flight.
+    @ObservationIgnored private var hostLooked = Set<String>()
+    @ObservationIgnored private(set) var hostTask: Task<Void, Never>?
     @ObservationIgnored var resolver: ([TerminalJumper.Target], Set<CGWindowID>) async -> [String: TerminalJumper.ResolvedWindow] = {
         await TerminalJumper.resolveWindows($0, excluding: $1)
     }
@@ -99,19 +107,34 @@ public final class AgentsModel {
             if let row = needsYouRows.last {
                 show = { [weak self] in self?.jump(to: row) }
             }
-            peek(AgentsText.needsYou(needsYou), state: .waiting, show: show)
+            let one = needsYouRows.count == 1 ? needsYouRows.last.flatMap(store.session(rowID:)) : nil
+            peek(AgentsText.needsYou(needsYou), state: .waiting, show: show, about: one)
         }
         if !finished.isEmpty {
-            let detail = finished.count == 1 ? store.live.first { $0.label == finished[0] }?.lastTurnDuration : nil
+            let one = finished.count == 1 ? store.live.first { $0.label == finished[0] } : nil
             let text = finished.count == 1 ? AgentsText.finished(finished[0]) : AgentsText.finishedMany(finished)
-            peek(text, state: .done, detail: detail.map(AgentsText.duration))
+            peek(text, state: .done, detail: one?.lastTurnDuration.map(AgentsText.duration), about: one)
         }
     }
 
     /// Takes over a store rebuilt off the main actor (launch). No peeks.
-    public func adopt(_ rebuilt: AgentSessionStore) {
-        store = rebuilt
+    public func adopt(_ rebuilt: AgentSessionStore, for kind: AgentKind = .claudeCode) {
+        store.replace(kind, with: rebuilt)
         loaded = true
+        refresh()
+    }
+
+    /// What a source delivered.
+    func apply(_ update: AgentSourceUpdate, from kind: AgentKind) {
+        switch update {
+        case .rebuilt(let s): adopt(s, for: kind)
+        case let .events(events, quiet): ingest(events, rebuild: quiet)
+        }
+    }
+
+    /// A source was turned off: its rows go.
+    func removeSource(_ kind: AgentKind) {
+        store.remove(kind)
         refresh()
     }
 
@@ -121,11 +144,47 @@ public final class AgentsModel {
         let on: Bool
         if case .expanded = v { on = true } else { on = false }
         if pulse != on { pulse = on }
+        if on {
+            resolveHosts()
+        } else {
+            AgentAppIcons.clear()
+        }
+    }
+
+    /// Sessions whose source did not say which app they run in (an older Claude hook, the Codex
+    /// CLI, OpenCode's database): looked up once from the process tree, off the main actor, when
+    /// the panel opens. Never on a timer.
+    func resolveHosts() {
+        guard hostTask == nil else { return }
+        let liveRows = Set(store.live.map(\.rowID))
+        hostLooked.formIntersection(liveRows)
+        let wanted = store.live.filter { s in
+            !hostLooked.contains(s.rowID) && (s.host == nil || s.host?.kind == .unknown
+                || (s.host?.kind == .terminal && s.host?.bundleID == nil))
+        }
+        guard !wanted.isEmpty else { return }
+        for s in wanted { hostLooked.insert(s.rowID) }
+        let cwds = Set(wanted.flatMap { [$0.cwd, $0.projectPath] }.filter { !$0.isEmpty })
+        let names = wanted.reduce(into: Set<String>()) { $0.formUnion($1.agent.processNames) }
+        let lookup = hostLookup
+        hostTask = Task { [weak self] in
+            let found = await Task.detached(priority: .utility) { lookup(cwds, names) }.value
+            guard let self, !Task.isCancelled else { return }
+            self.hostTask = nil
+            var changed = false
+            for s in wanted {
+                guard let b = found[s.cwd] ?? found[s.projectPath] else { continue }
+                if self.store.setHost(AgentHost.from(bundleID: b), rowID: s.rowID) { changed = true }
+            }
+            if changed { self.refresh() }
+        }
     }
 
     func reset() {
         wakeTask?.cancel(); wakeTask = nil; wakeAt = nil
-        store = AgentSessionStore()
+        hostTask?.cancel(); hostTask = nil
+        hostLooked = []
+        store = AgentStores()
         postedKey = nil
         endTiling()
         windowCache.removeAll()
@@ -205,10 +264,12 @@ public final class AgentsModel {
 
     var scheduledWake: Date? { wakeAt }
 
-    private func peek(_ text: String, state: AgentState, detail: String? = nil, show: (@MainActor () -> Void)? = nil) {
+    private func peek(_ text: String, state: AgentState, detail: String? = nil, show: (@MainActor () -> Void)? = nil,
+                      about session: AgentSession? = nil) {
         // A peek with an action stays a little longer, so there is time to reach it.
         hub?.show(PeekEvent(module: .agents, duration: show == nil ? 2.5 : 4,
-                            content: AnyView(AgentsPeekView(text: text, detail: detail, state: state, show: show))))
+                            content: AnyView(AgentsPeekView(text: text, detail: detail, state: state, show: show,
+                                                            agent: session?.agent, host: session?.host))))
     }
 
     // MARK: Actions
@@ -216,16 +277,19 @@ public final class AgentsModel {
     /// - Parameter note: what to say afterwards instead of the jump's own note (⌥-click fallbacks).
     public func jump(to rowID: String, note override: String? = nil) {
         guard let s = store.session(rowID: rowID) else { return }
-        let target = TerminalJumper.Target(projectPath: s.projectPath, cwd: s.cwd, label: s.label)
+        let target = Self.target(s)
         jumpTask = Task { [weak self] in
             guard let self else { return }
             let outcome = await self.jumper(target)
             let note: String? = switch outcome {
             case .raisedWindow: nil
             case .activatedApp:
-                TerminalJumper.isTrusted ? nil
-                    : AgentsText.t("Accessibility is off: Glancy can bring the terminal app forward, not the exact window.")
-            case .notFound: AgentsText.t("No terminal window found for this session.")
+                if case .terminal = target.plan, !TerminalJumper.isTrusted {
+                    AgentsText.t("Accessibility is off: Glancy can bring the terminal app forward, not the exact window.")
+                } else { nil }
+            case .notFound:
+                if case .terminal = target.plan { AgentsText.t("No terminal window found for this session.") }
+                else { AgentsText.t("The app this session runs in is not installed.") }
             }
             self.jumpNote = (override ?? note).map { (rowID, $0) }
         }
@@ -409,12 +473,13 @@ public final class AgentsModel {
     }
 
     func showWaitingPeekForRender() {
-        let label = store.live.first { $0.state == .waiting }?.label ?? "api"
-        peek(AgentsText.needsYou([label]), state: .waiting, show: {})
+        let s = store.live.first { $0.state == .waiting }
+        peek(AgentsText.needsYou([s?.label ?? "api"]), state: .waiting, show: {}, about: s)
     }
 
     static func target(_ s: AgentSession) -> TerminalJumper.Target {
-        TerminalJumper.Target(projectPath: s.projectPath, cwd: s.cwd, label: s.label, rowID: s.rowID)
+        TerminalJumper.Target(projectPath: s.projectPath, cwd: s.cwd, label: s.label, rowID: s.rowID,
+                              plan: AgentJump.plan(for: s))
     }
 
     /// The sessions worth a glance on Home: waiting first, then working, then a fresh done/failed.

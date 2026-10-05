@@ -113,7 +113,9 @@ public final class NotesModel {
 
     public func delete(_ id: String) {
         willDelete?(id)
-        pending.removeValue(forKey: id)?.cancel()
+        // A save already writing this note must land before the delete, or the file comes back.
+        let inFlight = pending.removeValue(forKey: id)
+        inFlight?.cancel()
         dirty.remove(id)
         notes.removeAll { $0.id == id }
         if settings.pinnedID == id { settings.pinnedID = nil }
@@ -121,7 +123,7 @@ public final class NotesModel {
         if selectedID == id { selectedID = listed.first?.id }
         confirmingDelete = false
         let store = store
-        Task { await store.delete(id) }
+        Task { _ = await inFlight?.value; await store.delete(id) }
     }
 
     public func togglePin(_ id: String) {
@@ -202,8 +204,9 @@ public final class NotesModel {
         }
     }
 
+    // `pending[id]` keeps the task until it is replaced or the note deleted, so a delete can wait
+    // for a write that is already past its debounce.
     private func write(_ id: String) async {
-        pending[id] = nil
         guard dirty.remove(id) != nil, let note = notes.first(where: { $0.id == id }) else { return }
         if note.isBlank, settings.inboxID != id {
             await store.delete(id)

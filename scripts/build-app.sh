@@ -37,7 +37,10 @@ done
 if [[ -n "${GLANCY_SIGN_IDENTITY:-}" ]]; then
   IDENTITY="$GLANCY_SIGN_IDENTITY"
 else
+  # Developer ID (distributable, notarizable) first, then Apple Development, then ad-hoc.
   IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/^ *[0-9]*) [0-9A-F]* "\(Developer ID Application: .*\)"$/\1/p' | head -n 1)"
+  [[ -n "$IDENTITY" ]] || IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
     | sed -n 's/^ *[0-9]*) [0-9A-F]* "\(Apple Development: .*\)"$/\1/p' | head -n 1)"
   IDENTITY="${IDENTITY:--}"
 fi
@@ -125,10 +128,12 @@ PLIST
 plutil -lint "$STAGE/Contents/Info.plist" >/dev/null
 
 if [[ "$IDENTITY" == "-" ]]; then echo "==> codesign (ad-hoc)"; else echo "==> codesign ($IDENTITY)"; fi
+# Notarization needs a secure timestamp; local development builds skip the round trip.
+if [[ "$IDENTITY" == "Developer ID Application:"* ]]; then TS=(--timestamp); else TS=(--timestamp=none); fi
 # Nested adapter code first, same identity (boring.notch #998: a mismatch stops perl loading it).
-codesign --force --timestamp=none -s "$IDENTITY" "$STAGE/Contents/Frameworks/MediaRemoteAdapter.framework"
-codesign --force --options runtime --timestamp=none -s "$IDENTITY" "$STAGE/Contents/MacOS/MediaRemoteAdapterTestClient"
-codesign --force --deep --options runtime --timestamp=none \
+codesign --force "${TS[@]}" -s "$IDENTITY" "$STAGE/Contents/Frameworks/MediaRemoteAdapter.framework"
+codesign --force --options runtime "${TS[@]}" -s "$IDENTITY" "$STAGE/Contents/MacOS/MediaRemoteAdapterTestClient"
+codesign --force --deep --options runtime "${TS[@]}" \
   --entitlements "$ROOT/scripts/Glancy.entitlements" -s "$IDENTITY" "$STAGE"
 codesign --verify --strict "$STAGE"
 echo "built $STAGE ($(lipo -archs "$STAGE/Contents/MacOS/Glancy"))"

@@ -283,7 +283,7 @@ private let toneURL: URL = {
         #expect(note.audio?.waveform.count == VoiceAnalysis.bars)
         #expect(note.text.hasPrefix("Voice note ") || note.text.hasPrefix("Nota vocale "))   // suites switch the language
         #expect(rig.module.model.selectedID == note.id)
-        try? await Task.sleep(for: .milliseconds(80))
+        await rig.module.model.flush()                // the debounced save, deterministically
         #expect(files(rig.notesDir) == ["\(note.id).m4a", "\(note.id).md"])
         let md = try String(contentsOf: rig.notesDir.appendingPathComponent("\(note.id).md"), encoding: .utf8)
         #expect(md.hasPrefix("---\naudio: \(note.id).m4a\n"))

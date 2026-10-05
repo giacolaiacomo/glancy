@@ -104,6 +104,22 @@ enum Render {
             shot("10-notifications-peek", ctx)
             settings.setEnabled(.notifications, false)
         }
+        // Shelf: drop targets while dragging, item actions, screenshot and download drop-downs
+        // (sample files in a scratch folder; the real shelf is never saved over).
+        if let shelf = modules.compactMap({ $0 as? ShelfModule }).first {
+            let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("glancy-render-shelf-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: scratch) }
+            for state in ShelfModule.RenderState.allCases {
+                let ctx = context(true)
+                shelf.prepareForRender(state, scratch: scratch)
+                if state.isPeek {
+                    shot("11-shelf-\(state.rawValue)", ctx)
+                } else {
+                    shot("11-shelf-\(state.rawValue)", ctx) { $0.expand(tab: .shelf) }
+                }
+            }
+            shelf.endRender()
+        }
         // Settings: the index, every section, and the first-run welcome. Permission statuses are
         // fixed (a mix of every state) so nothing is asked of macOS.
         let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,

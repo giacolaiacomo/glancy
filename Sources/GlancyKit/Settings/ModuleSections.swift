@@ -107,7 +107,7 @@ struct ModuleSection: View {
         case .power: if let m = context.module(PowerModule.self) { PowerSection(module: m, context: context) }
         case .media: if let m = context.module(MediaModule.self) { MediaSection(module: m, context: context) }
         case .timer: if let m = context.module(TimerModule.self) { TimerSection(module: m) }
-        case .shelf: if let m = context.module(ShelfModule.self) { ShelfSection(module: m) }
+        case .shelf: if let m = context.module(ShelfModule.self) { ShelfSettingsSection(module: m) }
         case .clipboard: if let m = context.module(ClipboardModule.self) { ClipboardSection(module: m, context: context) }
         case .windows: if let m = context.module(WindowsModule.self) { WindowsSection(module: m, context: context) }
         case .agents: AgentsSection()
@@ -335,24 +335,6 @@ private struct TimerSection: View {
     private func set(_ l: PomodoroLengths) {
         lengths = l
         module.setPomodoroLengths(l)
-    }
-}
-
-// MARK: Shelf
-
-private struct ShelfSection: View {
-    let module: ShelfModule
-
-    var body: some View {
-        let count = module.model.items.count
-        VStack(alignment: .leading, spacing: 4) {
-            SettingsRow(tr("On the shelf"), note: count == 0 ? tr("Nothing parked") : L10n.tr("%d items", count)) {
-                ConfirmButton(title: tr("Clear"), question: L10n.tr("Remove %d items?", count), confirm: tr("Clear"),
-                              enabled: count > 0) { module.clear() }
-            }
-            SettingsNote(tr("Your files stay where they are; copies Glancy made (text, links, mail attachments) are deleted."))
-            SettingsNote(L10n.tr("Holds up to %d items, kept across restarts.", ShelfStore.limit))
-        }
     }
 }
 

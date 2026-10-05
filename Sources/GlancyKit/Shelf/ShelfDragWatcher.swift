@@ -11,7 +11,8 @@ final class ShelfDragWatcher {
 
     /// The pointer came within reach of a notch carrying content. Once per drag.
     var onApproach: (() -> Void)?
-    /// The button went up after an approach.
+    /// The button went up after a content drag (approached or not: the panel may already have
+    /// been open, and the drop targets need to know the drag is over).
     var onDragEnded: (() -> Void)?
 
     private var downMonitor: Any?
@@ -59,10 +60,10 @@ final class ShelfDragWatcher {
     }
 
     private func buttonUp() {
-        let wasFired = fired
+        let content = fired || dragPasteboard.changeCount != startCount
         removeDragMonitors()
         fired = false
-        if wasFired { onDragEnded?() }
+        if content { onDragEnded?() }
     }
 
     private func removeDragMonitors() {

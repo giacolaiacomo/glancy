@@ -84,7 +84,10 @@ struct ShelfTabView: View {
     let model: ShelfModel
 
     var body: some View {
-        if model.items.isEmpty && model.receiving == 0 {
+        if model.dropTargetsShown {
+            ShelfDropTargetsView(model: model)
+                .transition(.opacity.combined(with: .scale(scale: 0.97)))
+        } else if model.items.isEmpty && model.receiving == 0 && model.busy == 0 {
             EmptyShelf()
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -105,12 +108,17 @@ struct ShelfTabView: View {
     private var toolbar: some View {
         HStack(spacing: 4) {
             Caption(text: model.receiving > 0 ? L10n.tr("Receiving…")
+                    : model.busy > 0 ? L10n.tr("Working…")
                     : model.selection.isEmpty ? ShelfText.count(model.items.count) : ShelfText.selected(model.selection.count))
             Spacer(minLength: 8)
             ToolIcon(symbol: "eye", help: L10n.tr("Quick Look")) { shelf.quickLook() }
             ToolIcon(symbol: "dot.radiowaves.left.and.right", help: L10n.tr("AirDrop")) { shelf.airDrop() }
             ShareIcon(shelf: shelf)
+            ToolIcon(symbol: "doc.on.doc", help: L10n.tr("Copy")) { shelf.copy() }
+            ToolIcon(symbol: "doc.zipper", help: L10n.tr("Zip")) { shelf.zip() }
             ToolIcon(symbol: "folder", help: L10n.tr("Show in Finder")) { shelf.reveal() }
+            MenuIcon(shelf: shelf, item: nil)
+            Rectangle().fill(Theme.hairline).frame(width: 1, height: 12).padding(.horizontal, 2)
             if !model.selection.isEmpty {
                 ToolIcon(symbol: "minus.circle", help: L10n.tr("Remove")) { shelf.remove(model.selection) }
             }
@@ -142,6 +150,7 @@ private struct ShelfTile: View {
     let model: ShelfModel
     let item: ShelfItem
     let selected: Bool
+    @State private var hover = false
 
     var body: some View {
         VStack(spacing: 4) {
@@ -156,7 +165,15 @@ private struct ShelfTile: View {
         .overlay(ShelfMouseArea(
             onDown: { _, event in click(event) },
             onDoubleClick: { shelf.quickLook(from: item) },
-            onDrag: { view, event in dragOut(from: view, event: event) }))
+            onDrag: { view, event in dragOut(from: view, event: event) },
+            onMenu: { shelf.menu(for: item) }))
+        // Hover: the item's actions, one click away (right-click opens the same menu).
+        .overlay(alignment: .topTrailing) {
+            if hover || model.renderHover == item.id {
+                MenuIcon(shelf: shelf, item: item, compact: true).padding(2).transition(.opacity)
+            }
+        }
+        .onHover { h in withAnimation(Theme.peek) { hover = h } }
         .help(item.name)
     }
 
@@ -209,6 +226,35 @@ private struct ToolGlyph: View {
     }
 }
 
+/// "…": every action on the selection (or on one item), as a menu.
+private struct MenuIcon: View {
+    let shelf: ShelfModule
+    let item: ShelfItem?
+    var compact = false
+    @State private var hover = false
+    var body: some View {
+        Group {
+            if compact {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Theme.primary)
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(Color.black.opacity(0.75)))
+                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+            } else {
+                ToolGlyph(symbol: "ellipsis.circle", hover: hover)
+            }
+        }
+        .overlay(ShelfMouseArea(onDown: { view, _ in
+            let menu = shelf.menu(for: item)
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: view.bounds.height + 4), in: view)
+        }))
+        .onHover { hover = $0 }
+        .help(L10n.tr("More"))
+        .accessibilityLabel(L10n.tr("More"))
+    }
+}
+
 /// The Share button needs an AppKit view to anchor the picker.
 private struct ShareIcon: View {
     let shelf: ShelfModule
@@ -228,21 +274,30 @@ struct ShelfMouseArea: NSViewRepresentable {
     var onDown: (NSView, NSEvent) -> Void = { _, _ in }
     var onDoubleClick: () -> Void = {}
     var onDrag: ((NSView, NSEvent) -> Void)?
+    var onMenu: (() -> NSMenu?)?
 
     func makeNSView(context: Context) -> MouseView { MouseView() }
     func updateNSView(_ view: MouseView, context: Context) {
-        view.onDown = onDown; view.onDoubleClick = onDoubleClick; view.onDrag = onDrag
+        view.onDown = onDown; view.onDoubleClick = onDoubleClick; view.onDrag = onDrag; view.onMenu = onMenu
     }
 
     final class MouseView: NSView {
         var onDown: (NSView, NSEvent) -> Void = { _, _ in }
         var onDoubleClick: () -> Void = {}
         var onDrag: ((NSView, NSEvent) -> Void)?
+        var onMenu: (() -> NSMenu?)?
         private var downAt: NSPoint?
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+        /// Right-click / control-click: the item's actions.
+        override func menu(for event: NSEvent) -> NSMenu? { onMenu?() }
+
         override func mouseDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.control), let menu = onMenu?() {
+                NSMenu.popUpContextMenu(menu, with: event, for: self)
+                return
+            }
             downAt = event.locationInWindow
             if event.clickCount == 2 { onDoubleClick() } else { onDown(self, event) }
         }

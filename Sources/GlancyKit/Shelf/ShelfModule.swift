@@ -8,8 +8,30 @@ public final class ShelfModel {
     public var selection: Set<UUID> = []
     /// Promised files still being written by their source app.
     public internal(set) var receiving = 0
+    /// Zips and conversions under way.
+    public internal(set) var busy = 0
     /// Resolved locations, by item; refreshed with the list.
     @ObservationIgnored var urls: [UUID: URL] = [:]
+
+    // Drop targets (files dragged to the notch)
+    /// The split drop zone is up (a file drag reached the notch).
+    public internal(set) var dropTargetsShown = false
+    /// The target under the pointer; nil = none (a drop goes to the Shelf).
+    public internal(set) var dropHover: ShelfDropAction?
+    /// Files in the drag.
+    public internal(set) var dropCount = 0
+    @ObservationIgnored var dropFrames: [ShelfDropAction: CGRect] = [:]
+    @ObservationIgnored weak var dropProbe: NSView?
+
+    // Screenshots and downloads
+    public internal(set) var lastScreenshot: URL?
+    public internal(set) var lastDownloads: [URL] = []
+    public internal(set) var screenshotsStatus: ShelfFolderStatus = .off
+    public internal(set) var downloadsStatus: ShelfFolderStatus = .off
+    public internal(set) var screenshotsFolder: URL?
+    /// Renderer only: the tile drawn as hovered (its "…" showing).
+    var renderHover: UUID?
+
     public init() {}
 
     public func url(_ item: ShelfItem) -> URL { urls[item.id] ?? URL(fileURLWithPath: item.path) }
@@ -22,22 +44,30 @@ public final class ShelfModel {
 }
 
 /// Shelf (SPEC §3): files dropped on the notch, kept as bookmarks across relaunches, dragged back
-/// out anywhere; AirDrop, Share, Quick Look. Nothing runs at rest: one click monitor (see
-/// `ShelfDragWatcher`) and the drop target the surface forwards to.
+/// out anywhere; AirDrop, Share, Quick Look, Copy, Open with, Zip, image conversion. While files
+/// are dragged to the notch the drop zone splits into Shelf / AirDrop / Share / Zip. New
+/// screenshots (opt-in) and finished downloads drop down from the notch. Nothing runs at rest:
+/// one click monitor (see `ShelfDragWatcher`), the drop target the surface forwards to, and a
+/// `DispatchSource` per watched folder.
 @MainActor
 public final class ShelfModule: GlancyModule, SurfaceDropTarget {
     public let id: ModuleID = .shelf
     public let model = ShelfModel()
     let thumbnails = ShelfThumbnails()
 
-    private let store: ShelfStore
-    private var hub: ActivityHub?
+    public let settings: ShelfSettings
+    let store: ShelfStore
+    let folders: ShelfFolders
+    private(set) var hub: ActivityHub?
+    var screenshotWatcher: ShelfFolderWatcher?
+    var downloadWatcher: ShelfFolderWatcher?
     private let watcher = ShelfDragWatcher()
     private var visibility: SurfaceVisibility = .collapsed
     private var openedForDrag = false
     private var droppedThisDrag = false
     private var dragOver = false
     private var dragAcceptable = false
+    private var dragKind: ShelfDropKind?
     private let promiseQueue: OperationQueue = {
         let q = OperationQueue()
         q.name = "ai.glancy.shelf.promises"
@@ -45,15 +75,20 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         return q
     }()
     private var started = false
+    /// Renderer only: the real items while sample ones are shown.
+    var renderSaved: [ShelfItem]?
 
     /// Files that vanish after the drag and must be copied in (tests point this at their own rule).
     private let isTransient: (URL) -> Bool
 
-    public convenience init() { self.init(store: .default) }
+    public convenience init() { self.init(store: .default, folders: .system) }
 
-    public init(store: ShelfStore, isTransient: @escaping (URL) -> Bool = ShelfStore.isTransient) {
+    public init(store: ShelfStore, isTransient: @escaping (URL) -> Bool = ShelfStore.isTransient,
+                settings: ShelfSettings = ShelfSettings(), folders: ShelfFolders = .none) {
         self.store = store
         self.isTransient = isTransient
+        self.settings = settings
+        self.folders = folders
     }
 
     // MARK: Lifecycle
@@ -68,11 +103,16 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         watcher.onApproach = { [weak self] in self?.dragApproached() }
         watcher.onDragEnded = { [weak self] in self?.dragEnded() }
         watcher.start()
+        settings.onChange = { [weak self] in self?.applyFolderSettings() }
+        applyFolderSettings()
     }
 
     public func stop() {
         started = false
         watcher.stop()
+        settings.onChange = nil
+        stopFolderWatchers()
+        hideDropTargets()
         if SurfaceDrop.target === self { SurfaceDrop.target = nil }
         hub?.clearAll(from: .shelf)
         hub = nil
@@ -81,7 +121,13 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
 
     public func visibilityChanged(_ v: SurfaceVisibility) {
         visibility = v
-        if case .expanded = v {} else { model.selection = [] }
+        if case .expanded = v {
+            // The screenshot location is a system preference with no change notification: look
+            // again whenever the panel opens (one defaults read).
+            if settings.screenshots, let folder = folders.screenshots(), folder != screenshotWatcher?.folder {
+                applyFolderSettings()
+            }
+        } else { model.selection = [] }
     }
 
     // MARK: Drag towards the notch (SPEC §2: within 32 pt opens the Shelf tab)
@@ -90,19 +136,39 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         guard let hub else { return }
         if case .expanded = visibility { openedForDrag = false } else { openedForDrag = true }
         droppedThisDrag = false
+        let files = ShelfDrop.fileCount(NSPasteboard(name: .drag))
+        if settings.dropTargets && files > 0 { showDropTargets(count: files) }
         hub.requestOpen(.shelf)
     }
 
     /// The button went up: if we opened the panel for a drag that was dropped elsewhere, close it.
     /// Checked a moment later: the button-up can reach us before the drop itself does.
     private func dragEnded() {
-        guard openedForDrag else { return }
+        let reopen = openedForDrag
         openedForDrag = false
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(400))
-            guard let self, !self.droppedThisDrag, !self.dragOver else { return }
-            self.hub?.requestClose()
+            guard let self, !self.dragOver else { return }
+            self.hideDropTargets()
+            if reopen && !self.droppedThisDrag { self.hub?.requestClose() }
         }
+    }
+
+    func showDropTargets(count: Int) {
+        if !model.dropTargetsShown { model.dropTargetsShown = true }
+        if model.dropCount != count { model.dropCount = count }
+    }
+
+    func hideDropTargets() {
+        guard model.dropTargetsShown || model.dropHover != nil else { return }
+        model.dropTargetsShown = false
+        model.dropHover = nil
+    }
+
+    /// The target under a drag location given in window coordinates.
+    func dropTarget(atWindowPoint p: NSPoint, in window: NSWindow?) -> ShelfDropAction? {
+        guard model.dropTargetsShown, let probe = model.dropProbe, probe.window != nil, probe.window === window else { return nil }
+        return ShelfDropAction.hit(probe.convert(p, from: nil), frames: model.dropFrames)
     }
 
     // MARK: SurfaceDropTarget
@@ -113,26 +179,48 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         if !dragOver {
             // Judged once per entry. Our own items dragged back over the notch: nothing to add.
             dragOver = true
-            dragAcceptable = info.draggingSource == nil && ShelfDrop.classify(info.draggingPasteboard) != nil
+            dragKind = info.draggingSource == nil ? ShelfDrop.classify(info.draggingPasteboard) : nil
+            dragAcceptable = dragKind != nil
             guard dragAcceptable else { return [] }
             let count = max(1, info.numberOfValidItemsForDrop)
             hub?.post(LiveActivity(id: "shelf.drag", module: .shelf, priority: 95,
                                    left: AnyView(ShelfDragWing(count: count)), right: AnyView(EmptyView())))
+            if case .files(let urls) = dragKind, settings.dropTargets { showDropTargets(count: urls.count) }
             if visibility != .expanded(.shelf) { hub?.requestOpen(.shelf) }
         }
-        return dragAcceptable ? .copy : []
+        guard dragAcceptable else { return [] }
+        // Every move over the panel: which target is under the pointer.
+        let hover = dropTarget(atWindowPoint: info.draggingLocation, in: info.draggingDestinationWindow)
+        if model.dropHover != hover {
+            model.dropHover = hover
+            if hover != nil { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
+        }
+        return .copy
     }
 
     public func dragExited() {
         dragOver = false
+        if model.dropHover != nil { model.dropHover = nil }
         hub?.clear("shelf.drag")
+        // Left the notch with the button already up (a cancelled drag): nothing more will come.
+        if NSEvent.pressedMouseButtons & 1 == 0 { hideDropTargets() }
     }
 
     public func performDrop(_ info: NSDraggingInfo) -> Bool {
-        dragExited()
-        guard info.draggingSource == nil, let kind = ShelfDrop.classify(info.draggingPasteboard) else { return false }
+        let action = ShelfDropAction.resolve(model.dropHover, targetsShown: model.dropTargetsShown)
+        dragOver = false
+        hub?.clear("shelf.drag")
+        guard info.draggingSource == nil, let kind = ShelfDrop.classify(info.draggingPasteboard) else {
+            hideDropTargets()
+            return false
+        }
         droppedThisDrag = true
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        if case .files(let urls) = kind, action != .shelf {
+            perform(action, on: urls)
+            return true
+        }
+        hideDropTargets()
         switch kind {
         case .files(let urls): addFiles(urls)
         case .promises: receivePromises(from: info.draggingPasteboard)
@@ -153,7 +241,7 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         })
     }
 
-    private func add(_ files: [(URL, Bool)]) {
+    func add(_ files: [(URL, Bool)]) {
         let new = files.compactMap { try? ShelfStore.item(for: $0.0, owned: $0.1) }
         guard !new.isEmpty else { return }
         let (items, removed) = ShelfList.adding(new, to: model.items)
@@ -195,7 +283,7 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
 
     public func clear() { remove(Set(model.items.map(\.id))) }
 
-    private func setItems(_ items: [ShelfItem], save: Bool = true) {
+    func setItems(_ items: [ShelfItem], save: Bool = true) {
         var urls: [UUID: URL] = [:]
         for item in items { urls[item.id] = ShelfStore.resolve(item)?.0 ?? URL(fileURLWithPath: item.path) }
         model.urls = urls
@@ -203,30 +291,6 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         model.selection.formIntersection(items.map(\.id))
         if save { store.save(items) }
     }
-
-    // MARK: Actions on the selection
-
-    func quickLook(from item: ShelfItem? = nil) {
-        let targets = model.targets
-        guard !targets.isEmpty else { return }
-        let start = item.flatMap { i in targets.firstIndex(where: { $0.id == i.id }) } ?? 0
-        ShelfQuickLook.shared.show(targets.map { model.url($0) }, at: start)
-    }
-
-    func airDrop() {
-        NSSharingService(named: .sendViaAirDrop)?.perform(withItems: model.targets.map { model.url($0) })
-    }
-
-    func share(from view: NSView) {
-        let picker = NSSharingServicePicker(items: model.targets.map { model.url($0) })
-        picker.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
-    }
-
-    func reveal() {
-        NSWorkspace.shared.activateFileViewerSelecting(model.targets.map { model.url($0) })
-    }
-
-    func openShelfTab() { hub?.requestOpen(.shelf) }
 
     // MARK: Surface
 

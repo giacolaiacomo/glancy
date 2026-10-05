@@ -199,6 +199,11 @@ public enum ShelfDrop {
         [.fileURL, .URL, .string] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
     }
 
+    /// File URLs on a pasteboard, without touching the files (cheap enough for a drag in flight).
+    public static func fileCount(_ pb: NSPasteboard) -> Int {
+        (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?.count ?? 0
+    }
+
     /// Real files first (when they exist), then file promises (Mail, Outlook, Photos), then a web
     /// link, then plain text.
     public static func classify(_ pb: NSPasteboard) -> ShelfDropKind? {

@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 enum SettingsCatalog {
     static func hasSection(_ id: ModuleID) -> Bool {
-        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power].contains(id)
+        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power, .notes].contains(id)
     }
 
     static func generalSummary(_ s: AppSettings) -> String {
@@ -56,7 +56,9 @@ enum SettingsCatalog {
             return m.hotkeys.enabled ? WindowsSection.summary(m.hotkeys) : tr("Shortcuts off")
         case .agents:
             return FileManager.default.fileExists(atPath: AgentsModule.defaultLogURL.path) ? tr("Hook log found") : tr("No hook log")
-        case .notifications, .command, .control, .notes:
+        case .notes:
+            return context.module(NotesModule.self)?.settingsSummary ?? ""
+        case .notifications, .command, .control:
             return ""
         }
     }
@@ -111,7 +113,8 @@ struct ModuleSection: View {
         case .clipboard: if let m = context.module(ClipboardModule.self) { ClipboardSection(module: m, context: context) }
         case .windows: if let m = context.module(WindowsModule.self) { WindowsSection(module: m, context: context) }
         case .agents: AgentsSection()
-        case .notifications, .command, .control, .notes: EmptyView()
+        case .notes: if let m = context.module(NotesModule.self) { NotesSettingsSection(module: m, context: context) }
+        case .notifications, .command, .control: EmptyView()
         }
     }
 }
@@ -291,6 +294,7 @@ private struct MediaSection: View {
                 PermissionLine(context: context, permission: .automation, text: tr("Controls need Automation for Music or Spotify"))
             }
             SettingsNote(tr("Chosen at launch: the reader is tried first, the scripts take over if it fails."))
+            LyricsSettingsRows(module: module)
         }
     }
 
@@ -448,6 +452,9 @@ enum GlancyHotkeys {
         var out: [HotkeyBinding] = []
         if let c = context.module(ClipboardModule.self), context.settings.isEnabled(.clipboard) {
             out.append(HotkeyBinding(id: "clipboard", title: tr("Clipboard"), hotkey: c.model.settings.hotkey))
+        }
+        if let n = context.module(NotesModule.self), context.settings.isEnabled(.notes) {
+            out.append(n.hotkeyBinding)
         }
         if let w = context.module(WindowsModule.self), context.settings.isEnabled(.windows), w.hotkeys.enabled {
             for a in WindowsSection.actions + WindowsSection.arrangeActions {

@@ -9,7 +9,8 @@ public enum Modules {
         // Agents ↔ Windows link: ⌥-click tiles a session's terminal, "Lay out sessions" arranges
         // them all (previewed, undoable). Weak: turning Windows off just hides those actions.
         agents.tiling = windows
-        return [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, HUDModule(), PowerModule(), NotificationsModule()]
+        return [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, HUDModule(), PowerModule(), NotificationsModule(),
+                NotesModule()]
     }
 
     /// The real modules, plus the demo ones when launched with `--demo` (never overriding a real

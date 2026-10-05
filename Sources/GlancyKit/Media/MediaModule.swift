@@ -7,7 +7,9 @@ import SwiftUI
 @MainActor
 public final class MediaModule: GlancyModule {
     public let id = ModuleID.media
-    public let model = MediaModel()
+    public let model: MediaModel
+    /// Synced lyrics (LRCLIB): looked up per track, only while something shows them.
+    public let lyrics: LyricsController
 
     /// Apps whose launch is worth restarting the adapter for (players and browsers).
     static let knownPlayers: Set<String> = [
@@ -46,12 +48,25 @@ public final class MediaModule: GlancyModule {
     private var unexpectedExits: [Date] = []
     private var iconBundle: String?
 
-    public convenience init() { self.init(stream: AdapterStream(), locate: { MediaAdapter.locate() }) }
+    public convenience init() {
+        // The renderer never sends the user's track anywhere.
+        let render = ProcessInfo.processInfo.processName == "glancy-render"
+        let lyrics = LyricsController(settings: LyricsSettings(), provider: render ? nil : LRCLIBClient(),
+                                      cache: render ? nil : LyricsCache())
+        self.init(stream: AdapterStream(), locate: { MediaAdapter.locate() }, lyrics: lyrics)
+    }
 
-    /// Tests: a private pid file and a fake adapter.
-    init(stream: AdapterStream, locate: @escaping () -> MediaAdapter?) {
+    /// Tests: a private pid file and a fake adapter. Without `lyrics`, lookups never leave the Mac.
+    init(stream: AdapterStream, locate: @escaping () -> MediaAdapter?, lyrics: LyricsController? = nil) {
         self.stream = stream
         self.locateAdapter = locate
+        let lyrics = lyrics ?? LyricsController(settings: LyricsSettings(defaults: UserDefaults(suiteName: "ai.glancy.media.lyrics.offline")!),
+                                                provider: nil, cache: nil)
+        self.lyrics = lyrics
+        self.model = MediaModel(lyrics: lyrics.model, lyricsSettings: lyrics.settings)
+        lyrics.onWingChange = { [weak self] in self?.publish() }
+        // Settings → Media is reachable while the module is off: the lyrics strings must be there too.
+        L10n.addItalian(MediaText.lyricsItalian)
         model.onToggle = { [weak self] in self?.toggle() }
         model.onNext = { [weak self] in self?.skip(.next) }
         model.onPrevious = { [weak self] in self?.skip(.previous) }
@@ -67,6 +82,7 @@ public final class MediaModule: GlancyModule {
         generation &+= 1
         self.hub = hub
         L10n.addItalian(MediaText.italian)
+        L10n.addItalian(MediaText.lyricsItalian)
         if let fixture = fixturePath {
             loadFixture(fixture)
             return
@@ -104,6 +120,7 @@ public final class MediaModule: GlancyModule {
         healthTask = nil; artworkTask = nil; peekTask = nil; lingerTask = nil
         tickTask = nil; probeTask = nil; restartTask = nil; triggerTask = nil
         stream.stop()
+        lyrics.stop()
         for (center, token) in observers { center.removeObserver(token) }
         observers = []
         output.stop()
@@ -118,6 +135,7 @@ public final class MediaModule: GlancyModule {
     public func visibilityChanged(_ v: SurfaceVisibility) {
         let wasShowing = showsMedia(visibility)
         visibility = v
+        lyrics.visibility(v)
         if case .expanded = v {
             if output.isIdle { output.start { [weak self] in self?.model.outputName = $0 } }
             model.now = .now
@@ -279,7 +297,7 @@ public final class MediaModule: GlancyModule {
 
     private func handle(_ c: MediaSession.Change) {
         guard started else { return }
-        if c.changed { model.info = session.info }
+        if c.changed { model.info = session.info; lyrics.update(session.info) }
         if c.trackChanged {
             artworkTask?.cancel()
             artworkKey = nil
@@ -308,14 +326,17 @@ public final class MediaModule: GlancyModule {
             return
         }
         let art = model.artwork.map { "\(ObjectIdentifier($0).hashValue)" } ?? "-"
-        let signature = "\(info.trackKey)|\(info.playing)|\(art)"
+        let words = lyrics.wingActive
+        let signature = "\(info.trackKey)|\(info.playing)|\(art)|\(words)"
         guard signature != postedSignature else { return }
         postedSignature = signature
         let tint = model.tint
+        let right = words ? AnyView(MediaWingLyrics(lyrics: lyrics.model, tint: tint))
+                          : AnyView(MediaWingRight(playing: info.playing, tint: tint))
         hub.post(LiveActivity(
             id: "media", module: .media, priority: 30, updated: now, expires: session.pausedDeadline,
             left: AnyView(MediaWingLeft(artwork: model.artwork, tint: tint)),
-            right: AnyView(MediaWingRight(playing: info.playing, tint: tint))))
+            right: right))
     }
 
     /// One wake-up at the next deadline (paused too long / no player too long), never a ticker.
@@ -428,16 +449,17 @@ public final class MediaModule: GlancyModule {
 
     // MARK: Commands
 
-    private func toggle() {
+    func toggle() {
         guard let info = session.info else { return }
         let target = !info.playing
         if !MediaRemoteCommands.send(.toggle) { script(info.appBundleID, "playpause") }
         session.assume(playing: target)
         model.info = session.info
+        lyrics.update(session.info)
         publish(); armLinger(); updateTick()
     }
 
-    private func skip(_ cmd: MediaRemoteCommands.Command) {
+    func skip(_ cmd: MediaRemoteCommands.Command) {
         guard let info = session.info else { return }
         if !MediaRemoteCommands.send(cmd) { script(info.appBundleID, cmd == .next ? "next track" : "previous track") }
     }
@@ -448,6 +470,7 @@ public final class MediaModule: GlancyModule {
         if model.source == .scripts { script(info.appBundleID, "set player position to \(Int(t))") }
         session.assume(position: t)
         model.info = session.info
+        lyrics.update(session.info)
         model.now = .now
     }
 
@@ -456,6 +479,12 @@ public final class MediaModule: GlancyModule {
         guard PlayerScripts.players.contains(bundle), PlayerScripts.isRunning(bundle) else { return }
         PlayerScripts.command(bundle, verb)
     }
+
+    /// Opens the panel on the Media tab (command bar, "show lyrics").
+    func openTab() { hub?.requestOpen(.media) }
+
+    /// A lyrics setting changed (Settings → Media): look up, stop, or re-post the wing.
+    public func lyricsSettingsChanged() { lyrics.settingsChanged() }
 
     private func openApp() {
         guard let bundle = session.info?.appBundleID,

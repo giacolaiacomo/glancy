@@ -10,7 +10,7 @@ public enum Theme {
     public static let openBottomRadius: CGFloat = 24
 
     // Sizes (points)
-    public static let expandedSize = CGSize(width: 640, height: 210)   // 12 icons fit beside a 185 pt notch
+    public static let expandedSize = CGSize(width: 680, height: 210)   // 13 icons at full 30 pt slots beside a 185 pt notch
     public static let wingMaxWidth: CGFloat = 120
     public static let peekGrow = CGSize(width: 12, height: 6)
     public static let peekEventDrop: CGFloat = 32

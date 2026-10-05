@@ -35,7 +35,7 @@ public final class SurfaceContext {
     public var tabSequence: [ModuleID?] { [nil] + stripTabs.map(\.module) }
 
     static func order(_ id: ModuleID) -> Int {
-        let order: [ModuleID] = [.agents, .calendar, .media, .timer, .notes, .shelf, .clipboard, .windows, .control, .notifications, .hud, .power, .command]
+        let order: [ModuleID] = [.agents, .calendar, .media, .timer, .notes, .shelf, .clipboard, .windows, .control, .monitor, .notifications, .hud, .power, .command]
         return order.firstIndex(of: id) ?? order.count
     }
 
@@ -54,6 +54,7 @@ public final class SurfaceContext {
         case .command: "Command bar"
         case .control: "Control"
         case .notes: "Notes"
+        case .monitor: "Monitor"
         }
     }
 
@@ -72,6 +73,7 @@ public final class SurfaceContext {
         case .command: "command"
         case .control: "switch.2"
         case .notes: "note.text"
+        case .monitor: "gauge.with.dots.needle.67percent"
         }
     }
 }

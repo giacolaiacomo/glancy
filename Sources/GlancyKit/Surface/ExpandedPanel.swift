@@ -61,16 +61,13 @@ private struct TabBand: View {
     var body: some View {
         let items = allItems
         // Home + tabs split in two; the gear always closes the right side.
-        let leftCount = (items.count + 1 + 1) / 2          // +1 for the gear on the right
+        let leftCount = TabBandLayout.leftCount(items: items.count)
         let left = Array(items.prefix(leftCount)), right = Array(items.dropFirst(leftCount))
         let gear = Item(id: "gear", symbol: "gearshape", title: tr("Settings"), selected: model.showingSettings) {
             model.toggleSettings()
         }
         GeometryReader { geo in
-            // Room on each side of the notch (a small gap keeps icons off its rounded edge).
-            let side = max(0, (geo.size.width - notchWidth) / 2 - inset - TabIcon.gap)
-            let slots = CGFloat(max(left.count, right.count + 1))
-            let slot = min(TabIcon.slot, (side / max(slots, 1)).rounded(.down))
+            let slot = TabBandLayout.slot(width: geo.size.width, notchWidth: notchWidth, inset: inset, items: items.count)
             HStack(spacing: 0) {
                 HStack(spacing: 0) { ForEach(left) { icon($0, slot) } }
                 Spacer(minLength: notchWidth + 2 * TabIcon.gap)
@@ -102,10 +99,36 @@ private struct TabBand: View {
     }
 }
 
+/// The band's arithmetic: Home + tabs (`items`) split either side of the notch, the gear last on
+/// the right; every icon gets the same slot, at most `TabIcon.slot`.
+@MainActor
+enum TabBandLayout {
+    static func leftCount(items: Int) -> Int { (items + 1 + 1) / 2 }      // +1 for the gear on the right
+
+    /// Width of one icon slot when the band is `width` wide.
+    static func slot(width: CGFloat, notchWidth: CGFloat, inset: CGFloat, items: Int) -> CGFloat {
+        // Room on each side of the notch (a small gap keeps icons off its rounded edge).
+        let side = max(0, (width - notchWidth) / 2 - inset - TabIcon.gap)
+        let left = leftCount(items: items), right = items - left + 1
+        let slots = CGFloat(max(left, right, 1))
+        return min(TabIcon.slot, (side / slots).rounded(.down))
+    }
+
+    /// The panel's own band: `Theme.expandedSize` beside a notch, the inset `ExpandedPanel` uses.
+    static func slot(notchWidth: CGFloat, items: Int) -> CGFloat {
+        slot(width: Theme.expandedSize.width, notchWidth: notchWidth, inset: Theme.openTopRadius + 10, items: items)
+    }
+
+    static var fullSlot: CGFloat { TabIcon.slot }
+    /// The drawn capsule; a slot narrower than this makes icons touch.
+    static var iconWidth: CGFloat { TabIcon.iconWidth }
+}
+
 private struct TabIcon: View {
     /// Width of one icon slot, and the clearance kept from the notch's edge.
     static let slot: CGFloat = 30
     static let gap: CGFloat = 8
+    static let iconWidth: CGFloat = 28
     let symbol: String
     let title: String
     let selected: Bool
@@ -118,7 +141,7 @@ private struct TabIcon: View {
                 .font(.system(size: 12, weight: .medium))
                 .symbolVariant(selected ? .fill : .none)
                 .foregroundStyle(selected ? Theme.primary : hover ? Theme.secondary : Theme.tertiary)
-                .frame(width: 28, height: 22)
+                .frame(width: Self.iconWidth, height: 22)
                 .background(Capsule().fill(selected ? Theme.card : .clear))
                 .contentShape(Rectangle())
         }

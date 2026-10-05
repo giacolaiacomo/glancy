@@ -481,6 +481,16 @@ private struct StatsCard: View {
                     Text(verbatim: L10n.tr("up %@", ControlFormat.uptime(up)))
                         .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.tertiary).lineLimit(1)
                 }
+                // Monitor link (lot MON): the full monitor, when that module is on.
+                if let open = MonitorLink.open {
+                    Button(action: open) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8.5, weight: .bold)).foregroundStyle(Theme.tertiary)
+                            .frame(width: 14, height: 14).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.tr("System monitor"))
+                }
             }
             StatRow(symbol: "cpu", label: ControlText.t("CPU"),
                     value: stats.cpu.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", fraction: stats.cpu)

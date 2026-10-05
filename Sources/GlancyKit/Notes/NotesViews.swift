@@ -6,6 +6,8 @@ import SwiftUI
 struct NotesActions {
     var openInNotes: (Note) -> Void = { _ in }
     var copied: () -> Void = {}
+    var record: () -> Void = {}
+    var stopRecording: () -> Void = {}
 }
 
 // MARK: Tab
@@ -13,15 +15,24 @@ struct NotesActions {
 /// A mini Notes: the list (search + new) on the left, the editor on the right.
 struct NotesTabView: View {
     let model: NotesModel
+    let voice: VoiceNotes
     let actions: NotesActions
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            NotesList(model: model)
+            NotesList(model: model, voice: voice, actions: actions)
                 .frame(width: 162)
             VStack(spacing: 4) {
-                if let note = model.selected {
-                    NoteToolbar(model: model, note: note, actions: actions)
+                if voice.phase == .recording || voice.phase == .saving {
+                    VoiceRecordingPanel(voice: voice, stop: actions.stopRecording, cancel: { voice.cancel() })
+                } else if let card = voice.card {
+                    VoiceCardView(card: card, voice: voice)
+                } else if let note = model.selected {
+                    NoteToolbar(model: model, voice: voice, note: note, actions: actions)
+                    if let audio = note.audio, let url = model.audioURL(note) {
+                        VoicePlayerStrip(voice: voice, note: note, audio: audio, url: url)
+                        if voice.speechAskID == note.id { VoiceSpeechAsk(voice: voice, noteID: note.id) }
+                    }
                     NoteEditor(model: model, noteID: note.id, text: note.text, focusToken: model.focusToken)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.card))
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -37,6 +48,8 @@ struct NotesTabView: View {
 
 private struct NotesList: View {
     let model: NotesModel
+    let voice: VoiceNotes
+    let actions: NotesActions
 
     var body: some View {
         VStack(spacing: 6) {
@@ -53,6 +66,13 @@ private struct NotesList: View {
                 .frame(height: 22)
                 .background(Capsule().fill(Theme.card))
                 NotesIconButton(symbol: "square.and.pencil", label: L10n.tr("New note")) { model.create() }
+                    .padding(.trailing, -6)
+                if voice.isRecording {
+                    NotesIconButton(symbol: "stop.circle.fill", label: L10n.tr("Stop recording"), tint: Theme.failed) { actions.stopRecording() }
+                } else {
+                    NotesIconButton(symbol: "mic", label: L10n.tr("Record voice note")) { actions.record() }
+                        .disabled(voice.phase != .idle)
+                }
             }
             let list = model.listed
             if list.isEmpty, !model.query.isEmpty {
@@ -84,7 +104,7 @@ private struct NoteRow: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 4) {
-                    Text(verbatim: note.title ?? L10n.tr("New note"))
+                    Text(verbatim: note.title ?? L10n.tr(note.audio == nil ? "New note" : "Voice note"))
                         .font(Theme.font(.s, .semibold))
                         .foregroundStyle(note.title == nil ? Theme.tertiary : Theme.primary)
                         .lineLimit(1)
@@ -96,6 +116,13 @@ private struct NoteRow: View {
                 HStack(spacing: 5) {
                     Text(verbatim: NotesFormat.short(note.modified))
                         .foregroundStyle(Theme.secondary)
+                    if let audio = note.audio {
+                        HStack(spacing: 2) {
+                            Image(systemName: "waveform").font(.system(size: 8, weight: .semibold))
+                            Text(verbatim: VoiceTime.format(audio.duration)).monospacedDigit()
+                        }
+                        .foregroundStyle(Theme.secondary)
+                    }
                     Text(verbatim: note.bodyLines.first ?? "")
                         .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
@@ -116,15 +143,22 @@ private struct NoteRow: View {
 
 private struct NoteToolbar: View {
     let model: NotesModel
+    let voice: VoiceNotes
     let note: Note
     let actions: NotesActions
 
     var body: some View {
         HStack(spacing: 2) {
-            Text(verbatim: L10n.tr("Edited %@", NotesFormat.short(note.modified)))
-                .font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
-                .lineLimit(1)
-                .padding(.leading, 4)
+            Group {
+                if voice.transcribing.contains(note.id) {
+                    Text(verbatim: L10n.tr("Transcribing…")).foregroundStyle(Theme.secondary)
+                } else {
+                    Text(verbatim: L10n.tr("Edited %@", NotesFormat.short(note.modified))).foregroundStyle(Theme.tertiary)
+                }
+            }
+            .font(Theme.font(.xs))
+            .lineLimit(1)
+            .padding(.leading, 4)
             Spacer(minLength: 4)
             NotesIconButton(symbol: "checklist", label: L10n.tr("Add a checklist item")) { addChecklistItem() }
             let pinned = model.settings.pinnedID == note.id
@@ -137,6 +171,13 @@ private struct NoteToolbar: View {
                     actions.copied()
                 }
                 ShareLink(item: note.text) { Text(verbatim: L10n.tr("Share…")) }
+                if let url = model.audioURL(note) {
+                    ShareLink(item: url) { Text(verbatim: L10n.tr("Share recording…")) }
+                    Button(L10n.tr("Show recording in Finder")) { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                    if note.audio?.transcribed == false, voice.transcriber.status() != .denied, model.settings.transcribe {
+                        Button(L10n.tr("Transcribe")) { Task { await voice.transcribe(note.id, ask: true) } }
+                    }
+                }
                 Divider()
                 Button(L10n.tr("Open in Notes")) { actions.openInNotes(note) }
             } label: {
@@ -189,6 +230,7 @@ struct NotesIconButton: View {
     let symbol: String
     let label: String
     var on = false
+    var tint: Color? = nil
     let action: () -> Void
     @State private var hover = false
 
@@ -196,7 +238,7 @@ struct NotesIconButton: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(on || hover ? Theme.primary : Theme.secondary)
+                .foregroundStyle(tint ?? (on || hover ? Theme.primary : Theme.secondary))
                 .frame(width: 26, height: 22)
                 .background(Capsule().fill(hover ? Theme.card : .clear))
                 .contentShape(Rectangle())

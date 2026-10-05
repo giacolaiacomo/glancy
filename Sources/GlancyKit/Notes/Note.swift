@@ -1,17 +1,22 @@
 import Foundation
 
 /// One note: a plain-text (light Markdown) file in `Application Support/Glancy/notes/<id>.md`.
+/// A voice note also has `<id>.m4a` beside it, described in a front-matter block at the top of
+/// the file (see `NoteFile`); its `text` is the title, the transcript and anything typed.
 public struct Note: Identifiable, Equatable, Sendable {
     /// The file name without `.md` ("2026-10-05 143210"): readable in Finder, unique per second.
     public let id: String
     public var text: String
     public var modified: Date
+    /// The recording, for a voice note.
+    public var audio: NoteAudio?
 
-    public init(id: String, text: String, modified: Date) {
-        self.id = id; self.text = text; self.modified = modified
+    public init(id: String, text: String, modified: Date, audio: NoteAudio? = nil) {
+        self.id = id; self.text = text; self.modified = modified; self.audio = audio
     }
 
-    public var isBlank: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// No words and no recording: never written, dropped when left.
+    public var isBlank: Bool { audio == nil && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     /// The first line with words, without Markdown marks; nil for a blank note.
     public var title: String? {

@@ -233,6 +233,26 @@ enum Render {
             media.stop()
             media.start(hub: live.hub)
         }
+        // Voice notes (lot VOICE): mixed text/voice list, recording (meter + time), the recording
+        // wing collapsed, playback with waveform + transcript, the transcription ask, the cards.
+        // Sample notes and fixed states only: no microphone, no permission asked, nothing played.
+        if let notesModule = modules.compactMap({ $0 as? NotesModule }).first {
+            for state in NotesModule.VoiceRenderState.allCases {
+                let hub = ActivityHub()
+                notesModule.stop()
+                notesModule.start(hub: hub)
+                notesModule.prepareForRender(state)
+                let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [notesModule])
+                if state == .wing {
+                    shot("12-voice-\(state.rawValue)", ctx)
+                } else {
+                    shot("12-voice-\(state.rawValue)", ctx) { $0.expand(tab: .notes) }
+                }
+            }
+            notesModule.prepareForRender(.list)
+            notesModule.stop()
+            notesModule.start(hub: live.hub)
+        }
         // Focus & meetings (FO): synthetic meetings and Pomodoro on a hub of their own; the Focus
         // controller is frozen (no `shortcuts` is run, Focus is never touched).
         FocusController.shared.prepareForRender(.missing([FocusController.offShortcut]))

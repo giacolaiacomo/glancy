@@ -485,6 +485,7 @@ enum GlancyHotkeys {
         }
         if let n = context.module(NotesModule.self), context.settings.isEnabled(.notes) {
             out.append(n.hotkeyBinding)
+            out.append(n.voiceHotkeyBinding)
         }
         if let h = context.module(HUDModule.self), context.settings.isEnabled(.hud), h.settings.micHotkey.modifiers != 0 {
             out.append(HotkeyBinding(id: "hud.mic", title: tr("Mute microphone"), hotkey: h.settings.micHotkey))

@@ -185,6 +185,38 @@ enum Render {
             media.stop()
             media.start(hub: live.hub)
         }
+        // Focus & meetings (FO): synthetic meetings and Pomodoro on a hub of their own; the Focus
+        // controller is frozen (no `shortcuts` is run, Focus is never touched).
+        FocusController.shared.prepareForRender(.missing([FocusController.offShortcut]))
+        func solo(_ m: any GlancyModule) -> SurfaceContext {
+            let hub = ActivityHub()
+            m.stop(); m.start(hub: hub)
+            return SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [m])
+        }
+        let calendarModule = modules.compactMap { $0 as? CalendarModule }.first
+        let timerModule = modules.compactMap { $0 as? TimerModule }.first
+        if let cal = calendarModule {
+            for state in CalendarModule.RenderState.allCases {
+                let ctx = solo(cal)
+                cal.prepareForRender(state)
+                shot("11-fo-\(state.rawValue)", ctx)
+            }
+        }
+        if let timer = timerModule {
+            for state in TimerModule.RenderState.allCases {
+                let ctx = solo(timer)
+                timer.prepareForRender(state)
+                shot("11-fo-\(state.rawValue)-wings", ctx)
+                shot("11-fo-\(state.rawValue)-tab", ctx) { $0.expand(tab: .timer) }
+            }
+        }
+        // The setup card shows in Settings → Calendar / Timer with the options on (reset below).
+        calendarModule?.settings.focusDuringMeetings = true
+        timerModule?.settings.focusDuringWork = true
+        defer {
+            calendarModule?.settings.focusDuringMeetings = false
+            timerModule?.settings.focusDuringWork = false
+        }
         // Settings: the index, every section, and the first-run welcome. Permission statuses are
         // fixed (a mix of every state) so nothing is asked of macOS.
         let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,

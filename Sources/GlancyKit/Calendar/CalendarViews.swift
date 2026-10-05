@@ -22,6 +22,7 @@ struct CalendarDot: View {
 
 struct JoinPill: View {
     let link: MeetingLink
+    var eventID: String? = nil
     var interactive = true
     var compact = false
     var body: some View {
@@ -32,7 +33,7 @@ struct JoinPill: View {
             .background(Capsule().fill(Theme.primary))
             .fixedSize()
         if interactive {
-            Button { CalendarJoin.open(link) } label: { label }.buttonStyle(.plain)
+            Button { CalendarJoin.join(link, eventID: eventID) } label: { label }.buttonStyle(.plain)
                 .help(link.provider.displayName)
         } else { label }
     }
@@ -86,7 +87,7 @@ struct CalendarPeek: View {
             Text(verbatim: event.title).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
             Text(verbatim: "· " + CalL10n.inTwo).font(Theme.font(.m)).foregroundStyle(Theme.secondary).fixedSize()
             Spacer(minLength: 4)
-            if let link = event.link { JoinPill(link: link) }
+            if let link = event.link { JoinPill(link: link, eventID: event.id) }
         }
         .padding(.horizontal, 14)
     }
@@ -112,7 +113,7 @@ struct CalendarHomeCard: View {
                     .font(Theme.font(.s)).foregroundStyle(Theme.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 6)
-                if let link = e.link { JoinPill(link: link) }
+                if let link = e.link { JoinPill(link: link, eventID: e.id) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -123,11 +124,12 @@ struct CalendarHomeCard: View {
 
 struct CalendarTabView: View {
     let model: CalendarModel
+    var focus: FocusController? = nil
     var body: some View {
         switch model.access {
         case .denied: PermissionCard()
         case .notDetermined: Color.clear
-        case .granted: Agenda(model: model)
+        case .granted: Agenda(model: model, focus: focus)
         }
     }
 }
@@ -158,6 +160,7 @@ private enum AgendaItem: Identifiable {
 /// Today's list on the left; the next events of the coming days on the right.
 struct Agenda: View {
     let model: CalendarModel
+    var focus: FocusController? = nil
 
     private func items(for day: CalendarLogic.Day) -> [AgendaItem] {
         var out: [AgendaItem] = []
@@ -177,7 +180,11 @@ struct Agenda: View {
         HStack(alignment: .top, spacing: 14) {
             // Today
             VStack(alignment: .leading, spacing: 4) {
-                ColumnHeader(title: CalL10n.today, date: model.now)
+                HStack(spacing: 6) {
+                    ColumnHeader(title: CalL10n.today, date: model.now)
+                    Spacer(minLength: 4)
+                    if let focus, focus.isOn { FocusOnChip(focus: focus) }
+                }
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 4) {
                         if let today, !today.allDay.isEmpty { AllDayStrip(events: today.allDay) }
@@ -306,8 +313,139 @@ struct EventRow: View {
                 Text(verbatim: untilText(event.start))
                     .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.secondary)
             }
-            if !past, let link = event.link { JoinPill(link: link) }
+            if !past, let link = event.link { JoinPill(link: link, eventID: event.id) }
         }
         .frame(minHeight: 26)
+    }
+}
+
+// MARK: Wave 4: overrun, end peeks, join notices, Focus chip
+
+/// A soft red for "you're running late" (Theme.failed, toned down).
+private let overrunTint = Theme.failed.opacity(0.9)
+
+/// Left wing while the previous call ran over and the next one has started.
+struct CalendarOverrunWingLeft: View {
+    let previous: CalendarEvent
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle().fill(overrunTint).frame(width: 7, height: 7)
+            Text(verbatim: CalL10n.late).font(Theme.font(.s, .semibold)).foregroundStyle(overrunTint).lineLimit(1)
+        }
+        .padding(.leading, 6).frame(maxWidth: Theme.wingMaxWidth, alignment: .leading)
+        .help(CalL10n.overrunHelp)
+    }
+}
+
+/// Title truncated to keep a peek inside its 440 pt drop-down.
+private struct PeekTitle: View {
+    let text: String
+    var weight: Font.Weight = .semibold
+    var maxWidth: CGFloat = 150
+    var body: some View {
+        Text(verbatim: text).font(Theme.font(.m, weight)).foregroundStyle(Theme.primary)
+            .lineLimit(1).truncationMode(.tail).frame(maxWidth: maxWidth, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// "● Design review · ends in 5 min · next: Standup at 15:30" / "Next: Standup · in 10 min [Join]".
+struct MeetingEndPeekView: View {
+    let peek: MeetingEndPeek
+    let now: Date
+    var body: some View {
+        HStack(spacing: 4) {
+            switch peek {
+            case .ending(let e, let minutes, let next):
+                CalendarDot(color: e.color).padding(.trailing, 3)
+                PeekTitle(text: e.title, maxWidth: next == nil ? 200 : 120)
+                Text(verbatim: "· " + CalL10n.endsIn(minutes)).font(Theme.font(.m)).foregroundStyle(Theme.secondary).fixedSize()
+                if let next {
+                    Text(verbatim: "·").font(Theme.font(.m)).foregroundStyle(Theme.tertiary)
+                    nextLine(next)
+                }
+            case .backToBack(_, let next):
+                CalendarDot(color: next.color).padding(.trailing, 3)
+                Text(verbatim: CalL10n.next).font(Theme.font(.m)).foregroundStyle(Theme.secondary).fixedSize()
+                PeekTitle(text: next.title, maxWidth: 170)
+                Text(verbatim: "· " + (next.start <= now ? CalL10n.now : untilText(next.start, now: now)))
+                    .font(Theme.font(.m)).monospacedDigit().foregroundStyle(Theme.secondary).fixedSize()
+                if let link = next.link { JoinPill(link: link, eventID: next.id).padding(.leading, 4) }
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    /// "next: Standup at 15:30", the title truncated in the middle of the sentence.
+    @ViewBuilder private func nextLine(_ next: CalendarEvent) -> some View {
+        let parts = CalL10n.nextAt("\u{1}", shortTime(next.start)).components(separatedBy: "\u{1}")
+        Text(verbatim: (parts.first ?? "").trimmingCharacters(in: .whitespaces)).font(Theme.font(.m)).foregroundStyle(Theme.tertiary).fixedSize()
+        Text(verbatim: next.title).font(Theme.font(.m, .medium)).foregroundStyle(Theme.secondary)
+            .lineLimit(1).truncationMode(.tail).frame(maxWidth: 100, alignment: .leading)
+        Text(verbatim: (parts.count > 1 ? parts[1] : "").trimmingCharacters(in: .whitespaces))
+            .font(Theme.font(.m)).monospacedDigit().foregroundStyle(Theme.tertiary).fixedSize()
+    }
+}
+
+/// The Join hotkey found nothing to join now: says so, and offers the next call.
+struct CalendarNothingToJoinPeek: View {
+    let later: CalendarEvent?
+    let now: Date
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "video.slash").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
+            Text(verbatim: CalL10n.nothingToJoin).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).fixedSize()
+            if let later {
+                Text(verbatim: "·").font(Theme.font(.m)).foregroundStyle(Theme.tertiary)
+                PeekTitle(text: later.title, weight: .regular, maxWidth: 120)
+                Text(verbatim: when(later)).font(Theme.font(.m)).monospacedDigit().foregroundStyle(Theme.secondary).fixedSize()
+                if let link = later.link { JoinPill(link: link, eventID: later.id) }
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private func when(_ e: CalendarEvent) -> String {
+        Calendar.current.isDate(e.start, inSameDayAs: now) ? shortTime(e.start)
+            : e.start.formatted(.dateTime.weekday(.abbreviated).hour().minute().locale(L10n.locale))
+    }
+}
+
+/// A one-line notice ("Link copied · Standup").
+struct CalendarNoticePeek: View {
+    let text: String
+    var detail: String? = nil
+    var symbol = "calendar"
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
+            Text(verbatim: text).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).fixedSize()
+            if let detail {
+                Text(verbatim: "·").font(Theme.font(.m)).foregroundStyle(Theme.tertiary)
+                PeekTitle(text: detail, weight: .regular, maxWidth: 200)
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+}
+
+/// "☾ Focus on ✕" in the agenda header while Glancy holds Focus; the ✕ turns it off.
+struct FocusOnChip: View {
+    let focus: FocusController
+    @State private var hover = false
+    var body: some View {
+        Button { focus.turnOffNow() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "moon.fill").font(.system(size: 9, weight: .semibold))
+                Text(verbatim: CalL10n.focusOn).font(Theme.font(.xs, .semibold))
+                Image(systemName: "xmark").font(.system(size: 7, weight: .bold)).opacity(hover ? 1 : 0.6)
+            }
+            .foregroundStyle(Color(red: 0.62, green: 0.58, blue: 1.0))
+            .padding(.horizontal, 7).frame(height: 18)
+            .background(Capsule().fill(Color(red: 0.62, green: 0.58, blue: 1.0).opacity(hover ? 0.24 : 0.14)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(CalL10n.cmdFocusOff)
     }
 }

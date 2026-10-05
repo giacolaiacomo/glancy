@@ -14,10 +14,13 @@ public final class TimerModel {
     /// Re-stamped once a second only while the Timer tab is on screen (the ring); otherwise at
     /// every state change.
     public internal(set) var now: Date = .now
+    /// Focus rounds finished today (persisted with the timer).
+    public internal(set) var tally: PomodoroTally?
     public init() {}
 
     public var remaining: TimeInterval { TimerMachine.remaining(state, now: now) }
     public var progress: Double { TimerMachine.progress(state, now: now) }
+    public var roundsToday: Int { PomodoroTally.today(tally, now: now) }
 }
 
 /// Timer / Pomodoro (SPEC §3). The deadline is a `Date`, persisted; the module wakes once at the
@@ -28,25 +31,36 @@ public final class TimerModel {
 public final class TimerModule: GlancyModule {
     public let id: ModuleID = .timer
     public let model = TimerModel()
+    public let settings: TimerSettings
+    /// Focus during Pomodoro focus rounds; nil = none (tests, isolated runs).
+    public let focus: FocusController?
 
     private let store: TimerStore
     private let alerts: TimerAlerting
-    private var hub: ActivityHub?
+    private(set) var hub: ActivityHub?
     private var visibility: SurfaceVisibility = .collapsed
     private var wake: Task<Void, Never>?
     private var ticker: Task<Void, Never>?
     private var wakeObserver: NSObjectProtocol?
     private var started = false
+    /// The user turned Focus off during this focus round: no claim until the round changes.
+    private var focusSuppressed = false
+    /// Renders: a state shown without being persisted or alerted.
+    private var frozen = false
+    static let focusOwner = "timer"
 
     public convenience init() {
-        self.init(store: .default, alerts: SystemTimerAlerts())
-        // Settings shows the saved lengths even while the module is off.
+        self.init(store: .default, alerts: SystemTimerAlerts(), settings: TimerSettings(), focus: .shared)
+        // Settings shows the saved lengths (and its strings) even while the module is off.
         Pomodoro.lengths = PomodoroLengths.load()
+        L10n.addItalian(timerItalian)
     }
 
-    public init(store: TimerStore, alerts: TimerAlerting) {
+    public init(store: TimerStore, alerts: TimerAlerting, settings: TimerSettings? = nil, focus: FocusController? = nil) {
         self.store = store
         self.alerts = alerts
+        self.settings = settings ?? TimerSettings()
+        self.focus = focus
     }
 
     // MARK: Lifecycle
@@ -54,15 +68,20 @@ public final class TimerModule: GlancyModule {
     public func start(hub: ActivityHub) {
         guard !started else { return }
         started = true
+        frozen = false
         self.hub = hub
         L10n.addItalian(timerItalian)
         Pomodoro.lengths = PomodoroLengths.load()
         let snap = store.load()
         model.customMinutes = snap.customMinutes
         model.state = snap.state
+        model.tally = snap.tally
+        settings.onChange = { [weak self] in self?.refresh(announce: false) }
+        focus?.register(Self.focusOwner) { [weak self] in self?.suppressFocus() }
         // A relaunch after the deadline: catch up quietly (the system already showed the alert).
-        let events = TimerMachine.advance(&model.state, now: .now)
+        let events = TimerMachine.advance(&model.state, now: .now, autoStart: settings.autoStartNext)
         if !events.isEmpty {
+            PomodoroTally.record(&model.tally, events: events, now: .now)
             persist()
             if model.state.status == .running { scheduleAlert() }
         }
@@ -79,6 +98,8 @@ public final class TimerModule: GlancyModule {
         ticker?.cancel(); ticker = nil
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
         wakeObserver = nil
+        settings.onChange = nil
+        focus?.unregister(Self.focusOwner)
         hub?.clearAll(from: .timer)
         hub = nil
     }
@@ -100,6 +121,12 @@ public final class TimerModule: GlancyModule {
         committed(haptic: true)
     }
 
+    /// A plain timer shown as a break ("pausa 5"): green, "Break" in the wing.
+    public func startBreak(minutes: Int) {
+        TimerMachine.start(&model.state, minutes: minutes, now: .now, isBreak: true)
+        committed(haptic: true)
+    }
+
     public func startCustom() { start(minutes: model.customMinutes) }
 
     public func startPomodoro() {
@@ -112,9 +139,17 @@ public final class TimerModule: GlancyModule {
         committed()
     }
 
+    /// Also "Start" for a Pomodoro phase held without auto-start.
     public func resume() {
         TimerMachine.resume(&model.state, now: .now)
         committed()
+    }
+
+    /// Pomodoro: the next phase now (skipping the long break ends the cycle).
+    public func skip() {
+        let event = TimerMachine.skip(&model.state, now: .now)
+        committed(haptic: true)
+        if let event { hub?.show(PeekEvent(module: .timer, duration: 3.5, content: AnyView(TimerPeek(event: event)))) }
     }
 
     public func stopTimer() {
@@ -141,6 +176,7 @@ public final class TimerModule: GlancyModule {
     }
 
     private func committed(haptic: Bool = false) {
+        frozen = false
         if haptic { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
         persist()
         if model.state.status == .running { scheduleAlert() } else { alerts.cancel() }
@@ -153,16 +189,35 @@ public final class TimerModule: GlancyModule {
     func refresh(announce: Bool) {
         guard started else { return }
         let now = Date.now
-        let events = TimerMachine.advance(&model.state, now: now)
+        let roundBefore = focusRound
+        let events = frozen ? [] : TimerMachine.advance(&model.state, now: now, autoStart: settings.autoStartNext)
         model.now = now
         if !events.isEmpty {
+            PomodoroTally.record(&model.tally, events: events, now: now)
             persist()
             if model.state.status == .running { scheduleAlert() }
             if announce, let last = events.last { hub?.show(PeekEvent(module: .timer, duration: 3.5, content: AnyView(TimerPeek(event: last)))) }
         }
+        // A manual "Focus off" holds for the focus round it was made in, not the next one.
+        if focusRound == nil || focusRound != roundBefore { focusSuppressed = false }
         publish(now: now)
+        claimFocus()
         updateTicker()
         arm(now: now)
+    }
+
+    /// The focus round under way (phase), nil outside one.
+    private var focusRound: Int? { model.state.isFocusBlock ? model.state.phase : nil }
+
+    private func claimFocus() {
+        guard let focus, !frozen else { return }
+        focus.claim(Self.focusOwner, settings.focusDuringWork && focusRound != nil && !focusSuppressed)
+    }
+
+    /// The user turned Focus off (agenda chip, command bar): not again this round.
+    private func suppressFocus() {
+        focusSuppressed = focusRound != nil
+        focus?.claim(Self.focusOwner, false)
     }
 
     private func publish(now: Date) {
@@ -172,8 +227,9 @@ public final class TimerModule: GlancyModule {
         let finishing = TimerSchedule.isFinishing(s, now: now)
         let snapshot = TimerWingSnapshot(progress: TimerMachine.progress(s, now: now),
                                          minutesLeft: TimerSchedule.minutesLeft(TimerMachine.remaining(s, now: now)),
-                                         paused: s.status == .paused, isBreak: s.phase.map { !Pomodoro.isFocus($0) } ?? false,
-                                         finishingUntil: finishing ? s.deadline : nil)
+                                         paused: s.status == .paused, isBreak: s.isBreakRun,
+                                         finishingUntil: finishing ? s.deadline : nil,
+                                         label: TimerText.wingLabel(s), held: s.isHeld)
         hub.post(LiveActivity(id: "timer", module: .timer, priority: finishing ? 80 : 40, updated: now,
                               left: AnyView(TimerWingLeft(snap: snapshot)),
                               right: AnyView(TimerWingRight(snap: snapshot))))
@@ -181,7 +237,7 @@ public final class TimerModule: GlancyModule {
 
     private func arm(now: Date) {
         wake?.cancel(); wake = nil
-        guard model.state.status == .running, let deadline = model.state.deadline else { return }
+        guard !frozen, model.state.status == .running, let deadline = model.state.deadline else { return }
         let target = TimerSchedule.nextWake(now: now, deadline: deadline, minuteText: visibility == .collapsed)
         wake = Task { [weak self] in
             // +50 ms so the boundary has strictly passed when we look again.
@@ -193,7 +249,7 @@ public final class TimerModule: GlancyModule {
 
     /// The ring in the Timer tab moves once a second, only while that tab is on screen and running.
     private func updateTicker() {
-        let want = visibility == .expanded(.timer) && model.state.status == .running
+        let want = visibility == .expanded(.timer) && model.state.status == .running && !frozen
         if !want { ticker?.cancel(); ticker = nil; return }
         guard ticker == nil else { return }
         ticker = Task { [weak self] in
@@ -208,13 +264,36 @@ public final class TimerModule: GlancyModule {
     // MARK: Persistence and alert
 
     private func persist() {
-        store.save(TimerSnapshot(state: model.state, customMinutes: model.customMinutes))
+        guard !frozen else { return }
+        store.save(TimerSnapshot(state: model.state, customMinutes: model.customMinutes, tally: model.tally))
     }
 
     private func scheduleAlert() {
-        guard let deadline = model.state.deadline else { return }
+        guard !frozen, let deadline = model.state.deadline else { return }
         let (title, body) = TimerText.alert(for: model.state)
         alerts.schedule(at: deadline, title: title, body: body)
+    }
+
+    // MARK: Renders
+
+    public enum RenderState: String, CaseIterable, Sendable { case pomodoro, held }
+
+    /// Shows a Pomodoro state for `glancy-render` without touching the saved timer or alerts:
+    /// focus round 2 of 4, 13 minutes left (`.pomodoro`), or its short break waiting for Start.
+    public func prepareForRender(_ r: RenderState) {
+        frozen = true
+        wake?.cancel(); wake = nil
+        let now = Date.now
+        var s = TimerState()
+        TimerMachine.startPomodoro(&s, now: now.addingTimeInterval(-42 * 60))
+        TimerMachine.advance(&s, now: now)
+        if r == .held, let deadline = s.deadline {
+            TimerMachine.advance(&s, now: deadline, autoStart: false)
+        }
+        model.state = s
+        model.now = now
+        model.tally = PomodoroTally(day: Calendar.current.startOfDay(for: now), count: r == .held ? 2 : 1)
+        publish(now: now)
     }
 
     // MARK: Surface

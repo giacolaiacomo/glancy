@@ -7,7 +7,11 @@ final class SurfaceController: SurfaceModelDelegate {
     let uuid: String
     let model: SurfaceModel
     private let panel: NotchPanel
-    private let host: SurfaceHostingView
+    private var host: SurfaceHostingView
+    private let container: NSView
+    /// The panel has been open since the host was built: its SwiftUI graph holds the expanded
+    /// pages' caches (styles, symbol renders, layout), so it is rebuilt once collapsed.
+    private var hostOpened = false
     private let context: SurfaceContext
     private weak var manager: SurfaceManager?
 
@@ -30,17 +34,39 @@ final class SurfaceController: SurfaceModelDelegate {
         host = SurfaceHostingView(rootView: SurfaceView(model: model, context: context))
         // The host is centred on the notch, not on the window: when one wing is narrower the
         // window is off-centre, and during a transition it is the union of two shapes.
-        let container = NSView(frame: CGRect(origin: .zero, size: frame.size))
+        container = NSView(frame: CGRect(origin: .zero, size: frame.size))
         container.addSubview(host)
         panel.contentView = container
         model.delegate = self
-        host.onHover = { [weak self] inside, event in self?.hoverChanged(inside, event) }
-        host.onMouseDown = { [weak self] p in self?.mouseDown(at: p) ?? false }
-        host.onSwipe = { [weak self] step in self?.swipe(step) }
+        wire(host)
         applyCapture()
         setPanelFrame(frame, display: false)
         if presents { panel.orderFrontRegardless() }
     }
+
+    private func wire(_ host: SurfaceHostingView) {
+        host.onHover = { [weak self] inside, event in self?.hoverChanged(inside, event) }
+        host.onMouseDown = { [weak self] p in self?.mouseDown(at: p) ?? false }
+        host.onSwipe = { [weak self] step in self?.swipe(step) }
+    }
+
+    /// A fresh hosting view for the collapsed surface once the panel has closed: the old graph,
+    /// with what the expanded pages left in it (style and help inputs, view caches, which grew
+    /// with every open), goes with it. The wings rebuild in a few milliseconds.
+    private func rebuildHost() {
+        hostOpened = false
+        hostRebuildsForTest += 1
+        let old = host
+        let fresh = SurfaceHostingView(rootView: SurfaceView(model: model, context: context))
+        fresh.frame = old.frame
+        wire(fresh)
+        old.onHover = nil; old.onMouseDown = nil; old.onSwipe = nil
+        container.replaceSubview(old, with: fresh)
+        host = fresh
+    }
+    private(set) var hostRebuildsForTest = 0
+    /// Tests: the hosting view currently in the panel.
+    var hostForTest: NSView { host }
 
     var panelFrame: CGRect { panel.frame }
     var panelVisible: Bool { panel.isVisible }
@@ -84,6 +110,7 @@ final class SurfaceController: SurfaceModelDelegate {
     func surfaceLayoutDidSettle(_ model: SurfaceModel) {
         let target = model.layout.windowFrame(in: model.geometry)
         if target != panel.frame { setPanelFrame(target, display: true) }
+        if model.expanded { hostOpened = true } else if hostOpened { rebuildHost() }
         // The frame shrank under a still pointer: no exit event comes, so check once here.
         if model.hovering, !model.expanded, !target.contains(NSEvent.mouseLocation) {
             hoverTask?.cancel(); intent.exited()

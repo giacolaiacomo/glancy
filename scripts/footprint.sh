@@ -1,7 +1,10 @@
 #!/bin/bash
 # Launches the installed Glancy, lets it idle, then reports phys_footprint, CPU, wake-ups and
 # child processes. Fails above the 40 MB budget (SPEC §1).
-# Usage: scripts/footprint.sh [--demo] [--idle SECONDS]
+# Usage: scripts/footprint.sh [--demo] [--idle SECONDS] [--tour home|tabs|all]
+#   --tour: 3 s after launch the panel opens and walks Home / every tab / every settings page, then
+#   closes (Glancy --tour, ~5/15/35 s); the reading at --idle is then the footprint after a use.
+#   It opens the panel on screen: not while someone is using the Mac.
 set -euo pipefail
 
 APP="$HOME/Applications/Glancy.app"
@@ -12,6 +15,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --demo) ARGS+=(--demo) ;;
     --idle) IDLE="$2"; shift ;;
+    --tour) ARGS+=(--tour "$2"); shift ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift

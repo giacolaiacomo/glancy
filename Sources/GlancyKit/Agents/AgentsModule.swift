@@ -27,18 +27,16 @@ public final class AgentsModule: GlancyModule {
         running = true
         model.hub = hub
         model.onWantsKeys = { [weak self] on in self?.wantsKeys(on) }
-        reader.start { [weak self] events, rebuild in
-            // Parsing happened on the reader queue. The launch rebuild (thousands of lines) also
-            // runs the state machine here; main only adopts the result. Then FIFO onto main, in
-            // file order, so live batches always land after the rebuild.
-            if rebuild {
-                var store = AgentSessionStore()
-                for e in events { store.apply(e) }
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver { $0.adopt(store) } } }
-            } else {
-                DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver { $0.ingest(events, rebuild: false) } } }
-            }
-        }
+        // Parsing happens on the reader queue. The launch rebuild (thousands of lines) also runs
+        // the state machine there, one line at a time; main only adopts the result. Then FIFO onto
+        // main, in file order, so live batches always land after the rebuild.
+        reader.start({ [weak self] events, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver { $0.ingest(events, rebuild: false) } } }
+        }, rebuild: { [weak self] lines in
+            var store = AgentSessionStore()
+            AgentEventParser.drain(&lines) { store.apply($0) }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver { $0.adopt(store) } } }
+        })
     }
 
     /// Drops batches that were already queued for main when `stop()` ran.

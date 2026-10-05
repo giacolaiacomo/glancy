@@ -9,6 +9,9 @@ import Foundation
 /// open across the `mv` still gets its line read; the new file is followed from byte 0.
 final class JSONLTailReader: @unchecked Sendable {
     typealias Handler = @Sendable (_ events: [AgentEvent], _ isRebuild: Bool) -> Void
+    /// Consumes the launch rebuild's complete lines itself (leaving a trailing partial line in
+    /// the buffer), instead of receiving them as one `[AgentEvent]` batch.
+    typealias RebuildFold = @Sendable (_ lines: inout Data) -> Void
 
     let url: URL
     let rebuildBytes: Int
@@ -16,6 +19,7 @@ final class JSONLTailReader: @unchecked Sendable {
 
     // Everything below is touched only on `queue`.
     private var handler: Handler?
+    private var fold: RebuildFold?
     private var current: Follower?
     private var retired: Follower?
     private var folderSource: DispatchSourceFileSystemObject?
@@ -28,11 +32,12 @@ final class JSONLTailReader: @unchecked Sendable {
 
     var rotatedURL: URL { URL(fileURLWithPath: url.path + ".1") }
 
-    func start(_ handler: @escaping Handler) {
+    func start(_ handler: @escaping Handler, rebuild fold: RebuildFold? = nil) {
         queue.async { [self] in
             guard !running else { return }
             running = true
             self.handler = handler
+            self.fold = fold
             rebuild()
         }
     }
@@ -41,6 +46,7 @@ final class JSONLTailReader: @unchecked Sendable {
         queue.sync { [self] in
             running = false
             handler = nil
+            fold = nil
             current?.cancel(); current = nil
             retired?.cancel(); retired = nil
             folderSource?.cancel(); folderSource = nil
@@ -54,7 +60,7 @@ final class JSONLTailReader: @unchecked Sendable {
 
     private func rebuild() {
         guard let f = Follower(path: url.path) else {
-            deliver([], rebuild: true)
+            if let fold { var none = Data(); fold(&none) } else { deliver([], rebuild: true) }
             watchForCreation()
             return
         }
@@ -69,9 +75,13 @@ final class JSONLTailReader: @unchecked Sendable {
         let raw = Self.pread(f.fd, from: off_t(from), count: size - from)
         f.offset = off_t(from + raw.count)
         data.append(from > 0 ? Self.dropFirstLine(raw) : raw)
-        let events = AgentEventParser.drain(&data)
+        if let fold {
+            fold(&data)
+        } else {
+            let events = AgentEventParser.drain(&data)
+            deliver(events, rebuild: true)
+        }
         f.partial = data
-        deliver(events, rebuild: true)
         follow(f)
         read(f)                               // lines appended before the source existed
         // Rotated between open() and the source: catch up now rather than miss the new file.

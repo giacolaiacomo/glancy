@@ -54,8 +54,10 @@ public enum AgentEventParser {
     /// Parses one JSONL line. Returns nil for blank, malformed or unknown-event lines (skipped, never fatal).
     public static func parse(_ line: String) -> AgentEvent? { parse(Data(line.utf8)) }
 
-    public static func parse(_ data: Data) -> AgentEvent? {
-        guard !data.isEmpty, let raw = try? JSONDecoder().decode(Raw.self, from: data),
+    public static func parse(_ data: Data) -> AgentEvent? { parse(data, decoder: JSONDecoder()) }
+
+    private static func parse(_ data: Data, decoder: JSONDecoder) -> AgentEvent? {
+        guard !data.isEmpty, let raw = try? decoder.decode(Raw.self, from: data),
               let name = raw.event, let kind = AgentEvent.Kind(rawValue: name),
               let sid = raw.session_id, !sid.isEmpty, let ms = raw.ts else { return nil }
         return AgentEvent(
@@ -74,13 +76,28 @@ public enum AgentEventParser {
     /// trailing partial line in place for the next read.
     public static func drain(_ buffer: inout Data) -> [AgentEvent] {
         var out: [AgentEvent] = []
+        drain(&buffer) { out.append($0) }
+        return out
+    }
+
+    /// The same, one event at a time: the launch rebuild folds 2 MB of lines into the session
+    /// store without holding every event at once, with one decoder for all of them and the
+    /// Foundation temporaries released every 256 lines, so the parse leaves no megabytes of
+    /// freed-but-dirty heap behind at idle.
+    public static func drain(_ buffer: inout Data, _ each: (AgentEvent) -> Void) {
+        let decoder = JSONDecoder()
         var start = buffer.startIndex
-        while let nl = buffer[start...].firstIndex(of: 0x0A) {
-            if nl > start, let e = parse(Data(buffer[start..<nl])) { out.append(e) }
-            start = buffer.index(after: nl)
+        var more = true
+        while more {
+            autoreleasepool {
+                for _ in 0..<256 {
+                    guard let nl = buffer[start...].firstIndex(of: 0x0A) else { more = false; return }
+                    if nl > start, let e = parse(buffer[start..<nl], decoder: decoder) { each(e) }
+                    start = buffer.index(after: nl)
+                }
+            }
         }
         buffer = start == buffer.endIndex ? Data() : Data(buffer[start...])
-        return out
     }
 
     /// Messages Claude Code injects as a "prompt" (background agent results, task notifications,
@@ -98,7 +115,10 @@ public enum AgentEventParser {
             let name = trimmed.dropFirst().prefix { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
             if injectedTags.contains(String(name)) { return nil }
         }
-        let untagged = trimmed.replacingOccurrences(of: #"</?[a-zA-Z_][\w-]*(\s[^>]*)?>"#, with: " ", options: .regularExpression)
+        // Most prompts have no tag at all: no regular expression (ICU) for them.
+        let untagged = trimmed.contains("<")
+            ? trimmed.replacingOccurrences(of: #"</?[a-zA-Z_][\w-]*(\s[^>]*)?>"#, with: " ", options: .regularExpression)
+            : trimmed
         let line = untagged.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return line.isEmpty ? nil : line
     }

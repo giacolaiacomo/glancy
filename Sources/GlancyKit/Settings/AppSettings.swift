@@ -54,7 +54,15 @@ public final class AppSettings {
         L10n.apply(language)
     }
 
-    public func isEnabled(_ module: ModuleID) -> Bool { !disabledModules.contains(module) }
+    public func isEnabled(_ module: ModuleID) -> Bool {
+        !disabledModules.contains(module) && Self.onlyModules?.contains(module) != false
+    }
+
+    /// Diagnostics (footprint bisection): `GLANCY_ONLY_MODULES=agents,media` runs just those, as if
+    /// the others were off, without touching the saved choice.
+    nonisolated static let onlyModules: Set<ModuleID>? = ProcessInfo.processInfo.environment["GLANCY_ONLY_MODULES"].map {
+        Set($0.split(separator: ",").compactMap { ModuleID(rawValue: String($0)) })
+    }
 
     public func setEnabled(_ module: ModuleID, _ on: Bool) {
         if on { disabledModules.remove(module) } else { disabledModules.insert(module) }

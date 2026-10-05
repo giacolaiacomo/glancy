@@ -38,6 +38,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         manager.start()
         startPermissions()
         if CommandLine.arguments.contains("--selftest") { manager.runSelfTest() }
+        if let i = CommandLine.arguments.firstIndex(of: "--tour") {
+            // `--tour [home|tabs|all|<module>] [rounds]`: see SurfaceManager.runTour (diagnostics).
+            let rest = CommandLine.arguments.dropFirst(i + 1)
+            let scope = rest.first.flatMap { ["home", "tabs", "all"].contains($0) || ModuleID(rawValue: $0) != nil ? $0 : nil }
+            let rounds = rest.dropFirst(scope == nil ? 0 : 1).first.flatMap { Int($0) } ?? 1
+            manager.runTour(after: 3, scope: scope ?? "all", rounds: rounds)
+        }
         if settings.needsOnboarding, !CommandLine.arguments.contains("--selftest") {
             welcomeTask = Task { [weak self] in
                 // Let the surfaces settle after launch, then open once.

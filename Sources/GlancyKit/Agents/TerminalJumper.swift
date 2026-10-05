@@ -24,7 +24,7 @@ enum TerminalJumper {
         .filter { $0.value.kind == .terminal || $0.value.kind.isEditor }
         .mapValues(\.name)
 
-    static var isTrusted: Bool { AXIsProcessTrusted() }
+    static var isTrusted: Bool { Lab.accessibilityTrusted() }
 
     struct Target: Sendable {
         let projectPath: String

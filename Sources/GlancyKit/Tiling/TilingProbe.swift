@@ -24,7 +24,7 @@ public enum TilingProbe {
                            targets: [CGRect]? = nil) async -> [String] {
         var lines: [String] = []
         func log(_ s: String) { lines.append(s); logger.notice("\(s, privacy: .public)") }
-        guard AXIsProcessTrusted() else {
+        guard Lab.accessibilityTrusted() else {
             log("Accessibility not granted: nothing probed")
             return lines
         }

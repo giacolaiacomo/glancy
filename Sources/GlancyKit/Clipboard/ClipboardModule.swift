@@ -167,7 +167,7 @@ public final class ClipboardModule: GlancyModule {
 
     private func chosen(_ item: ClipItem) {
         hub?.requestClose()
-        guard model.settings.pasteAfterChoosing, AXIsProcessTrusted(), !sample else { return }
+        guard model.settings.pasteAfterChoosing, Lab.accessibilityTrusted(), !sample else { return }
         let target = lastFrontmost
         pasteTask?.cancel()
         pasteTask = Task {
@@ -196,7 +196,7 @@ public final class ClipboardModule: GlancyModule {
 
     /// Asks for Accessibility when "Paste after choosing" is turned on without it.
     public func pasteSettingChanged(_ on: Bool) {
-        guard on, !AXIsProcessTrusted() else { return }
+        guard on, !Lab.accessibilityTrusted() else { return }
         // kAXTrustedCheckOptionPrompt, spelled out (the global is not concurrency-safe).
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }

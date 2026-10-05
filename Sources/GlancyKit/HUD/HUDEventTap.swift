@@ -77,6 +77,7 @@ final class HUDEventTap: @unchecked Sendable {
 
     /// nil when the tap can't be created (no Accessibility).
     static func start(handler: HUDKeyHandler) -> HUDEventTap? {
+        guard !Lab.isActive else { return nil }
         let mask = CGEventMask(1 << 14)   // NX_SYSDEFINED
         // The tap object is the callback's context, so it must exist before the port: a box first.
         let slot = TapSlot()

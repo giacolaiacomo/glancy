@@ -143,7 +143,7 @@ enum MenuBarReader {
     /// The menu titles of `pid`'s menu bar, Apple menu excluded. nil when not trusted or the app
     /// didn't answer within the timeout. Never prompts.
     static func menus(pid: pid_t, primaryHeight h: CGFloat) -> [CGRect]? {
-        guard AXIsProcessTrusted() else { return nil }
+        guard Lab.accessibilityTrusted() else { return nil }
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.25)
         var barRef: CFTypeRef?
@@ -204,7 +204,7 @@ final class MenuBarWatcher {
         static let system = Reader(
             menus: { MenuBarReader.menus(pid: $0, primaryHeight: MenuBarReader.primaryHeight) },
             status: { MenuBarReader.statusItems(excluding: getpid(), primaryHeight: MenuBarReader.primaryHeight) },
-            trusted: { AXIsProcessTrusted() },
+            trusted: { Lab.accessibilityTrusted() },
             owner: { NSWorkspace.shared.menuBarOwningApplication?.processIdentifier })
     }
 

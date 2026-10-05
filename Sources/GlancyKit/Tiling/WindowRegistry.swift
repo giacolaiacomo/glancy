@@ -80,7 +80,7 @@ public final class WindowRegistry {
 
     /// Starts observing. Does nothing without Accessibility permission (never prompts).
     public func start() {
-        guard !isRunning, AXIsProcessTrusted() else { return }
+        guard !isRunning, Lab.accessibilityTrusted() else { return }
         isRunning = true
         let ws = NSWorkspace.shared.notificationCenter
         func on(_ name: Notification.Name, _ body: @escaping @MainActor (NSRunningApplication?) -> Void) {

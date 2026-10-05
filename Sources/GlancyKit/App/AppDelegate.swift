@@ -14,6 +14,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public init(demo: Bool) { self.demo = demo }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        if Lab.isActive { launchLab(); return }
         LegacyMigration.run()
         guard let lock = SingleInstanceLock.acquire() else {
             // Another Glancy is already running: leave quietly.
@@ -56,7 +57,41 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// `--lab` (App/Lab.swift): demo data in a scratch root, no lock, no permissions, an off-screen
+    /// surface driven by signals. Never touches the installed app or anything of the user's.
+    private var labActivity: NSObjectProtocol?
+    private var labSuites: (() -> Void)?
+    private func launchLab() {
+        NSApp.setActivationPolicy(.accessory)
+        // The real notch is always on screen, so it is never napped; the off-screen lab would be.
+        labActivity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "memory lab")
+        let defaults = UserDefaults(suiteName: Lab.defaultsSuite)!
+        defaults.removePersistentDomain(forName: Lab.defaultsSuite)
+        let settings = AppSettings(defaults: defaults)
+        settings.markOnboarded()
+        settings.permissions.probe = Lab.permissions
+        for id in AppSettings.defaultDisabled { settings.setEnabled(id, true) }
+        let set = DemoData.make(root: Lab.root.appendingPathComponent("data", isDirectory: true))
+        labSuites = set.removeDefaults
+        let context = SurfaceContext(hub: ActivityHub(), settings: settings, launchAtLogin: LaunchAtLogin(), modules: set.modules)
+        context.quit = { NSApp.terminate(nil) }
+        self.context = context
+        for m in context.enabledModules { start(m) }
+        let screen = Lab.screen()
+        let manager = SurfaceManager(context: context, screens: { [screen] }, fullscreenSpaces: { [] },
+                                     events: SystemEvents(), menuBar: nil, presents: true)
+        self.manager = manager
+        manager.start()
+        Lab.installSignals { [weak manager] in manager?.runTour(after: 0, scope: "all", rounds: Lab.rounds) }
+        print("lab: ready pid=\(getpid()) root=\(Lab.root.path) surface=\(Int(screen.frame.minX)),\(Int(screen.frame.minY))")
+        fflush(stdout)
+    }
+
     public func applicationWillTerminate(_ notification: Notification) {
+        if Lab.isActive {
+            UserDefaults(suiteName: Lab.defaultsSuite)?.removePersistentDomain(forName: Lab.defaultsSuite)
+            labSuites?()
+        }
         guard let context else { return }
         welcomeTask?.cancel()
         context.settings.permissions.stop()

@@ -132,7 +132,7 @@ final class SystemEvents {
     /// Mission Control enter/exit comes from the Dock's accessibility notifications, which need
     /// the Accessibility grant. Without it, only the Space-switch fade applies.
     func attachDock() {
-        guard AXIsProcessTrusted(),
+        guard Lab.accessibilityTrusted(),
               let pid = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first?.processIdentifier
         else { return }
         if dock?.pid == pid { return }

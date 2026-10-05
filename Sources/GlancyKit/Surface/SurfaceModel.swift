@@ -167,6 +167,7 @@ public final class SurfaceModel {
             change()
         }
         let after = layout
+        if ProcessInfo.processInfo.environment["GLANCY_LAB_TRACE"] != nil { print("TRACE transition \(state) wings=\(wingContent) peek=\(String(describing: shownPeek)) size=\(after.size) anim=\(animation != nil) t=\(Date().timeIntervalSince1970)") }
         if after != before { delegate?.surfaceLayoutWillChange(self, to: after) }
         if !animated, !animating { delegate?.surfaceLayoutDidSettle(self) }
         if state != wasState { delegate?.surfaceStateDidChange(self) }

@@ -46,7 +46,7 @@ public final class TilingEngine {
     // MARK: Lifecycle
 
     /// Accessibility granted to this process (never prompts).
-    public var isTrusted: Bool { AXIsProcessTrusted() }
+    public var isTrusted: Bool { Lab.accessibilityTrusted() }
 
     /// Starts the registry. Without Accessibility it does nothing; call again once granted.
     public func start() { registry.start() }

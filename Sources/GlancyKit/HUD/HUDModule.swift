@@ -215,7 +215,7 @@ public final class HUDModule: GlancyModule {
     /// Install or remove the tap to match the setting and the Accessibility grant.
     private func reconcile() {
         guard started, usesHardware else { return }
-        let trusted = AXIsProcessTrusted()
+        let trusted = Lab.accessibilityTrusted()
         model.needsAccessibility = !trusted
         guard settings.enabled, !settings.kinds.isEmpty, trusted else { teardown(); return }
         handler?.setKinds(settings.kinds)

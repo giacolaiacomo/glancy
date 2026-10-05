@@ -20,7 +20,7 @@ final class DragMonitor {
     var isActive: Bool { machine.isActive }
 
     func start() {
-        guard monitors.isEmpty else { return }
+        guard monitors.isEmpty, !Lab.isActive else { return }
         let types: [(NSEvent.EventTypeMask, (NSEvent) -> Void)] = [
             (.leftMouseDown, { [weak self] e in self?.down(e) }),
             (.leftMouseDragged, { [weak self] _ in self?.dragged() }),

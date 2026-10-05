@@ -43,7 +43,7 @@ public final class SurfaceManager {
         self.fullscreenSpaces = fullscreenSpaces
         self.events = events
         self.presents = presents
-        escape = EscapeHotKey(system: presents)
+        escape = EscapeHotKey(system: presents && !Lab.isActive)
     }
 
     public func start() {
@@ -259,7 +259,7 @@ public final class SurfaceManager {
     /// Clicks in other apps close the panel. Exists only while something is expanded.
     private func installClickMonitor() {
         guard clickMonitor == nil else { return }
-        guard presents else { clickMonitor = NSNull(); return }
+        guard presents, !Lab.isActive else { clickMonitor = NSNull(); return }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.closeAll() }
         }

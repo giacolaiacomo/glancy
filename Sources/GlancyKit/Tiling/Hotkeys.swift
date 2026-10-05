@@ -126,6 +126,7 @@ public final class HotkeyManager {
     public var registered: Set<Hotkey> { Set(combos.values) }
 
     private static func carbonRegister(_ hotkey: Hotkey, id: UInt32) -> EventHotKeyRef? {
+        guard !Lab.isActive else { return nil }   // the lab never takes a key from the user
         var ref: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: signature, id: id)
         let status = RegisterEventHotKey(hotkey.keyCode, hotkey.modifiers, hotKeyID, GetApplicationEventTarget(), 0, &ref)

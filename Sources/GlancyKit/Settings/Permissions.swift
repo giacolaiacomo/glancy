@@ -38,7 +38,7 @@ public struct PermissionProbe: Sendable {
     public static let system = PermissionProbe {
         var out: [PermissionKind: PermissionStatus] = [:]
         out[.calendar] = SystemPermissions.calendar()
-        out[.accessibility] = AXIsProcessTrusted() ? .granted : .notDetermined
+        out[.accessibility] = Lab.accessibilityTrusted() ? .granted : .notDetermined
         out[.bluetooth] = SystemPermissions.bluetooth()
         out[.fullDiskAccess] = SystemPermissions.fullDiskAccess()
         out[.notifications] = await SystemPermissions.notifications()

@@ -9,6 +9,11 @@ import Foundation
 @MainActor
 public enum DemoData {
     public static func modules(root: URL, now: Date = .now) -> [any GlancyModule] {
+        make(root: root, now: now).modules
+    }
+
+    /// The seeded set, with its private defaults suites (the lab removes them when it quits).
+    static func make(root: URL, now: Date = .now) -> IsolatedModules.Set {
         let set = IsolatedModules.make(root: root)
         writeAgentsLog(to: set.agentsLog, now: now)
         fillCalendar(set.calendar, now: now)
@@ -22,7 +27,7 @@ public enum DemoData {
                                           battery: BluetoothBattery(left: 82, right: 90, case: 40))])
         // Tiling shown as available (the synthetic desk needs no Accessibility; nothing is moved).
         set.modules.compactMap { $0 as? AgentsModule }.first?.prepareForRender(.tilingReady)
-        return set.modules
+        return set
     }
 
     // MARK: Agents: four sessions, one waiting for permission

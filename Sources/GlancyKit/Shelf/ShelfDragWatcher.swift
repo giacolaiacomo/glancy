@@ -24,7 +24,7 @@ final class ShelfDragWatcher {
     private var fired = false
 
     func start() {
-        guard downMonitor == nil else { return }
+        guard downMonitor == nil, !Lab.isActive else { return }
         downMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
             MainActor.assumeIsolated { self?.buttonDown() }
         }

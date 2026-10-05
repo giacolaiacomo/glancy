@@ -13,7 +13,7 @@ final class CopyKeyTap {
     private var source: CFRunLoopSource?
 
     /// Whether the system lets us see key events (never prompts).
-    static var permitted: Bool { CGPreflightListenEventAccess() || AXIsProcessTrusted() }
+    static var permitted: Bool { !Lab.isActive && CGPreflightListenEventAccess() || Lab.accessibilityTrusted() }
 
     /// Asks for Input Monitoring (the system prompt / Settings pane). User-initiated only.
     static func requestPermission() {

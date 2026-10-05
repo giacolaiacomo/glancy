@@ -241,7 +241,9 @@ struct WorkspaceRestoreTests {
         m.workspaces.add(saved)
         let start = ContinuousClock.now
         let o = await m.restoreWorkspace(saved.id)
-        #expect(ContinuousClock.now - start < .seconds(2))
+        // The 80 ms timeout ended the wait, not the 10 s default. Not tighter: in the full run other
+        // suites hold the main actor (one blocks main on purpose), which measured 2.07 s here once.
+        #expect(ContinuousClock.now - start < .seconds(8))
         #expect(launcher.launched == ["com.example.Quiet"])
         #expect(o?.launched == 1 && o?.placed == 6 && o?.notFound == 1)
         #expect(o.map { $0.line } == "Placed 6, launched 1, 1 not found")

@@ -64,7 +64,23 @@ enum IsolatedModules {
         let notifications = NotificationsModule(databaseURL: dir("notifications").appendingPathComponent("db"),
                                                 settings: NotificationsSettings(defaults: defaults("notifications")),
                                                 sample: true)
-        return Set(modules: [agents, calendar, media, timer, shelf, clipboard, windows, hud, power, notifications],
+        // Wave 4: sample notes (no hot keys, no microphone), the bar in sample mode (no hot key, no
+        // cache, rates only on demand), Control and Monitor live but read-only until a user acts.
+        let notes = NotesModule(store: NotesStore(directory: dir("notes")), settings: NotesSettings(defaults: defaults("notes")),
+                                sample: true, voiceSystem: .sample)
+        notes.micControl = hud
+        power.sound = hud
+        let control = ControlModule(actions: LiveSystemActions(), settings: ControlSettings(defaults: defaults("control")),
+                                    scheduler: TaskWakeScheduler(), stats: StatsSampler())
+        let monitor = MonitorModule(source: LiveMonitorSource(), actions: LiveMonitorActions(),
+                                    settings: MonitorSettings(defaults: defaults("monitor")))
+        var modules: [any GlancyModule] = [agents, calendar, media, timer, shelf, clipboard, windows, hud, power, notifications,
+                                           notes, control, monitor]
+        let command = CommandModule(settings: CommandSettings(defaults: defaults("command")), history: PaletteHistory(url: nil),
+                                    apps: AppIndex(), rates: CurrencyRates(cacheURL: nil), sample: true)
+        command.sources = CommandModule.weakly(modules)
+        modules.append(command)
+        return Set(modules: modules,
                    agentsLog: agentsLog, calendar: calendarSource, media: media, power: power, shelf: shelf,
                    timer: timer, windows: windows, suites: suites)
     }

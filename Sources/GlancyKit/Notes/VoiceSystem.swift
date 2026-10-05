@@ -228,7 +228,7 @@ struct SystemTranscriber: NoteTranscribing {
         box.recognizer = recognizer   // kept alive until the task ends
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (cont: CheckedContinuation<String, Error>) in
-                box.task = recognizer.recognitionTask(with: request) { result, error in
+                box.task = recognizer.recognitionTask(with: request) { @Sendable result, error in
                     if let result, result.isFinal {
                         if once.claim() { cont.resume(returning: result.bestTranscription.formattedString) }
                     } else if let error {

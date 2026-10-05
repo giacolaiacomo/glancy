@@ -398,7 +398,7 @@ public final class PowerModule: GlancyModule {
     /// For renders: fixed devices (battery, headphones, paired) without hardware.
     public func prepareForRender(battery: PowerState, devices: [BluetoothDeviceInfo], paired: [BluetoothDeviceInfo] = []) {
         model.battery = battery
-        model.devices = Dictionary(uniqueKeysWithValues: devices.map { ($0.address, $0) })
+        model.devices = Dictionary(devices.map { ($0.address, $0) }, uniquingKeysWith: { _, last in last })
         model.pairedAudio = paired
     }
 

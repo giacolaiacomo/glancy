@@ -2,11 +2,10 @@ import AppKit
 import Foundation
 
 /// AppleScript fallback for Music and Spotify, used only when the adapter's health check fails
-/// (boring.notch v2.7, PR #460). Needs the Automation permission; runs one script at a time on a
-/// private queue, and never talks to a player that isn't running (a `tell` would launch it).
+/// (boring.notch v2.7, PR #460). Needs the Automation permission; runs one script at a time on
+/// `AppleScriptRunner`'s queue, and never talks to a player that isn't running (a `tell` would launch it).
 enum PlayerScripts {
     static let players = [PlayerNotification.musicBundle, PlayerNotification.spotifyBundle]
-    private static let queue = DispatchQueue(label: "ai.glancy.media.applescript", qos: .utility)
 
     @MainActor static func isRunning(_ bundle: String) -> Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: bundle).isEmpty
@@ -23,9 +22,8 @@ enum PlayerScripts {
         end tell
         """
         return await withCheckedContinuation { cont in
-            queue.async {
-                var err: NSDictionary?
-                guard let d = NSAppleScript(source: source)?.executeAndReturnError(&err), d.numberOfItems >= 6,
+            AppleScriptRunner.queue.async {
+                guard let d = AppleScriptRunner.execute(source).result, d.numberOfItems >= 6,
                       let state = d.atIndex(1)?.stringValue, state != "stopped",
                       let title = d.atIndex(2)?.stringValue, !title.isEmpty else {
                     cont.resume(returning: nil); return
@@ -48,8 +46,7 @@ enum PlayerScripts {
                         end try
                     end tell
                     """
-                    var e2: NSDictionary?
-                    art = NSAppleScript(source: artScript)?.executeAndReturnError(&e2).data
+                    art = AppleScriptRunner.execute(artScript).result?.data
                     if art?.isEmpty == true { art = nil }
                 }
                 cont.resume(returning: (info, art))
@@ -60,9 +57,6 @@ enum PlayerScripts {
     /// Fire-and-forget command ("playpause", "next track", "set player position to 42").
     static func command(_ bundle: String, _ verb: String) {
         let source = "tell application id \"\(bundle)\" to \(verb)"
-        queue.async {
-            var err: NSDictionary?
-            _ = NSAppleScript(source: source)?.executeAndReturnError(&err)
-        }
+        AppleScriptRunner.run(source)
     }
 }

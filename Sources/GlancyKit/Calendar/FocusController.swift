@@ -53,7 +53,7 @@ public struct ShortcutsCLI: ShortcutRunning {
                 p.standardError = FileHandle.nullDevice
                 p.standardInput = FileHandle.nullDevice
                 do { try p.run() } catch { done.resume(returning: nil); return }
-                let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
+                let killer = DispatchWorkItem { @Sendable in if p.isRunning { p.terminate() } }
                 DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
                 let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 p.waitUntilExit()

@@ -80,6 +80,12 @@ enum Render {
             media?.showSamplePeek(n)
             shot("04-peekEvent-\(name)", ctx)
         }
+        // Glancy crashed since the last launch (GlancyKit/App/CrashReports.swift).
+        do {
+            let ctx = context(false)
+            CrashReports.show(hub: ctx.hub, summary: URL(fileURLWithPath: "/tmp/2026-10-06-001206.txt"), count: 1)
+            shot("04-peekEvent-crash", ctx)
+        }
         shot("05-expanded-home", live) { $0.expand(tab: nil) }
         shot("05-expanded-home-empty", context(false, [])) { $0.expand(tab: nil) }
         for (i, tab) in live.stripTabs.enumerated() {

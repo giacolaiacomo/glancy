@@ -303,7 +303,7 @@ private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 2) async ->
         let (m, fake, _, _) = makeControl()
         m.visibilityChanged(.expanded(.control))
         m.run(.eject)
-        #expect(m.model.prompt == .note(ControlText.t("Nothing to eject"), symbol: "eject"))
+        #expect(await settle { m.model.prompt == .note(ControlText.t("Nothing to eject"), symbol: "eject") })
         fake.volumes = ["USB", "Backup"]
         fake.ejectResult = (2, 0)
         m.run(.eject)

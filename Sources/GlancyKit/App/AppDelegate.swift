@@ -37,6 +37,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         self.manager = manager
         manager.start()
         startPermissions()
+        // Glancy crashed since the last launch? One look, a few seconds in, off main.
+        if !demo { CrashReports.checkAtLaunch(hub: hub) }
         if CommandLine.arguments.contains("--selftest") { manager.runSelfTest() }
         if let i = CommandLine.arguments.firstIndex(of: "--tour") {
             // `--tour [home|tabs|all|<module>] [rounds]`: see SurfaceManager.runTour (diagnostics).
@@ -73,7 +75,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let permissions = context.settings.permissions
         permissions.calendarRequester = { [weak self] in
             guard let self, let calendar = self.runningModule(CalendarModule.self) else {
-                _ = try? await EKEventStore().requestFullAccessToEvents()
+                if EventKitSource.usable { _ = try? await EKEventStore().requestFullAccessToEvents() }
                 return
             }
             await calendar.requestAccess()

@@ -50,7 +50,7 @@ public final class NotesModel {
     public func load() async {
         let all = await store.loadAll()
         // Edits made before the load finished win.
-        let local = Dictionary(uniqueKeysWithValues: notes.map { ($0.id, $0) })
+        let local = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         notes = all.filter { local[$0.id] == nil } + notes
         notes.sort { $0.modified > $1.modified }
         loaded = true

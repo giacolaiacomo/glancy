@@ -182,10 +182,7 @@ public final class NotesModule: GlancyModule {
         end tell
         """
         hub?.requestClose()
-        DispatchQueue.global(qos: .userInitiated).async {
-            var err: NSDictionary?
-            _ = NSAppleScript(source: source)?.executeAndReturnError(&err)
-        }
+        AppleScriptRunner.run(source)
     }
 
     /// Plain text → the HTML body Apple Notes stores (first line as its title).

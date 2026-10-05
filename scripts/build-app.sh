@@ -116,10 +116,12 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
 	<key>NSSupportsSuddenTermination</key><false/>
 	<key>NSCalendarsFullAccessUsageDescription</key><string>Glancy shows your next meeting and a Join button in the notch.</string>
 	<key>NSCalendarsUsageDescription</key><string>Glancy shows your next meeting and a Join button in the notch.</string>
-	<key>NSAppleEventsUsageDescription</key><string>Glancy reads what Music and Spotify are playing and controls playback from the notch, and switches dark mode or empties the Trash when you ask.</string>
+	<key>NSAppleEventsUsageDescription</key><string>Glancy reads what Music and Spotify are playing and controls playback from the notch, and switches dark mode, empties the Trash or sends a note to Apple Notes when you ask.</string>
 	<key>NSCameraUsageDescription</key><string>Glancy shows your camera as a mirror in the notch, only while the mirror is open.</string>
 	<key>NSMicrophoneUsageDescription</key><string>Glancy records voice notes when you ask, and mutes and unmutes your microphone from the notch.</string>
 	<key>NSSpeechRecognitionUsageDescription</key><string>Glancy turns your voice notes into text on this Mac. The audio never leaves it.</string>
+	<key>NSDesktopFolderUsageDescription</key><string>Glancy shows a new screenshot in the notch the moment it lands on your Desktop.</string>
+	<key>NSDownloadsFolderUsageDescription</key><string>Glancy shows a finished download in the notch.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key><string>Glancy shows when your headphones connect and how much battery they have.</string>
 	<key>NSHumanReadableCopyright</key><string>© 2026 Glancy contributors. MIT License.</string>
 </dict>

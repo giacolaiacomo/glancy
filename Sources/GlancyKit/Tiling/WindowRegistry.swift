@@ -262,7 +262,7 @@ public final class WindowRegistry {
 
     private func apply(snapshots: [(pid_t, AppSnapshot?)], onScreen: [CGWindowInfo], mouseUp: Bool) {
         let h = ScreenSpace.primaryHeight
-        var byID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+        var byID = Dictionary(windows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })   // never trap on a repeated id
         var change = RegistryChange(afterMouseUp: mouseUp)
         let z = Dictionary(onScreen.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
 

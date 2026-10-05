@@ -4,7 +4,10 @@ import IOBluetooth
 import IOKit
 
 /// Connect / disconnect notifications from IOBluetooth. No polling: one connect registration plus
-/// one disconnect registration per connected device. Callbacks arrive on the main run loop.
+/// one disconnect registration per connected device. IOBluetooth calls the selectors on its own
+/// coordinator queue (CoreBluetooth's XPC replies), not on main: the `@objc` entry points are
+/// `nonisolated`, copy what they need and hop to main (a main-actor `@objc` method trapped there —
+/// four crash reports of 2026-10-05).
 @MainActor
 final class BluetoothWatcher: NSObject {
     struct Device: Equatable {
@@ -28,7 +31,7 @@ final class BluetoothWatcher: NSObject {
 
     /// IOBluetooth needs `NSBluetoothAlwaysUsageDescription` in Info.plist: without it macOS kills
     /// the process on first use. So command-line hosts (tests, renders) never touch it.
-    static var isUsable: Bool {
+    nonisolated static var isUsable: Bool {
         Bundle.main.object(forInfoDictionaryKey: "NSBluetoothAlwaysUsageDescription") != nil
     }
 
@@ -90,9 +93,12 @@ final class BluetoothWatcher: NSObject {
         return device.openConnection(self) == kIOReturnSuccess
     }
 
-    @objc func connectionComplete(_ device: IOBluetoothDevice, status: IOReturn) {
-        let address = BluetoothProfiler.normaliseAddress(device.addressString ?? "")
-        onConnectResult?(address, status == kIOReturnSuccess)
+    /// `openConnection` delegate. Any thread.
+    @objc nonisolated func connectionComplete(_ device: AnyObject, status: IOReturn) {
+        guard Self.isUsable else { return }
+        let address = BluetoothProfiler.normaliseAddress((device as? IOBluetoothDevice)?.addressString ?? "")
+        let ok = status == kIOReturnSuccess
+        Self.onMain(self) { $0.onConnectResult?(address, ok) }
     }
 
     func stop() {
@@ -106,19 +112,44 @@ final class BluetoothWatcher: NSObject {
         connected = [:]
     }
 
-    @objc private func didConnect(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
-        // Registration replays devices that are already connected: those are not news.
-        guard let d = track(device) else { return }
-        refreshPaired()
-        onConnect?(d)
+    /// IOBluetooth's connect notification. Any thread (the coordinator queue in practice). The
+    /// parameters are `AnyObject` so a wrong object can never reach IOBluetooth API.
+    @objc nonisolated func didConnect(_ note: AnyObject, device: AnyObject) {
+        guard Self.isUsable, let device = device as? IOBluetoothDevice else { return }
+        let ref = DeviceRef(device: device)
+        Self.onMain(self) { me in
+            guard me.isWatching else { return }
+            // Registration replays devices that are already connected: those are not news.
+            guard let d = me.track(ref.device) else { return }
+            me.refreshPaired()
+            me.onConnect?(d)
+        }
     }
 
-    @objc private func didDisconnect(_ note: IOBluetoothUserNotification, device: IOBluetoothDevice) {
+    /// IOBluetooth's disconnect notification. Any thread.
+    @objc nonisolated func didDisconnect(_ note: AnyObject, device: AnyObject) {
+        guard Self.isUsable, let device = device as? IOBluetoothDevice else { return }
         let address = BluetoothProfiler.normaliseAddress(device.addressString ?? "")
-        disconnectNotes.removeValue(forKey: address)?.unregister()
-        if let d = connected.removeValue(forKey: address) { onDisconnect?(d) }
-        refreshPaired()
+        Self.onMain(self) { me in
+            me.disconnectNotes.removeValue(forKey: address)?.unregister()
+            if let d = me.connected.removeValue(forKey: address) { me.onDisconnect?(d) }
+            if me.isWatching { me.refreshPaired() }
+        }
     }
+
+    /// FIFO onto main, so connect and disconnect keep their order.
+    private nonisolated static func onMain(_ watcher: BluetoothWatcher,
+                                           _ body: @escaping @MainActor (BluetoothWatcher) -> Void) {
+        DispatchQueue.main.async { [weak watcher] in
+            MainActor.assumeIsolated {
+                guard let watcher else { return }
+                body(watcher)
+            }
+        }
+    }
+
+    /// An IOBluetooth device handed from the coordinator queue to main, where it is used.
+    private struct DeviceRef: @unchecked Sendable { let device: IOBluetoothDevice }
 
     /// Starts watching a connected device; nil when it was already tracked.
     @discardableResult

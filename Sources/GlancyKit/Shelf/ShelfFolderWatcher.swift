@@ -125,10 +125,11 @@ final class ShelfFolderWatcher {
             known = names
             let src = DispatchSource.makeFileSystemObjectSource(fileDescriptor: fd, eventMask: [.write, .rename, .delete, .link],
                                                                 queue: .main)
-            src.setEventHandler { [weak self] in
+            // On the main queue; @Sendable so the handler itself carries no actor (see lint.sh).
+            src.setEventHandler { @Sendable [weak self] in
                 MainActor.assumeIsolated { self?.folderChanged() }
             }
-            src.setCancelHandler { close(fd) }
+            src.setCancelHandler { @Sendable in close(fd) }
             src.resume()
             source = src
             status = .watching

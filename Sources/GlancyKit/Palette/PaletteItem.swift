@@ -85,7 +85,7 @@ enum PaletteActions {
     static func launch(_ app: AppEntry) {
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
-        NSWorkspace.shared.openApplication(at: app.url, configuration: config) { _, _ in }
+        NSWorkspace.shared.openApplication(at: app.url, configuration: config) { @Sendable _, _ in }
     }
 
     static func reveal(_ path: String) {

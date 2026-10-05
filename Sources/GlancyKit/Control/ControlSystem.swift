@@ -288,7 +288,7 @@ public final class LiveSystemActions: SystemActions {
             p.arguments = args
             p.standardOutput = FileHandle.nullDevice
             p.standardError = FileHandle.nullDevice
-            p.terminationHandler = { proc in
+            p.terminationHandler = { @Sendable proc in
                 ChildProcesses.unregister(proc.processIdentifier)
                 k.resume(returning: proc.terminationStatus)
             }

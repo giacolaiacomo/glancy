@@ -166,7 +166,7 @@ final class CoreAudioSystem: AudioSystem {
                         into list: inout [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)]) {
         var addr = Self.address(selector, scope: scope, element: element)
         guard AudioObjectHasProperty(id, &addr) else { return }
-        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+        let block: AudioObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver(event) } }
         }
         if AudioObjectAddPropertyListenerBlock(id, &addr, listenQueue, block) == noErr { list.append((id, addr, block)) }
@@ -208,7 +208,7 @@ final class CoreAudioSystem: AudioSystem {
 
     private func listenCameras() {
         var addr = Self.cmioAddress(CMIOObjectPropertySelector(kCMIOHardwarePropertyDevices))
-        let block: CMIOObjectPropertyListenerBlock = { [weak self] _, _ in
+        let block: CMIOObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.deliver(.cameras) } }
         }
         if CMIOObjectAddPropertyListenerBlock(CMIOObjectID(kCMIOObjectSystemObject), &addr, listenQueue, block) == 0 {
@@ -225,7 +225,7 @@ final class CoreAudioSystem: AudioSystem {
         perCamera = []
         for cam in Self.cameraList() {
             var addr = Self.cmioAddress(CMIOObjectPropertySelector(kCMIODevicePropertyDeviceIsRunningSomewhere))
-            let block: CMIOObjectPropertyListenerBlock = { [weak self] _, _ in
+            let block: CMIOObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.onChange?(.camera) } }
             }
             if CMIOObjectAddPropertyListenerBlock(cam, &addr, listenQueue, block) == 0 { perCamera.append((cam, addr, block)) }

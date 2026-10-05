@@ -20,7 +20,7 @@ final class ShelfThumbnails {
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: Self.pixels / 2, height: Self.pixels / 2),
                                                    scale: 2, representationTypes: [.icon, .thumbnail])
         let cg: CGImage? = await withCheckedContinuation { cont in
-            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { rep, _ in
+            QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { @Sendable rep, _ in
                 cont.resume(returning: rep?.cgImage)
             }
         }

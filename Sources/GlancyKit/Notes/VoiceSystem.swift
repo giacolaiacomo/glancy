@@ -198,8 +198,14 @@ struct SystemTranscriber: NoteTranscribing {
 
     @MainActor func request() async -> Bool {
         guard Self.usable else { return false }
-        return await withCheckedContinuation { cont in
-            SFSpeechRecognizer.requestAuthorization { cont.resume(returning: $0 == .authorized) }
+        return await Self.askSpeech()
+    }
+
+    /// The answer arrives on a TCC/XPC queue, so the callback must not be main-actor isolated
+    /// (a closure formed inside a @MainActor method is, and Swift traps when it runs elsewhere).
+    nonisolated static func askSpeech() async -> Bool {
+        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            SFSpeechRecognizer.requestAuthorization { @Sendable status in cont.resume(returning: status == .authorized) }
         }
     }
 

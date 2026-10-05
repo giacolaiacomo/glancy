@@ -205,9 +205,7 @@ public final class PermissionCenter {
             guard status(.speech) == .notDetermined else { return openSettings(p) }
             asking = .speech
             Task { [weak self] in
-                _ = await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
-                    SFSpeechRecognizer.requestAuthorization { _ in c.resume() }
-                }
+                _ = await SystemTranscriber.askSpeech()
                 self?.asking = nil
                 self?.refresh()
             }

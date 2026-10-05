@@ -28,7 +28,7 @@ final class WorkspaceAppLauncher: AppLauncher {
         config.activates = false
         config.addsToRecentItems = false
         return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
-            NSWorkspace.shared.openApplication(at: url, configuration: config) { app, error in
+            NSWorkspace.shared.openApplication(at: url, configuration: config) { @Sendable app, error in
                 cont.resume(returning: app != nil && error == nil)
             }
         }

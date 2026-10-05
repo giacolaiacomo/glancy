@@ -39,6 +39,7 @@ public final class WindowsModule: GlancyModule {
         self.hotkeysURL = hotkeysURL
         hotkeys = hotkeysURL.map { WindowsHotkeys.load(from: $0) } ?? WindowsHotkeys()
         model = WindowsModel(backend: engine)
+        model.hotkeys = hotkeys
     }
 
     // MARK: Lifecycle
@@ -205,6 +206,18 @@ public final class WindowsModule: GlancyModule {
         tokens.removeAll()
         guard hotkeys.enabled else { model.failedHotkeys = []; return }
         var failed: [String] = []
+        if hotkeys.autoArrange.modifiers != 0 {
+            let key = hotkeys.autoArrange
+            if let t = HotkeyManager.shared.register(key, action: { [weak self] in self?.autoArrange(appOnly: false) }) {
+                tokens.append(t)
+            } else {
+                failed.append(key.description)
+            }
+            if let app = WindowsHotkeys.appVariant(key), !hotkeys.allCombos.contains(app),
+               let t = HotkeyManager.shared.register(app, action: { [weak self] in self?.autoArrange(appOnly: true) }) {
+                tokens.append(t)
+            }
+        }
         for (action, key) in hotkeys.bindings where key.modifiers != 0 {   // no modifiers = cleared
             let token = HotkeyManager.shared.register(key) { [weak self] in
                 guard let self else { return }
@@ -237,6 +250,7 @@ public final class WindowsModule: GlancyModule {
     public func setHotkeys(_ h: WindowsHotkeys) {
         guard h != hotkeys else { return }
         hotkeys = h
+        model.hotkeys = h
         if let hotkeysURL { try? h.save(to: hotkeysURL) }
         if running { registerHotkeys() }
     }
@@ -264,6 +278,16 @@ public final class WindowsModule: GlancyModule {
         Task { [weak self] in
             guard let self else { return }
             let line = await self.model.arrangeShortcut(strategy, appOnly: appOnly)
+            self.hub?.show(PeekEvent(module: .windows, duration: 3, content: AnyView(WindowsPeek(text: line))))
+        }
+    }
+
+    /// ⌃⌥A (⇧ = front app only): the suggested layout on the display under the pointer, at once,
+    /// outcome as a peek. Without Accessibility it moves nothing and the peek says why.
+    private func autoArrange(appOnly: Bool) {
+        Task { [weak self] in
+            guard let self else { return }
+            let line = await self.model.autoArrangeShortcut(appOnly: appOnly)
             self.hub?.show(PeekEvent(module: .windows, duration: 3, content: AnyView(WindowsPeek(text: line))))
         }
     }
@@ -305,7 +329,7 @@ public final class WindowsModule: GlancyModule {
     // MARK: Agents link
 
     /// Arranges exactly these windows (e.g. every Claude Code terminal) on the target window's
-    /// display, with the default strategy. One undoable operation.
+    /// display, in the auto-arrange layout for their count. One undoable operation.
     @discardableResult
     public func layOut(windowIDs: [CGWindowID]) async -> [PlacementResult] {
         guard model.backend.isRunning else { return [] }
@@ -325,13 +349,13 @@ public final class WindowsModule: GlancyModule {
 
     public var canUndoTiling: Bool { model.backend.canUndo }
 
-    /// Previews, on the real screen, `layOut` of these windows with Balanced, the first ID in the
-    /// first cell (reading order). Moves nothing. Returns the number of windows previewed.
+    /// Previews, on the real screen, `layOut` of these windows (auto-arrange layout), the first ID
+    /// in the first cell (reading order). Moves nothing. Returns the number of windows previewed.
     /// `titles`: what each box on the screen says (default: the window's title).
     @discardableResult
     public func previewLayOut(windowIDs: [CGWindowID], titles: [CGWindowID: String] = [:]) -> Int {
         guard tilingReady, !tabVisible,
-              let plan = model.planLayOut(windowIDs: windowIDs, strategy: .balanced, readingOrder: true) else {
+              let plan = model.planLayOut(windowIDs: windowIDs, readingOrder: true) else {
             cancelLayOutPreview()
             return 0
         }
@@ -351,7 +375,7 @@ public final class WindowsModule: GlancyModule {
     public func commitLayOut(windowIDs: [CGWindowID]) async -> [PlacementResult] {
         cancelLayOutPreview()
         guard tilingReady,
-              let plan = model.planLayOut(windowIDs: windowIDs, strategy: .balanced, readingOrder: true) else { return [] }
+              let plan = model.planLayOut(windowIDs: windowIDs, readingOrder: true) else { return [] }
         let r = await model.backend.commit(plan, label: WindowsText.t("Arrange"))
         model.backendChanged()
         return r
@@ -408,7 +432,17 @@ public final class WindowsModule: GlancyModule {
 
     /// States the renderer draws, on a synthetic screen (no Accessibility needed).
     public enum RenderState: String, CaseIterable, Sendable {
-        case map, hover, arrange, keyboard, drag, outcome, diagnostics, ultrawide, permission
+        /// The main surface, nothing picked: the four windows of the built-in, Suggested 2×2.
+        case map
+        /// Two picked (Notes #1, Mail #2): side by side, stacked, ⅔ + ⅓.
+        case picked2
+        /// Three picked, "3 columns" chosen instead of the suggestion.
+        case picked3
+        /// "?" open: the shortcuts.
+        case help
+        /// "More": the full map with grid, scope and strategies.
+        case more
+        case hover, arrange, keyboard, drag, outcome, diagnostics, ultrawide, permission
         /// The frontmost window is on the other display: nothing is targeted, the map asks for a pick.
         case noTarget
         /// App scope (Safari, two windows) previewing Balanced.
@@ -441,10 +475,20 @@ public final class WindowsModule: GlancyModule {
         switch state {
         case .map, .diagnostics, .permission:
             model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil)
+        case .picked2:
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, picked: [14, 13])
+        case .picked3:
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, picked: [12, 11, 14],
+                          layout: "columns")
+        case .help:
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, help: true)
+        case .more:
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, more: true)
         case .hover:
-            model.prepare(mode: .browse, display: nil, hover: CellRect(col: 0, row: 0, w: 2, h: 2), selection: nil, strategy: nil, outcome: nil)
+            model.prepare(mode: .browse, display: nil, hover: CellRect(col: 0, row: 0, w: 2, h: 2), selection: nil, strategy: nil,
+                          outcome: nil, more: true)
         case .arrange:
-            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: .balanced, outcome: nil)
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: .balanced, outcome: nil, more: true)
         case .keyboard:
             var s = KeyboardSelection(at: GridCoord(col: 1, row: 0))
             s.extend(.right, grid: GridSpec(cols: 3, rows: 2))
@@ -455,26 +499,31 @@ public final class WindowsModule: GlancyModule {
                           strategy: nil, outcome: nil)
         case .outcome:
             sample.outcomes = [terminal: .appSized]
-            let plan = sample.planArrange(on: SampleWindowsBackend.builtIn, strategy: .balanced, grid: nil, windowIDs: nil)
+            // After Apply on the main surface: the suggested 2×2 committed, Terminal kept its own size.
+            let d = SampleWindowsBackend.builtIn
+            let here = sample.windows.filter { $0.isTileable && d.frame.contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }
+            let plan = WindowsAutoLayout.plan(windows: here.map { PlanWindow(id: $0.id, frame: $0.frame) }, order: .minTravel,
+                                              displayID: d.id, usable: d.usableFrame, gaps: sample.grid(for: d))!.plan
             let results = plan.moves.map { m in
                 PlacementResult(windowID: m.windowID, outcome: m.windowID == terminal ? .appSized : .exact, requested: m.to,
                                 original: m.from, landed: m.windowID == terminal ? m.to.insetBy(dx: 3, dy: 2) : m.to,
                                 attempts: 1, euiWasOn: false, note: nil, elapsed: 0.05)
             }
-            for m in plan.moves { if let i = sample.windows.firstIndex(where: { $0.id == m.windowID }) { sample.windows[i].frame = m.to } }
+            for r in results { if let i = sample.windows.firstIndex(where: { $0.id == r.windowID }), let f = r.landed { sample.windows[i].frame = f } }
             model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: results)
         case .ultrawide:
-            model.prepare(mode: .browse, display: SampleWindowsBackend.ultrawide.id, hover: CellRect(col: 1, row: 0, w: 1, h: 2),
+            model.prepare(mode: .browse, display: SampleWindowsBackend.ultrawide.id, hover: nil,
                           selection: nil, strategy: nil, outcome: nil, switched: true)
         case .noTarget:
             sample.targetWindowID = 21
             model.prepare(mode: .browse, display: SampleWindowsBackend.builtIn.id, hover: nil, selection: nil, strategy: nil,
-                          outcome: nil, pick: 12)
+                          outcome: nil, pick: 12, more: true)
         case .appScope:
             sample.windows.append(SampleWindowsBackend.window(15, "com.apple.Safari", "Safari", "Apple",
                                                               CGRect(x: 300, y: 420, width: 760, height: 470), z: 2, pid: 1012))
             sample.targetWindowID = 12
-            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: .balanced, outcome: nil, scope: .app)
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: .balanced, outcome: nil, scope: .app,
+                          more: true)
         case .list, .selection:
             sample.windows.insert(SampleWindowsBackend.window(15, "com.apple.MobileSMS", "Messages", "Alex",
                                                               CGRect(x: 760, y: 90, width: 520, height: 520), z: 2), at: 2)
@@ -483,11 +532,11 @@ public final class WindowsModule: GlancyModule {
             } else {
                 sample.setGrid(GridSpec(cols: 2, rows: 1), for: SampleWindowsBackend.builtIn)
                 model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: .cells, outcome: nil,
-                              picked: [13, 14])
+                              picked: [13, 14], more: true)
             }
         case .windowScope:
             model.prepare(mode: .browse, display: nil, hover: CellRect(col: 2, row: 0, w: 1, h: 2), selection: nil, strategy: nil,
-                          outcome: nil, scope: .window)
+                          outcome: nil, scope: .window, more: true)
         }
     }
 }

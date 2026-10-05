@@ -20,7 +20,70 @@ enum WindowsText {
         }
     }
 
+    /// A layout's name (thumbnail captions, the status line, the shortcut's peek).
+    static func layoutTitle(_ s: WindowsAutoLayout.Shape) -> String {
+        let n = s.capacity
+        switch s.kind {
+        case .full: return t("Full screen")
+        case .leftHalf: return t("Left half")
+        case .rightHalf: return t("Right half")
+        case .sideBySide: return t("Side by side")
+        case .stacked: return t("Stacked")
+        case .twoThirds: return "⅔ + ⅓"
+        case .mainStack: return f("Main + %d", n - 1)
+        case .columns: return f("%d columns", n)
+        case .rows: return f("%d rows", n)
+        case .grid: return s.label.map { "\($0.cols)×\($0.rows)" } ?? f("%d windows", n)
+        }
+    }
+
+    /// A thumbnail's caption: "Suggested" for the first one.
+    static func caption(_ o: WindowsAutoLayout.Option) -> String {
+        o.suggested ? t("Suggested") : layoutTitle(o.shape)
+    }
+
+    /// The undo history's label for a layout.
+    static func layout(_ o: WindowsAutoLayout.Option) -> String { layoutTitle(o.shape) }
+
     static let italian: [String: String] = [
+        // Layouts (main surface)
+        "Layout": "Disposizione",
+        "Suggested": "Consigliata",
+        "Full screen": "Schermo intero",
+        "Left half": "Metà sinistra",
+        "Right half": "Metà destra",
+        "Side by side": "Affiancate",
+        "Stacked": "Una sopra l'altra",
+        "Main + %d": "Principale + %d",
+        "%d columns": "%d colonne",
+        "%d rows": "%d righe",
+        "All %d windows": "Tutte le %d finestre",
+        "The only window": "L'unica finestra",
+        "More": "Altro",
+        "Layouts": "Disposizioni",
+        "Back to layouts": "Torna alle disposizioni",
+        "Grid, scope, arrangements, placing on the map": "Griglia, ambito, disposizioni, posizionamento sulla mappa",
+        "Clear": "Azzera",
+        "Shortcuts": "Scorciatoie",
+        "Already in place": "Già a posto",
+        "Hover a layout to see it on the screen": "Passa su una disposizione per vederla sullo schermo",
+        "Click windows to choose which · none = all": "Fai clic sulle finestre per sceglierle · nessuna = tutte",
+        "Click: add or remove · ⇧-click: a range": "Clic: aggiungi o togli · ⇧-clic: un intervallo",
+        "Auto-arrange": "Disponi automaticamente",
+        "Auto-arrange: the display under the pointer, at once · ⇧ = only the front app · undo %@":
+            "Disponi automaticamente: lo schermo sotto il puntatore, subito · ⇧ = solo l'app davanti · annulla %@",
+        "front app": "app davanti",
+        "click": "clic",
+        "Hover a cell, click to place": "Passa su una cella, clic per sistemare",
+        "More shortcuts": "Altre scorciatoie",
+        "Arrange the display under the pointer with a fixed strategy · ⇧ = only the front app":
+            "Dispone lo schermo sotto il puntatore con una strategia fissa · ⇧ = solo l'app davanti",
+        "Apply the layout": "Applica la disposizione",
+        "Undo the last change": "Annulla l'ultima modifica",
+        "Open the map with the keyboard": "Apri la mappa con la tastiera",
+        "Halves: ½ → ⅔ → ⅓ on repeat": "Metà: ½ → ⅔ → ⅓ ripetendo",
+        "Choose windows: click · range: ⇧-click · clear: Esc": "Scegli le finestre: clic · intervallo: ⇧-clic · azzera: Esc",
+        "Drag a window to the notch: drop it on a cell": "Trascina una finestra sul notch: rilasciala su una cella",
         "Windows": "Finestre",
         // Permission
         "Windows needs Accessibility": "Per le Finestre serve l'Accessibilità",
@@ -41,8 +104,6 @@ enum WindowsText {
         "Master + stack": "Principale + colonna",
         "columns": "colonne",
         "rows": "righe",
-        "Hover a cell, click to place · ⌘-click windows to pick several":
-            "Passa su una cella, clic per sistemare · ⌘-clic per sceglierne più d'una",
         "←→↑↓ select · ⏎ place · ⇥ window · Space pick · A arrange": "←→↑↓ seleziona · ⏎ sistema · ⇥ finestra · Spazio scegli · A disponi",
         "←→↑↓ select · ⏎ place · ⇥ window · Space pick": "←→↑↓ seleziona · ⏎ sistema · ⇥ finestra · Spazio scegli",
         "1 window": "1 finestra",
@@ -57,12 +118,9 @@ enum WindowsText {
         "Swap the order (S)": "Scambia l'ordine (S)",
         "Rotate the order (S)": "Ruota l'ordine (S)",
         "Clear the selection (Esc)": "Annulla la selezione (Esc)",
-        "Click: only this window · ⌘-click: add to the selection · ⇧-click: a range":
-            "Clic: solo questa finestra · ⌘-clic: aggiungi alla selezione · ⇧-clic: un intervallo",
         "Arrange the selected windows in this grid": "Disponi le finestre selezionate in questa griglia",
         "in pick order": "nell'ordine scelto",
         "%d selected · pick a grid or an arrangement": "%d selezionate · scegli una griglia o una disposizione",
-        "⌘-click another window to pick it too": "⌘-clic su un'altra finestra per aggiungerla",
         "Only the windows picked in the list, in pick order": "Solo le finestre scelte nell'elenco, nell'ordine scelto",
         // Scope
         "Screen": "Schermo",
@@ -83,8 +141,6 @@ enum WindowsText {
         "Arrange: Rows": "Disponi: righe",
         "Arrange: Master + stack": "Disponi: principale + colonna",
         "Arrange: One per cell": "Disponi: una per cella",
-        "Arrange the display under the pointer at once (undo: %@) · add ⇧ for the front app only":
-            "Dispone subito lo schermo sotto il puntatore (annulla: %@) · con ⇧ solo l'app in primo piano",
         "Drop on a cell · on a window to swap · Esc cancels": "Rilascia su una cella · su una finestra per scambiare · Esc annulla",
         "%d windows": "%d finestre",
         "Swap with %@": "Scambia con %@",

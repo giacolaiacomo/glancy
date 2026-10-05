@@ -463,17 +463,20 @@ private struct WindowsSection: View {
 
     struct Action { let id: String; let title: String; let key: WritableKeyPath<WindowsHotkeys, Hotkey> }
 
+    /// Auto-arrange first: the one command most people need (⇧ = the front app only).
     static let actions: [Action] = [
+        Action(id: "windows.autoArrange", title: "Auto-arrange", key: \.autoArrange),
+        Action(id: "windows.undo", title: "Undo", key: \.undo),
         Action(id: "windows.open", title: "Open the map", key: \.open),
         Action(id: "windows.leftHalf", title: "Left half", key: \.leftHalf),
         Action(id: "windows.rightHalf", title: "Right half", key: \.rightHalf),
         Action(id: "windows.maximize", title: "Maximize", key: \.maximize),
         Action(id: "windows.restore", title: "Restore", key: \.restore),
         Action(id: "windows.fit", title: "Largest free space", key: \.fit),
-        Action(id: "windows.undo", title: "Undo", key: \.undo),
     ]
 
-    /// Arrange the display under the pointer, committed at once (⇧ = the front app only).
+    /// "More shortcuts": arrange the display under the pointer with a fixed strategy, committed at
+    /// once (⇧ = the front app only).
     static let arrangeActions: [Action] = [
         Action(id: "windows.arrangeBalanced", title: "Arrange: Balanced", key: \.arrangeBalanced),
         Action(id: "windows.arrangeColumns", title: "Arrange: Columns", key: \.arrangeColumns),
@@ -500,10 +503,12 @@ private struct WindowsSection: View {
                 }))
             }
             Group {
+                SettingsNote(WindowsText.f("Auto-arrange: the display under the pointer, at once · ⇧ = only the front app · undo %@",
+                                           hotkeys.undo.description))
                 grid(Self.actions, hotkeys: hotkeys, all: all, failed: failed)
-                SettingsNote(WindowsText.f("Arrange the display under the pointer at once (undo: %@) · add ⇧ for the front app only",
-                                     hotkeys.undo.description))
-                    .padding(.top, 6)
+                SettingsGroupTitle(WindowsText.t("More shortcuts"))
+                    .padding(.top, 8)
+                SettingsNote(WindowsText.t("Arrange the display under the pointer with a fixed strategy · ⇧ = only the front app"))
                 grid(Self.arrangeActions, hotkeys: hotkeys, all: all, failed: failed)
             }
             .opacity(hotkeys.enabled ? 1 : 0.4)

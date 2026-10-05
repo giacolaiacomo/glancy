@@ -9,6 +9,9 @@ import Foundation
 public struct WindowsHotkeys: Codable, Equatable, Sendable {
     static let ctrlOpt = UInt32(controlKey | optionKey)
 
+    /// Auto-arrange the display under the pointer at once (the tab's Suggested layout); the same
+    /// key with ⇧ added arranges only the front app's windows there. Undo with `undo`.
+    public var autoArrange = Hotkey(keyCode: UInt32(kVK_ANSI_A), modifiers: ctrlOpt)
     /// Opens the Windows tab with keyboard focus.
     public var open = Hotkey(keyCode: UInt32(kVK_Space), modifiers: ctrlOpt)
     public var leftHalf = Hotkey(keyCode: UInt32(kVK_LeftArrow), modifiers: ctrlOpt)
@@ -32,6 +35,7 @@ public struct WindowsHotkeys: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = WindowsHotkeys()
+        autoArrange = c.lenient(.autoArrange, d.autoArrange)
         open = c.lenient(.open, d.open)
         leftHalf = c.lenient(.leftHalf, d.leftHalf)
         rightHalf = c.lenient(.rightHalf, d.rightHalf)
@@ -60,7 +64,7 @@ public struct WindowsHotkeys: Codable, Equatable, Sendable {
     }
 
     /// Every combination bound above (the ⇧ variants never shadow one of them).
-    var allCombos: Set<Hotkey> { Set(bindings.map(\.1) + arrangeBindings.map(\.1)) }
+    var allCombos: Set<Hotkey> { Set(bindings.map(\.1) + arrangeBindings.map(\.1) + [autoArrange]) }
 
     /// The ⇧ variant of an arrange shortcut (front app only); nil when it already holds ⇧ or is cleared.
     static func appVariant(_ h: Hotkey) -> Hotkey? {

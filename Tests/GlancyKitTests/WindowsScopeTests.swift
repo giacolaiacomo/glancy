@@ -360,7 +360,14 @@ struct WindowsArrangeShortcutTests {
         // Defaults: ⌃⌥B C R M G, all distinct from each other and from the other Windows keys.
         let d = WindowsHotkeys()
         #expect(d.arrangeBindings.map(\.1.description) == ["⌃⌥B", "⌃⌥C", "⌃⌥R", "⌃⌥M", "⌃⌥G"])
-        #expect(d.allCombos.count == d.bindings.count + d.arrangeBindings.count)
+        #expect(d.allCombos.count == d.bindings.count + d.arrangeBindings.count + 1)     // + ⌃⌥A
+        #expect(d.autoArrange.description == "⌃⌥A")
+        #expect(old.autoArrange == d.autoArrange)                                         // older file: default
+        // ⌃⌥A and its ⇧ variant collide with nothing Glancy binds (⌃⌥Space ← → ↑ ↓ F Z B C R M G, ⌥⌘V).
+        let others = d.bindings.map(\.1) + d.arrangeBindings.map(\.1)
+            + d.arrangeBindings.compactMap { WindowsHotkeys.appVariant($0.1) } + [ClipboardSettings.defaultHotkey]
+        #expect(!others.contains(d.autoArrange))
+        #expect(WindowsHotkeys.appVariant(d.autoArrange).map { !others.contains($0) } == true)
         // The ⇧ variant adds ⇧, never doubles it, and is nil for a cleared binding.
         #expect(WindowsHotkeys.appVariant(d.arrangeBalanced)?.description == "⌃⌥⇧B")
         #expect(WindowsHotkeys.appVariant(Hotkey(keyCode: 11, modifiers: WindowsHotkeys.ctrlOpt | 0x0200)) == nil)

@@ -42,17 +42,38 @@ struct WindowsSelectionTests {
         #expect(model.scope == .screen)
     }
 
-    @Test func plainClickSelectsOnlyThatWindow() async {
+    @Test func plainClickTogglesAndNumbers() async {
         let b = backend()
         let model = await open(b)
-        model.click(13, .toggle)
-        model.click(14, .toggle)
+        // No ⌘ needed: a click adds, a second click removes, the rest renumber.
+        model.click(13, .plain)
+        model.click(14, .plain)
+        #expect(model.picks.ids == [13, 14])
+        #expect(model.number(13) == 1 && model.number(14) == 2)
         #expect(model.scope == .selection)
         model.click(12, .plain)
+        #expect(model.picks.ids == [13, 14, 12])
+        model.click(13, .plain)
+        #expect(model.picks.ids == [14, 12])
+        #expect(model.number(14) == 1 && model.number(12) == 2)
+        // ⌘-click does the same thing.
+        model.click(11, .toggle)
+        #expect(model.picks.ids == [14, 12, 11])
+        model.click(11, .plain)
+        model.click(12, .plain)
+        model.click(14, .plain)
         #expect(model.picks.isEmpty)
+        #expect(model.scope == .screen)
+        #expect(b.commits.isEmpty)
+    }
+
+    @Test func onePickedIsPlacedCellByCellOnTheFullMap() async {
+        let b = backend()
+        let model = await open(b)
+        model.setMore(true)
+        model.click(12, .plain)
         #expect(model.activeTargetID == 12)
         #expect(model.scope == .screen)
-        // The single target keeps the place-in-cell flow.
         model.hover(GridCoord(col: 0, row: 0))
         #expect(model.preview?.moves.map(\.windowID) == [12])
         #expect(b.commits.isEmpty)
@@ -75,14 +96,14 @@ struct WindowsSelectionTests {
         #expect(model.scope == .screen)
     }
 
-    @Test func commandClickStartsFromAClickedWindowButNotTheOpeningOne() async {
+    @Test func theOpeningTargetIsNotDraggedIntoTheSelection() async {
         let model = await open(backend())
         #expect(model.activeTargetID == 11)              // frontmost, by default
-        model.click(13, .toggle)
+        model.click(13, .plain)
         #expect(model.picks.ids == [13])                 // the default target is not dragged in
         model.click(12, .plain)
-        model.click(14, .toggle)
-        #expect(model.picks.ids == [12, 14])             // Finder: click A, ⌘-click B = A and B
+        model.click(14, .plain)
+        #expect(model.picks.ids == [13, 12, 14])
     }
 
     @Test func shiftClickAddsARangeInListOrder() async {
@@ -259,6 +280,7 @@ struct WindowsSelectionTests {
 
     @Test func theSelectionIsNotPlacedCellByCell() async {
         let model = await open(backend())
+        model.setMore(true)
         model.click(13, .toggle)
         model.click(14, .toggle)
         model.hover(GridCoord(col: 0, row: 0))

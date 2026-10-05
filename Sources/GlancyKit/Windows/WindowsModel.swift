@@ -1,6 +1,10 @@
 // Windows — the tab's state. Everything the user does here either changes the *preview* (hover,
-// sweep, arrows, grid, strategy) or *commits* one plan (click, ⏎, drop, Apply, digits). Only the
-// commit paths call `backend.commit`; the preview path never does (tested).
+// sweep, arrows, grid, strategy, a layout thumbnail) or *commits* one plan (click, ⏎, drop, Apply,
+// digits). Only the commit paths call `backend.commit`; the preview path never does (tested).
+//
+// Two surfaces share this state. The main one: pick windows in the list (or none = the whole
+// display), pick a layout thumbnail (Suggested first), Apply. "More" (and the keyboard map, and a
+// drag to the notch) shows the full map: cells, grid, scope, strategies.
 
 import AppKit
 import Observation
@@ -27,7 +31,7 @@ final class WindowsModel {
         case swapPicks
     }
 
-    /// How a row (or a map window) was clicked.
+    /// How a row (or a map window) was clicked. Plain and ⌘ both add / remove; ⇧ adds a range.
     enum Click: Equatable { case plain, toggle, extend }
 
     enum DragStep: Equatable { case none, cancelled, committed }
@@ -48,9 +52,21 @@ final class WindowsModel {
     private(set) var scopeApp: pid_t?
     /// The window a click would pick right now (pointer on its icon, or on any window with no target).
     private(set) var pickHover: CGWindowID?
-    /// "Exactly these windows", in pick order (⌘-click, ⇧-click, Space). Two or more = the
+    /// "Exactly these windows", in pick order (click, ⇧-click, Space). Two or more = the
     /// selection scope. Reset whenever the tab opens.
     private(set) var picks = PickedWindows()
+    /// "More": the full map (cells, grid, scope, strategies) instead of the layout thumbnails.
+    private(set) var showMore = false
+    /// The shortcuts card ("?").
+    private(set) var showHelp = false
+    /// The layout thumbnail chosen (`WindowsAutoLayout.Option.id`); Suggested by default.
+    private(set) var layoutChoice = WindowsModel.suggestedID
+    /// The thumbnail under the pointer: previewed on the map and on the real screen.
+    private(set) var layoutHover: String?
+    /// The pointer is on Apply: the result shows on the real screen too.
+    private(set) var applyHover = false
+    /// What Apply does on the main surface: the shown layout for the windows it acts on.
+    private(set) var layoutPlan: ArrangePlan?
     /// The list row under the pointer: outlined on the map and on the real screen.
     private(set) var rowHover: CGWindowID?
     /// Cells under the pointer (hover, or a sweep in progress), or under the dragged window.
@@ -81,9 +97,6 @@ final class WindowsModel {
     @ObservationIgnored var onPreview: ((ArrangePlan?, Display?) -> Void)?
     /// A list row is hovered: outline that window on the real screen (nil = none).
     @ObservationIgnored var onHighlight: ((TrackedWindow?, Display?) -> Void)?
-    /// The last thing done was a plain click on the target (not the frontmost window by
-    /// default, not a pick): a ⌘-click then starts the selection from it (Finder's rule).
-    @ObservationIgnored private var targetClicked = false
     @ObservationIgnored var onRequestClose: (() -> Void)?
     /// A short message for after the panel has closed (non-exact outcomes of keyboard commits).
     @ObservationIgnored var onPeek: ((String) -> Void)?
@@ -93,6 +106,10 @@ final class WindowsModel {
     /// The cell last placed into, per display: "the focused cell" for the Agents link.
     @ObservationIgnored private(set) var lastCell: [String: CellRect] = [:]
     @ObservationIgnored private(set) var lastDirect: HalvesCycle.Last?
+    /// What the real-screen overlay was last told (it is only told about changes).
+    @ObservationIgnored private var lastOverlay: ArrangePlan?
+    /// The shortcuts the "?" card lists (the module keeps them current).
+    @ObservationIgnored var hotkeys = WindowsHotkeys()
     @ObservationIgnored private var sweeping = false
     @ObservationIgnored private var observation = 0
     @ObservationIgnored private var outcomeTask: Task<Void, Never>?
@@ -144,13 +161,119 @@ final class WindowsModel {
     /// The pick-order number shown on a row, the map and the preview.
     func number(_ id: CGWindowID) -> Int? { picks.number(of: id) }
 
-    /// Numbers for the preview's windows, when it arranges the selection.
+    /// Numbers for the preview's windows, when it arranges the picked windows (the map's and the
+    /// real screen's ghosts).
     var previewNumbers: [CGWindowID: Int] {
-        guard scope == .selection, let p = preview, p.kind == .arrange else { return [:] }
+        let plan: ArrangePlan? = showsMap ? (scope == .selection ? preview : nil) : layoutPlan
+        guard let p = plan, p.kind == .arrange else { return [:] }
         var out: [CGWindowID: Int] = [:]
         for m in p.moves { if let n = picks.number(of: m.windowID) { out[m.windowID] = n } }
         return out
     }
+
+    // MARK: Main surface: layouts
+
+    nonisolated static let suggestedID = "suggested"
+
+    /// The full map is on screen (More, the keyboard map, a drag, a cell cursor); otherwise the
+    /// layout thumbnails are.
+    var showsMap: Bool { showMore || dragWindowID != nil || mode == .keyboard || selection != nil }
+
+    /// The windows the layouts act on: the picked ones in pick order, else every tileable window
+    /// of the shown display, front to back.
+    var layoutWindows: [TrackedWindow] {
+        let list = listWindows
+        guard !picks.isEmpty else { return list }
+        let byID = Dictionary(list.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return picks.ids.compactMap { byID[$0] }
+    }
+
+    /// The thumbnails for the current windows: Suggested first, then what makes sense for N.
+    var layoutOptions: [WindowsAutoLayout.Option] {
+        guard let d = display else { return [] }
+        return WindowsAutoLayout.options(count: layoutWindows.count, usable: d.usableFrame, gaps: grid)
+    }
+
+    /// The thumbnail shown on the map: the hovered one, else the chosen one (Suggested when the
+    /// choice no longer fits the count).
+    var shownLayout: WindowsAutoLayout.Option? {
+        let options = layoutOptions
+        if let h = layoutHover, let o = options.first(where: { $0.id == h }) { return o }
+        return options.first { $0.id == layoutChoice } ?? options.first
+    }
+
+    var chosenLayout: WindowsAutoLayout.Option? {
+        let options = layoutOptions
+        return options.first { $0.id == layoutChoice } ?? options.first
+    }
+
+    /// Every window already sits where the chosen layout would put it.
+    var layoutInPlace: Bool {
+        guard let p = layoutPlan, !p.moves.isEmpty else { return false }
+        return p.moves.allSatisfy { PlacementMath.approx($0.from, $0.to, 2) }
+    }
+
+    func planLayout(_ option: WindowsAutoLayout.Option) -> ArrangePlan? {
+        guard let d = display else { return nil }
+        let windows = layoutWindows.map { PlanWindow(id: $0.id, frame: $0.frame, bundleID: $0.bundleID, title: $0.title) }
+        guard !windows.isEmpty else { return nil }
+        return WindowsAutoLayout.plan(option.shape, windows: windows, order: picks.isEmpty ? .minTravel : .given,
+                                      displayID: d.id, usable: d.usableFrame, gaps: grid)
+    }
+
+    /// A thumbnail clicked: it becomes what Apply does. Nothing moves.
+    func chooseLayout(_ id: String) {
+        guard layoutOptions.contains(where: { $0.id == id }) else { return }
+        layoutChoice = id
+        recomputePreview()
+    }
+
+    /// The pointer is on a thumbnail (nil = left them): the map and the real screen show it.
+    func hoverLayout(_ id: String?) {
+        guard id != layoutHover else { return }
+        layoutHover = id
+        recomputePreview()
+    }
+
+    func hoverApply(_ on: Bool) {
+        guard on != applyHover else { return }
+        applyHover = on
+        pushOverlay()
+    }
+
+    /// Apply on the main surface: the chosen layout. Undoable.
+    func applyLayout(closeAfter: Bool = false) {
+        guard let o = chosenLayout, let plan = planLayout(o), !layoutInPlace else { return }
+        commit(plan, label: WindowsText.layout(o), closeAfter: closeAfter)
+    }
+
+    /// "More": the full map with cells, grid, scope and strategies.
+    func setMore(_ on: Bool) {
+        if on {
+            guard !showMore else { return }
+            showMore = true
+            showHelp = false
+            layoutHover = nil
+            applyHover = false
+            recomputePreview()
+        } else {
+            showLayouts()
+        }
+    }
+
+    /// Back to the thumbnails: whatever the map was previewing goes (the picks stay).
+    func showLayouts() {
+        showMore = false
+        if mode == .keyboard { mode = .browse }
+        strategy = nil
+        hoverCell = nil
+        selection = nil
+        sweeping = false
+        if scope == .app || scope == .window { scope = picks.count >= 2 ? .selection : .screen }
+        recomputePreview()
+    }
+
+    func toggleHelp() { showHelp.toggle() }
 
     var dragWindowID: CGWindowID? { if case let .drag(id, _) = mode { id } else { nil } }
 
@@ -179,7 +302,7 @@ final class WindowsModel {
         }
         pickHover = nil
         picks.clear()
-        targetClicked = false
+        resetLayouts()
         if scope == .selection { scope = .screen }
         setRowHover(nil)
         reloadDisplays()
@@ -214,6 +337,8 @@ final class WindowsModel {
         selection = nil
         strategy = nil
         picks.clear()
+        resetLayouts()
+        layoutPlan = nil
         if scope == .selection { scope = .screen }
         setRowHover(nil)
         sweeping = false
@@ -226,6 +351,14 @@ final class WindowsModel {
         pending = nil
         outcome = nil
         setPreview(nil)
+    }
+
+    private func resetLayouts() {
+        showMore = false
+        showHelp = false
+        layoutChoice = Self.suggestedID
+        layoutHover = nil
+        applyHover = false
     }
 
     /// Accessibility was granted while the app runs.
@@ -379,10 +512,7 @@ final class WindowsModel {
     /// the target (Space then picks it).
     func select(_ id: CGWindowID, keepPicks: Bool = false) {
         guard dragWindowID == nil, let w = map?.windows.first(where: { $0.id == id }), w.isTileable else { return }
-        if !keepPicks {
-            clearPicks(recompute: false)
-            targetClicked = true
-        }
+        if !keepPicks { clearPicks(recompute: false) }
         targetID = id
         if scope == .app { scopeApp = w.pid }
         pickHover = nil
@@ -393,26 +523,26 @@ final class WindowsModel {
 
     // MARK: Picking (the list)
 
-    /// A row (or a map window) clicked: plain = only it; ⌘ = add / remove; ⇧ = a range.
+    /// A row (or a map window) clicked: plain or ⌘ = add / remove (numbered in pick order);
+    /// ⇧ = a range from the last one picked.
     func click(_ id: CGWindowID, _ how: Click) {
         switch how {
-        case .plain: select(id)
-        case .toggle: togglePick(id)
+        case .plain, .toggle: togglePick(id)
         case .extend: extendPick(to: id)
         }
     }
 
-    /// ⌘-click / Space. Nothing moves.
+    /// Click / Space. Nothing moves.
     func togglePick(_ id: CGWindowID) {
         guard dragWindowID == nil, listWindows.contains(where: { $0.id == id }) else { return }
-        picks.toggle(id, seed: targetClicked ? activeTargetID : nil)
+        picks.toggle(id)
         pickChanged(focus: picks.contains(id) ? id : picks.ids.last)
     }
 
-    /// ⇧-click: from the last picked (else the clicked target) to this row, in list order.
+    /// ⇧-click: from the last picked to this row, in list order.
     func extendPick(to id: CGWindowID) {
         guard dragWindowID == nil, listWindows.contains(where: { $0.id == id }) else { return }
-        picks.extend(to: id, in: listWindows.map(\.id), seed: targetClicked ? activeTargetID : nil)
+        picks.extend(to: id, in: listWindows.map(\.id))
         pickChanged(focus: id)
     }
 
@@ -426,16 +556,17 @@ final class WindowsModel {
     func clearPicks() { clearPicks(recompute: true) }
 
     private func clearPicks(recompute: Bool) {
-        targetClicked = false
         guard !picks.isEmpty else { return }
         picks.clear()
+        layoutChoice = Self.suggestedID
         syncSelectionScope()
         if recompute { recomputePreview() }
     }
 
     private func pickChanged(focus: CGWindowID?) {
         if let focus { targetID = focus }
-        targetClicked = false
+        // Another count, another set of layouts: back to the suggestion.
+        layoutChoice = Self.suggestedID
         pickHover = nil
         hoverCell = nil
         syncSelectionScope()
@@ -569,15 +700,21 @@ final class WindowsModel {
                 commit(p, label: strategy.map(WindowsText.strategy), closeAfter: true)
             } else if let s = selection {
                 place(s.rect, closeAfter: true)
+            } else if !showsMap {
+                applyLayout()
             }
             return true
         case .escape:
-            // The picked windows go first, then the preview, then the panel.
-            if !picks.isEmpty {
+            // The picked windows go first, then the preview, then More, then the panel.
+            if showHelp {
+                showHelp = false
+            } else if !picks.isEmpty {
                 clearPicks()
             } else if strategy != nil || selection != nil || hoverCell != nil {
                 strategy = nil; selection = nil; hoverCell = nil
                 recomputePreview()
+            } else if showMore {
+                showLayouts()
             } else {
                 onRequestClose?()
             }
@@ -593,6 +730,7 @@ final class WindowsModel {
             rotatePicks()
             return true
         case .arrangeAll:
+            guard showsMap else { chooseLayout(Self.suggestedID); return true }
             guard canArrange else { return true }
             selection = nil
             if strategy == nil { choose(backend.defaultStrategy) }
@@ -683,7 +821,9 @@ final class WindowsModel {
     // MARK: Preview
 
     func recomputePreview() {
-        guard visible, trusted, let d = display else { setPreview(nil); return }
+        guard visible, trusted, let d = display else { layoutPlan = nil; setPreview(nil); return }
+        let shown = showsMap ? nil : shownLayout.flatMap(planLayout)
+        if shown != layoutPlan { layoutPlan = shown }
         let g = grid
         var plan: ArrangePlan?
         if case let .drag(id, frame) = mode {
@@ -702,9 +842,17 @@ final class WindowsModel {
     }
 
     private func setPreview(_ p: ArrangePlan?) {
-        guard p != preview else { return }
-        preview = p
-        onPreview?(p, p == nil ? nil : display)
+        if p != preview { preview = p }
+        pushOverlay()
+    }
+
+    /// The real screen shows the map's preview; on the main surface only while a thumbnail (or
+    /// Apply) is under the pointer, so opening the tab never covers the screen with boxes.
+    private func pushOverlay() {
+        let onScreen = preview ?? (layoutHover != nil || applyHover ? layoutPlan : nil)
+        guard onScreen != lastOverlay else { return }
+        lastOverlay = onScreen
+        onPreview?(onScreen, onScreen == nil ? nil : display)
     }
 
     // MARK: Commit
@@ -726,6 +874,8 @@ final class WindowsModel {
         hoverCell = nil
         strategy = nil
         sweeping = false
+        layoutHover = nil
+        applyHover = false
         setPreview(nil)
         pending = Task { [weak self] in
             guard let self else { return }
@@ -860,6 +1010,51 @@ final class WindowsModel {
         return line
     }
 
+    // MARK: Auto-arrange shortcut (no surface)
+
+    /// ⌃⌥A: the suggested layout for every tileable window of the display under the pointer,
+    /// committed at once (undo with the undo hotkey), windows paired with cells by least travel.
+    /// `appOnly` (⇧): only the front app's windows there. Never touches another display. Returns
+    /// the line for the peek.
+    func autoArrangeShortcut(appOnly: Bool) async -> String {
+        guard let (plan, shape) = planAutoArrange(appOnly: appOnly) else { return autoArrangeRefusal(appOnly: appOnly) }
+        busy = true
+        let results = await backend.commit(plan, label: WindowsText.t("Auto-arrange"))
+        busy = false
+        canUndo = backend.canUndo
+        if visible { reloadMap(); recomputePreview() }
+        var line = WindowsText.layoutTitle(shape) + " · " + OutcomeReport(results: results, name: name).line
+        if !plan.untouched.isEmpty { line += " · " + WindowsText.f("%d left as they are", plan.untouched.count) }
+        return line
+    }
+
+    /// What ⌃⌥A would do right now (nil: nothing to do, or not allowed; `autoArrangeRefusal` says why).
+    func planAutoArrange(appOnly: Bool) -> (ArrangePlan, WindowsAutoLayout.Shape)? {
+        guard backend.isTrusted, backend.isRunning, !busy else { return nil }
+        let all = backend.displays()
+        guard let d = ScopeRules.display(containing: pointer(), in: all) ?? all.first,
+              let screen = backend.screenMap(for: nil, display: d) else { return nil }
+        var windows = screen.windows.filter(\.isTileable)
+        if appOnly {
+            guard let front = backend.targetWindowID.flatMap({ backend.window($0) }) else { return nil }
+            windows = windows.filter { $0.pid == front.pid }
+        }
+        let pws = windows.map { PlanWindow(id: $0.id, frame: $0.frame, bundleID: $0.bundleID, title: $0.title) }
+        guard let r = WindowsAutoLayout.plan(windows: pws, order: .minTravel, displayID: d.id, usable: d.usableFrame,
+                                             gaps: backend.grid(for: d)), !r.plan.moves.isEmpty else { return nil }
+        return (r.plan, r.shape)
+    }
+
+    private func autoArrangeRefusal(appOnly: Bool) -> String {
+        guard backend.isTrusted, backend.isRunning else { return WindowsText.t("Windows needs Accessibility") }
+        guard !busy else { return WindowsText.t("Busy — try again") }
+        if appOnly {
+            guard let front = backend.targetWindowID.flatMap({ backend.window($0) }) else { return WindowsText.t("No app in front") }
+            return WindowsText.f("No %@ windows on this display", front.appName)
+        }
+        return WindowsText.t("Nothing to arrange here")
+    }
+
     // MARK: Agents link
 
     /// Arranges exactly these windows on the target window's display (else the first window's).
@@ -872,21 +1067,25 @@ final class WindowsModel {
     }
 
     /// The plan behind `layOut`: these windows (unknown or untileable ones dropped — minimized,
-    /// another Space — duplicates once) on the
-    /// target window's display (else the first window's), grid grown when they do not fit.
-    /// `strategy` nil = the default. `readingOrder`: the first ID gets the first cell.
-    func planLayOut(windowIDs: [CGWindowID], strategy: ArrangeStrategy? = nil, readingOrder: Bool = false) -> ArrangePlan? {
+    /// another Space — duplicates once) on the target window's display (else the first
+    /// window's), in the auto-arrange layout for their count (the same planner as ⌃⌥A and the
+    /// tab's Suggested). `readingOrder`: the first ID gets the first cell, and so on; otherwise
+    /// the windows move as little as possible.
+    func planLayOut(windowIDs: [CGWindowID], readingOrder: Bool = false) -> ArrangePlan? {
         var seen = Set<CGWindowID>()
-        let ids = windowIDs.filter { backend.window($0)?.isTileable == true && seen.insert($0).inserted }
+        let windows = windowIDs.compactMap { id -> TrackedWindow? in
+            guard let w = backend.window(id), w.isTileable, seen.insert(id).inserted else { return nil }
+            return w
+        }
         let all = backend.displays()
-        let anchor = backend.targetWindowID.flatMap { backend.window($0) } ?? ids.first.flatMap { backend.window($0) }
-        guard !ids.isEmpty, let a = anchor,
+        let anchor = backend.targetWindowID.flatMap { backend.window($0) } ?? windows.first
+        guard !windows.isEmpty, let a = anchor,
               let d = ScreenSpace.bestIndex(for: a.frame, among: all.map(\.frame)).map({ all[$0] }) else { return nil }
-        var g = backend.grid(for: d)
-        if ids.count > g.cellCount { g = Arrange.bestGrid(for: ids.count, fitting: d.usableFrame, like: g) }
-        let plan = backend.planArrange(on: d, strategy: strategy ?? backend.defaultStrategy, grid: g, windowIDs: ids)
-        guard !plan.moves.isEmpty else { return nil }
-        return readingOrder ? ReadingOrder.assign(plan, order: ids) : plan
+        let pws = windows.map { PlanWindow(id: $0.id, frame: $0.frame, bundleID: $0.bundleID, title: $0.title) }
+        guard let r = WindowsAutoLayout.plan(windows: pws, order: readingOrder ? .given : .minTravel, displayID: d.id,
+                                             usable: d.usableFrame, gaps: backend.grid(for: d)),
+              !r.plan.moves.isEmpty else { return nil }
+        return r.plan
     }
 
     /// Another module committed or undid through the backend: refresh the Undo state.
@@ -930,7 +1129,8 @@ final class WindowsModel {
 
     func prepare(mode: Mode, display: String?, hover: CellRect?, selection: KeyboardSelection?,
                  strategy: ArrangeStrategy?, outcome: [PlacementResult]?, scope: WindowsScope = .screen,
-                 switched: Bool = false, pick: CGWindowID? = nil, picked: [CGWindowID] = [], rowHover: CGWindowID? = nil) {
+                 switched: Bool = false, pick: CGWindowID? = nil, picked: [CGWindowID] = [], rowHover: CGWindowID? = nil,
+                 more: Bool = false, layout: String? = nil, help: Bool = false) {
         visible = true
         trusted = backend.isTrusted
         self.mode = mode
@@ -956,6 +1156,10 @@ final class WindowsModel {
         hoverCell = hover
         self.selection = selection
         self.strategy = strategy
+        showMore = more
+        showHelp = help
+        layoutChoice = layout ?? Self.suggestedID
+        layoutHover = nil
         recomputePreview()
         self.outcome = outcome.map { OutcomeReport(results: $0, name: name) }
         if outcome != nil { canUndo = true }

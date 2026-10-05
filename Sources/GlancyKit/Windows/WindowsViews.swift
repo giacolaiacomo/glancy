@@ -1,8 +1,9 @@
-// Windows — the tab. Left: the list of the display's windows, front to back — the way to choose
-// exactly which ones (click = only it, ⌘-click = add in order, ⇧-click = a range). Middle: the
-// live map of that display (real window rects, the grid, the target in the accent, the preview as
-// numbered ghosts). Right: grid, scope + arrangement. Below both: status, Undo, Apply.
-// Fits the page of the 640 × 210 panel.
+// Windows — the tab, one flow. Left: the display's windows, front to back; a click adds or removes
+// one (numbered in pick order), nothing picked = all of them. Right: the layouts that make sense
+// for that many windows, drawn as small screens (Suggested first); hovering one shows it on the
+// map below and on the real screen; Apply (⏎) commits, Undo (⌘Z) takes it back.
+// "More" swaps the right side for the full map: cells, grid, scope, strategies (also shown by the
+// keyboard map and while a window is dragged to the notch). Fits the 640 × 210 panel.
 
 import AppKit
 import SwiftUI
@@ -19,10 +20,12 @@ struct WindowsTab: View {
                     .frame(width: WindowsLayout.listWidth)
                 if model.showDiagnostics {
                     DiagnosticsPane(model: model)
+                } else if !model.showsMap {
+                    if model.showHelp { HelpCard(model: model) } else { LayoutPane(model: model) }
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top, spacing: 12) {
-                            MapPane(model: model)
+                            MapPane(model: model, placing: true)
                                 .frame(width: WindowsLayout.mapWidth)
                             ControlPane(model: model)
                         }
@@ -42,13 +45,15 @@ enum WindowsLayout {
     static let mapWidth: CGFloat = 150
     static let topHeight: CGFloat = 112
     static let rowHeight: CGFloat = 22
+    static let thumbWidth: CGFloat = 86
+    static let previewSize = CGSize(width: 96, height: 56)
 }
 
 // MARK: - Window list
 
-/// One row per tileable window of the shown display, front to back. Click = only this window;
-/// ⌘-click = add / remove, numbered in pick order; ⇧-click = a range. Hover outlines the window
-/// on the map and on the real screen.
+/// One row per tileable window of the shown display, front to back. Click = add / remove,
+/// numbered in pick order; ⇧-click = a range. Hover outlines the window on the map and on the
+/// real screen.
 private struct WindowList: View {
     let model: WindowsModel
 
@@ -92,21 +97,22 @@ private struct ListHeader: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            if model.picks.count >= 2 {
+            if model.picks.isEmpty {
+                SectionLabel(text: WindowsText.t("Windows"))
+            } else {
                 Text(verbatim: WindowsText.f("%d selected", model.picks.count).uppercased())
                     .font(.system(size: 10, weight: .semibold)).tracking(0.6)
                     .foregroundStyle(WindowsStyle.accent)
                     .lineLimit(1)
-                Spacer(minLength: 2)
-                IconButton(symbol: model.picks.count == 2 ? "arrow.left.arrow.right" : "arrow.triangle.2.circlepath",
-                           help: model.picks.count == 2 ? WindowsText.t("Swap the order (S)") : WindowsText.t("Rotate the order (S)"),
-                           on: true) { model.rotatePicks() }
-                IconButton(symbol: "xmark", help: WindowsText.t("Clear the selection (Esc)"), on: false) { model.clearPicks() }
-            } else {
-                SectionLabel(text: WindowsText.t("Windows"))
-                Spacer(minLength: 2)
-                if model.displays.count > 1, let d = model.display {
-                    DisplayPager(name: d.isBuiltIn ? WindowsText.t("Built-in") : d.name) { model.showDisplay(offset: $0) }
+                    .fixedSize()
+                TextLink(text: WindowsText.t("Clear"), help: WindowsText.t("Clear the selection (Esc)")) { model.clearPicks() }
+            }
+            Spacer(minLength: 2)
+            if model.displays.count > 1, let d = model.display {
+                let name = d.isBuiltIn ? WindowsText.t("Built-in") : d.name
+                ViewThatFits(in: .horizontal) {
+                    DisplayPager(name: name) { model.showDisplay(offset: $0) }
+                    DisplayPager(name: nil) { model.showDisplay(offset: $0) }
                 }
             }
         }
@@ -119,7 +125,8 @@ private struct WindowRow: View {
 
     var body: some View {
         let number = model.number(window.id)
-        let isTarget = window.id == model.activeTargetID
+        // The target (what the map places) only means something on the full map.
+        let isTarget = window.id == model.activeTargetID && model.showsMap
         let picked = number != nil
         let hover = model.rowHover == window.id || model.pickHover == window.id
         let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -154,7 +161,7 @@ private struct WindowRow: View {
         .onHover { inside in
             if inside { model.hoverRow(window.id) } else if model.rowHover == window.id { model.hoverRow(nil) }
         }
-        .help(WindowsText.t("Click: only this window · ⌘-click: add to the selection · ⇧-click: a range"))
+        .help(WindowsText.t("Click: add or remove · ⇧-click: a range"))
     }
 
     static func click(_ flags: NSEvent.ModifierFlags) -> WindowsModel.Click {
@@ -189,11 +196,13 @@ struct OrderBadge: View {
 
 private struct MapPane: View {
     let model: WindowsModel
+    /// The full map (cells place the target); otherwise a preview of the chosen layout.
+    let placing: Bool
 
     var body: some View {
         GeometryReader { geo in
             if let map = model.map {
-                MapView(model: model, map: map, size: geo.size)
+                MapView(model: model, map: map, size: geo.size, placing: placing)
             } else {
                 EmptyMap()
             }
@@ -217,96 +226,41 @@ struct MapView: View {
     let model: WindowsModel
     let map: ScreenMap
     let size: CGSize
+    var placing = true
 
     var body: some View {
+        if placing { placingMap } else { previewMap }
+    }
+
+    /// The main surface's map: the layout's result over the real windows. Not an input, except
+    /// that a click on a window adds or removes it (like its row).
+    private var previewMap: some View {
         let d = map.display
         let proj = MapProjection(display: d.frame, usable: d.usableFrame, size: size)
-        let screen = proj.displayRect
+        return MapCanvas(model: model, map: map, proj: proj, grid: nil, plan: model.layoutPlan)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .animation(Theme.peek, value: model.layoutPlan)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case let .active(p): model.hover(nil, pick: ScopeRules.pick(at: p, windows: map.windows, projection: proj, target: nil))
+                case .ended: model.hover(nil)
+                }
+            }
+            .onTapGesture { p in
+                if let id = ScopeRules.pick(at: p, windows: map.windows, projection: proj, target: nil) {
+                    model.click(id, WindowRow.click(NSEvent.modifierFlags))
+                }
+            }
+    }
+
+    private var placingMap: some View {
+        let d = map.display
+        let proj = MapProjection(display: d.frame, usable: d.usableFrame, size: size)
         let grid = model.grid
-        let preview = model.preview
-        let moving = Set(preview?.moves.map(\.windowID) ?? [])
-        let targetID = model.activeTargetID
-        let inScope = Self.inScope(model)
-        ZStack(alignment: .topLeading) {
-            // The display: a quiet slab with its menu bar and, on the built-in, its notch.
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
-                .frame(width: screen.width, height: screen.height)
-                .offset(x: screen.minX, y: screen.minY)
-            let bar = proj.toMap(CGRect(x: d.frame.minX, y: d.visibleFrame.maxY, width: d.frame.width, height: d.frame.maxY - d.visibleFrame.maxY))
-            if bar.height > 0.5 {
-                UnevenRoundedRectangle(topLeadingRadius: 7, topTrailingRadius: 7, style: .continuous)
-                    .fill(Color.white.opacity(0.07))
-                    .frame(width: bar.width, height: max(2, bar.height))
-                    .offset(x: bar.minX, y: bar.minY)
-            }
-            if d.isBuiltIn {
-                UnevenRoundedRectangle(bottomLeadingRadius: 3, bottomTrailingRadius: 3, style: .continuous)
-                    .fill(Color.black)
-                    .frame(width: screen.width * 0.12, height: max(3, bar.height))
-                    .offset(x: screen.midX - screen.width * 0.06, y: screen.minY)
-            }
-
-            // The grid: faint cells, so the eye reads it as slots.
-            ForEach(Array(proj.cells(of: grid).enumerated()), id: \.offset) { _, item in
-                let r = item.1
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.white.opacity(0.035))
-                    .frame(width: r.width, height: r.height)
-                    .offset(x: r.minX, y: r.minY)
-            }
-
-            // Real windows, back to front, at their real frames (never snapped).
-            ForEach(map.windows.reversed()) { w in
-                let r = proj.toMap(w.frame).intersection(screen)
-                if !r.isNull, r.width > 2, r.height > 2 {
-                    MapWindow(window: w, rect: r, isTarget: w.id == targetID,
-                              dimmed: moving.contains(w.id), outOfScope: !inScope(w),
-                              picking: w.id == model.pickHover || w.id == model.rowHover,
-                              number: model.number(w.id),
-                              badge: model.outcome?.badges[w.id])
-                        .frame(width: r.width, height: r.height)
-                        .offset(x: r.minX, y: r.minY)
-                }
-            }
-
-            // The keyboard cursor / pointer cells.
-            if let cell = model.hoverCell ?? model.selection?.rect {
-                let r = proj.toMap(Geometry.frame(for: cell, in: grid, on: d.usableFrame))
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(WindowsStyle.accent, lineWidth: 1.5)
-                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(WindowsStyle.accent.opacity(preview == nil ? 0.22 : 0.08)))
-                    .frame(width: r.width, height: r.height)
-                    .offset(x: r.minX, y: r.minY)
-            }
-
-            // What a commit would do.
-            if let preview {
-                let numbers = model.previewNumbers
-                ForEach(Array(preview.moves.enumerated()), id: \.element.windowID) { i, m in
-                    let r = proj.toMap(m.to)
-                    Ghost(window: model.backend.window(m.windowID), secondary: preview.kind == .swap && i > 0,
-                          number: numbers[m.windowID])
-                        .frame(width: r.width, height: r.height)
-                        .offset(x: r.minX, y: r.minY)
-                }
-            }
-
-            // The list row under the pointer: that window's outline, on top even when it is behind others.
-            if let id = model.rowHover, let w = map.windows.first(where: { $0.id == id }) {
-                let r = proj.toMap(w.frame).intersection(screen)
-                if !r.isNull {
-                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                        .strokeBorder(WindowsStyle.accent, lineWidth: 1.5)
-                        .frame(width: r.width, height: r.height)
-                        .offset(x: r.minX, y: r.minY)
-                        .allowsHitTesting(false)
-                }
-            }
-        }
+        return MapCanvas(model: model, map: map, proj: proj, grid: grid, plan: model.preview)
         .frame(width: size.width, height: size.height, alignment: .topLeading)
-        .animation(Theme.peek, value: preview)
+        .animation(Theme.peek, value: model.preview)
         .animation(Theme.peek, value: model.hoverCell)
         .animation(Theme.peek, value: model.selection)
         .contentShape(Rectangle())
@@ -347,6 +301,103 @@ struct MapView: View {
     }
 }
 
+/// The display with its windows, the grid (full map only), the cell cursor and a plan's ghosts.
+private struct MapCanvas: View {
+    let model: WindowsModel
+    let map: ScreenMap
+    let proj: MapProjection
+    /// nil: no grid and no cell cursor (the main surface's preview).
+    let grid: GridSpec?
+    let plan: ArrangePlan?
+
+    var body: some View {
+        let d = map.display
+        let screen = proj.displayRect
+        let preview = plan
+        let moving = Set(preview?.moves.map(\.windowID) ?? [])
+        let targetID = model.showsMap ? model.activeTargetID : nil
+        let inScope = MapView.inScope(model)
+        ZStack(alignment: .topLeading) {
+            // The display: a quiet slab with its menu bar and, on the built-in, its notch.
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+                .frame(width: screen.width, height: screen.height)
+                .offset(x: screen.minX, y: screen.minY)
+            let bar = proj.toMap(CGRect(x: d.frame.minX, y: d.visibleFrame.maxY, width: d.frame.width, height: d.frame.maxY - d.visibleFrame.maxY))
+            if bar.height > 0.5 {
+                UnevenRoundedRectangle(topLeadingRadius: 7, topTrailingRadius: 7, style: .continuous)
+                    .fill(Color.white.opacity(0.07))
+                    .frame(width: bar.width, height: max(2, bar.height))
+                    .offset(x: bar.minX, y: bar.minY)
+            }
+            if d.isBuiltIn {
+                UnevenRoundedRectangle(bottomLeadingRadius: 3, bottomTrailingRadius: 3, style: .continuous)
+                    .fill(Color.black)
+                    .frame(width: screen.width * 0.12, height: max(3, bar.height))
+                    .offset(x: screen.midX - screen.width * 0.06, y: screen.minY)
+            }
+
+            // The grid: faint cells, so the eye reads it as slots.
+            ForEach(Array((grid.map { proj.cells(of: $0) } ?? []).enumerated()), id: \.offset) { _, item in
+                let r = item.1
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color.white.opacity(0.035))
+                    .frame(width: r.width, height: r.height)
+                    .offset(x: r.minX, y: r.minY)
+            }
+
+            // Real windows, back to front, at their real frames (never snapped).
+            ForEach(map.windows.reversed()) { w in
+                let r = proj.toMap(w.frame).intersection(screen)
+                if !r.isNull, r.width > 2, r.height > 2 {
+                    MapWindow(window: w, rect: r, isTarget: w.id == targetID,
+                              dimmed: moving.contains(w.id), outOfScope: !inScope(w),
+                              picking: w.id == model.pickHover || w.id == model.rowHover,
+                              number: model.number(w.id),
+                              badge: model.outcome?.badges[w.id])
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                }
+            }
+
+            // The keyboard cursor / pointer cells.
+            if let grid, let cell = model.hoverCell ?? model.selection?.rect {
+                let r = proj.toMap(Geometry.frame(for: cell, in: grid, on: d.usableFrame))
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(WindowsStyle.accent, lineWidth: 1.5)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(WindowsStyle.accent.opacity(preview == nil ? 0.22 : 0.08)))
+                    .frame(width: r.width, height: r.height)
+                    .offset(x: r.minX, y: r.minY)
+            }
+
+            // What a commit would do.
+            if let preview {
+                let numbers = model.previewNumbers
+                ForEach(Array(preview.moves.enumerated()), id: \.element.windowID) { i, m in
+                    let r = proj.toMap(m.to)
+                    Ghost(window: model.backend.window(m.windowID), secondary: preview.kind == .swap && i > 0,
+                          number: numbers[m.windowID])
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                }
+            }
+
+            // The list row under the pointer: that window's outline, on top even when it is behind others.
+            if let id = model.rowHover, let w = map.windows.first(where: { $0.id == id }) {
+                let r = proj.toMap(w.frame).intersection(screen)
+                if !r.isNull {
+                    RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                        .strokeBorder(WindowsStyle.accent, lineWidth: 1.5)
+                        .frame(width: r.width, height: r.height)
+                        .offset(x: r.minX, y: r.minY)
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+}
+
 extension MapView {
     static func isClick(_ v: DragGesture.Value) -> Bool {
         abs(v.translation.width) < 4 && abs(v.translation.height) < 4
@@ -360,6 +411,10 @@ extension MapView {
 
     /// Whether a window belongs to what the tab acts on (others are drawn faded).
     static func inScope(_ model: WindowsModel) -> (TrackedWindow) -> Bool {
+        if !model.showsMap {
+            let picks = model.picks
+            return { picks.isEmpty || picks.contains($0.id) }
+        }
         let target = model.activeTargetID
         switch model.scope {
         case .screen: return { _ in true }
@@ -473,17 +528,20 @@ private struct OutcomeBadge: View {
 }
 
 private struct DisplayPager: View {
-    let name: String
+    /// nil: arrows only (a narrow header).
+    let name: String?
     let step: (Int) -> Void
 
     var body: some View {
         HStack(spacing: 2) {
             PagerArrow(symbol: "chevron.left", help: WindowsText.t("Previous display")) { step(-1) }
-            Text(verbatim: name)
-                .font(Theme.font(.xs, .medium))
-                .foregroundStyle(Theme.secondary)
-                .lineLimit(1)
-                .frame(maxWidth: 70)
+            if let name {
+                Text(verbatim: name)
+                    .font(Theme.font(.xs, .medium))
+                    .foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: 70)
+            }
             PagerArrow(symbol: "chevron.right", help: WindowsText.t("Next display")) { step(1) }
         }
         .fixedSize()
@@ -597,11 +655,19 @@ private struct Footer: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if model.dragWindowID == nil {
+                TextLink(text: "‹ " + WindowsText.t("Layouts"), help: WindowsText.t("Back to layouts")) { model.showLayouts() }
+            }
             status
                 .font(Theme.font(.xs))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if model.picks.count >= 2 {
+                IconButton(symbol: model.picks.count == 2 ? "arrow.left.arrow.right" : "arrow.triangle.2.circlepath",
+                           help: model.picks.count == 2 ? WindowsText.t("Swap the order (S)") : WindowsText.t("Rotate the order (S)"),
+                           on: true) { model.rotatePicks() }
+            }
             if model.canUndo {
                 WindowsPillButton(text: WindowsText.t("Undo"), symbol: "arrow.uturn.backward", prominent: false, enabled: !model.busy) {
                     model.undo()
@@ -646,11 +712,312 @@ private struct Footer: View {
         } else if model.mode == .keyboard || model.selection != nil {
             Text(verbatim: model.canArrange ? WindowsText.t("←→↑↓ select · ⏎ place · ⇥ window · Space pick · A arrange")
                  : WindowsText.t("←→↑↓ select · ⏎ place · ⇥ window · Space pick")).foregroundStyle(Theme.tertiary)
-        } else if !model.picks.isEmpty {
-            Text(verbatim: WindowsText.t("⌘-click another window to pick it too")).foregroundStyle(Theme.tertiary)
         } else {
-            Text(verbatim: WindowsText.t("Hover a cell, click to place · ⌘-click windows to pick several")).foregroundStyle(Theme.tertiary)
+            Text(verbatim: WindowsText.t("Hover a cell, click to place")).foregroundStyle(Theme.tertiary)
         }
+    }
+}
+
+// MARK: - Layouts (the main surface)
+
+/// "Layout · all 4 windows", the thumbnails, then the map (the result) with Undo and Apply.
+private struct LayoutPane: View {
+    let model: WindowsModel
+
+    var body: some View {
+        let options = model.layoutOptions
+        VStack(alignment: .leading, spacing: 0) {
+            PaneHeader(model: model)
+            if options.isEmpty {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Theme.card)
+                    .overlay {
+                        Text(verbatim: WindowsText.t("No windows on this display"))
+                            .font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
+                    }
+                    .padding(.top, 6)
+            } else {
+                HStack(spacing: 6) {
+                    ForEach(options) { o in
+                        LayoutThumb(model: model, option: o, aspect: model.display.map { $0.usableFrame.width / max(1, $0.usableFrame.height) } ?? 1.6)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 6)
+                .onHover { inside in if !inside { model.hoverLayout(nil) } }
+                Spacer(minLength: 6)
+                ResultRow(model: model)
+            }
+        }
+    }
+}
+
+private struct PaneHeader: View {
+    let model: WindowsModel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            SectionLabel(text: WindowsText.t("Layout") + " ·")
+            Text(verbatim: Self.count(model).uppercased())
+                .font(.system(size: 10, weight: .semibold)).tracking(0.6)
+                .foregroundStyle(model.picks.isEmpty ? Theme.tertiary : WindowsStyle.accent)
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if model.canUndo {
+                TextLink(text: "↶ " + WindowsText.t("Undo"), help: WindowsText.t("Undo the last change") + " (⌘Z)") { model.undo() }
+                    .disabled(model.busy)
+                    .transition(.opacity)
+            }
+            IconButton(symbol: "questionmark", help: WindowsText.t("Shortcuts"), on: model.showHelp) { model.toggleHelp() }
+            MoreButton(model: model)
+        }
+        .frame(height: 18)
+        .animation(Theme.peek, value: model.canUndo)
+    }
+
+    @MainActor static func count(_ model: WindowsModel) -> String {
+        let n = model.layoutWindows.count
+        if !model.picks.isEmpty { return WindowsText.f("%d selected", n) }
+        return n == 1 ? WindowsText.t("The only window") : WindowsText.f("All %d windows", n)
+    }
+}
+
+/// "More ⌄": the full map with cells, grid, scope and strategies.
+private struct MoreButton: View {
+    let model: WindowsModel
+    @State private var hover = false
+
+    var body: some View {
+        Button { model.setMore(!model.showMore) } label: {
+            HStack(spacing: 3) {
+                Text(verbatim: WindowsText.t("More")).font(Theme.font(.xs, .semibold))
+                Image(systemName: "chevron.down").font(.system(size: 7, weight: .bold))
+            }
+            .foregroundStyle(hover ? Theme.primary : Theme.secondary)
+            .padding(.horizontal, 8)
+            .frame(height: 18)
+            .background(Capsule().fill(Color.white.opacity(hover ? 0.12 : 0.06)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(WindowsText.t("Grid, scope, arrangements, placing on the map"))
+        .fixedSize()
+    }
+}
+
+/// One layout as a small screen with numbered cells (cell #1 goes to window #1). Hover previews
+/// it on the map and on the real screen; click chooses it.
+private struct LayoutThumb: View {
+    let model: WindowsModel
+    let option: WindowsAutoLayout.Option
+    /// The display's usable aspect: the thumbnail has the screen's shape.
+    let aspect: CGFloat
+
+    var body: some View {
+        let chosen = model.chosenLayout?.id == option.id
+        let hovered = model.layoutHover == option.id
+        let height: CGFloat = 32
+        let width = min(72, max(24, (height * aspect).rounded()))
+        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        Button { model.chooseLayout(option.id) } label: {
+            VStack(spacing: 3) {
+                MiniScreen(shape: option.shape, highlighted: chosen || hovered)
+                    .frame(width: width, height: height)
+                Text(verbatim: WindowsText.caption(option))
+                    .font(Theme.font(.xs, chosen ? .semibold : .medium))
+                    .foregroundStyle(option.suggested ? WindowsStyle.accent : chosen || hovered ? Theme.primary : Theme.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.vertical, 5)
+            .frame(width: WindowsLayout.thumbWidth)
+            .background(shape.fill(chosen ? WindowsStyle.accent.opacity(0.16) : Color.white.opacity(hovered ? 0.09 : 0.035)))
+            .overlay(shape.strokeBorder(chosen ? WindowsStyle.accent.opacity(0.75) : .clear, lineWidth: 1))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { model.hoverLayout(option.id) } else if model.layoutHover == option.id { model.hoverLayout(nil) }
+        }
+        .help(WindowsText.layoutTitle(option.shape))
+        .accessibilityLabel(WindowsText.caption(option))
+    }
+}
+
+/// A screen drawn with a layout's cells, numbered in reading order.
+private struct MiniScreen: View {
+    let shape: WindowsAutoLayout.Shape
+    let highlighted: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let inset: CGFloat = 3, gap: CGFloat = 2
+            let w = geo.size.width - 2 * inset, h = geo.size.height - 2 * inset
+            let cw = w / CGFloat(shape.cols), ch = h / CGFloat(shape.rows)
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
+                ForEach(Array(shape.cells.enumerated()), id: \.offset) { i, c in
+                    let r = CGRect(x: inset + CGFloat(c.col) * cw + gap / 2, y: inset + CGFloat(c.row) * ch + gap / 2,
+                                   width: CGFloat(c.w) * cw - gap, height: CGFloat(c.h) * ch - gap)
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(highlighted ? WindowsStyle.accent.opacity(0.42) : Color.white.opacity(0.16))
+                        .overlay {
+                            if r.width >= 9, r.height >= 9 {
+                                Text(verbatim: "\(i + 1)")
+                                    .font(.system(size: min(9, r.height * 0.6), weight: .bold, design: .rounded))
+                                    .foregroundStyle(highlighted ? Theme.primary : Theme.secondary)
+                            }
+                        }
+                        .frame(width: max(1, r.width), height: max(1, r.height))
+                        .offset(x: r.minX, y: r.minY)
+                }
+            }
+        }
+    }
+}
+
+/// The map as the result of the shown layout, what it is, and Undo / Apply.
+private struct ResultRow: View {
+    let model: WindowsModel
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            MapPane(model: model, placing: false)
+                .frame(width: WindowsLayout.previewSize.width, height: WindowsLayout.previewSize.height)
+            VStack(alignment: .leading, spacing: 2) {
+                if let o = model.shownLayout {
+                    Text(verbatim: o.suggested ? WindowsText.t("Suggested") + " · " + WindowsText.layoutTitle(o.shape)
+                         : WindowsText.layoutTitle(o.shape))
+                        .font(Theme.font(.s, .semibold))
+                        .foregroundStyle(Theme.primary)
+                        .lineLimit(1)
+                }
+                detail
+                    .font(Theme.font(.xs))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 2)
+            ApplyButton(model: model)
+        }
+        .frame(height: WindowsLayout.previewSize.height)
+    }
+
+    @ViewBuilder private var detail: some View {
+        if let o = model.outcome {
+            Text(verbatim: o.line).foregroundStyle(o.allExact ? Theme.secondary : Theme.waiting).help(o.line)
+        } else if model.layoutInPlace {
+            Text(verbatim: WindowsText.t("Already in place")).foregroundStyle(Theme.done)
+        } else if let p = model.layoutPlan, !p.untouched.isEmpty {
+            Text(verbatim: WindowsText.f("%d left as they are", p.untouched.count)).foregroundStyle(Theme.waiting)
+        } else if model.picks.count >= 2 {
+            Text(verbatim: WindowsText.t("in pick order")).foregroundStyle(Theme.secondary)
+        } else if model.picks.isEmpty {
+            Text(verbatim: WindowsText.t("Click windows to choose which · none = all")).foregroundStyle(Theme.tertiary)
+        } else {
+            Text(verbatim: WindowsText.t("Hover a layout to see it on the screen")).foregroundStyle(Theme.tertiary)
+        }
+    }
+}
+
+/// The one big button: commits the chosen layout (⏎). Hovering it shows the result on the screen.
+private struct ApplyButton: View {
+    let model: WindowsModel
+    @State private var hover = false
+
+    var body: some View {
+        let enabled = !model.busy && model.layoutPlan != nil && !model.layoutInPlace
+        Button { model.applyLayout() } label: {
+            HStack(spacing: 6) {
+                Text(verbatim: WindowsText.t("Apply")).font(Theme.font(.l, .semibold))
+                Text(verbatim: "⏎").font(.system(size: 10, weight: .semibold))
+                    .padding(.horizontal, 4).frame(height: 15)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.black.opacity(enabled ? 0.16 : 0)))
+            }
+            .foregroundStyle(enabled ? Color.black : Theme.tertiary)
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .background(Capsule().fill(!enabled ? Color.white.opacity(0.06) : hover ? WindowsStyle.accent.opacity(0.85) : WindowsStyle.accent))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { inside in
+            hover = inside
+            model.hoverApply(inside && enabled)
+        }
+        .help(WindowsText.t("Apply the layout"))
+        .fixedSize()
+    }
+}
+
+/// "?": what can be done, and the keys for it.
+private struct HelpCard: View {
+    let model: WindowsModel
+
+    var body: some View {
+        let h = model.hotkeys
+        VStack(alignment: .leading, spacing: 0) {
+            PaneHeader(model: model)
+            VStack(alignment: .leading, spacing: 3) {
+                line(Self.key(h.autoArrange), WindowsText.t("Auto-arrange") + " · ⇧ " + WindowsText.t("front app"))
+                line(Self.key(h.undo), WindowsText.t("Undo the last change"))
+                line(Self.key(h.open), WindowsText.t("Open the map with the keyboard"))
+                line(Self.key(h.leftHalf) + " " + Self.key(h.rightHalf), WindowsText.t("Halves: ½ → ⅔ → ⅓ on repeat"))
+                line("⏎  ⌘Z", WindowsText.t("Apply the layout") + " · " + WindowsText.t("Undo"))
+                line(WindowsText.t("click"), WindowsText.t("Choose windows: click · range: ⇧-click · clear: Esc"))
+                line("↗", WindowsText.t("Drag a window to the notch: drop it on a cell"))
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.card))
+            .padding(.top, 6)
+        }
+    }
+
+    private func line(_ key: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(verbatim: key)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.primary)
+                .frame(width: 70, alignment: .leading)
+                .lineLimit(1)
+            Text(verbatim: text)
+                .font(Theme.font(.xs))
+                .foregroundStyle(Theme.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+    }
+
+    static func key(_ h: Hotkey) -> String { h.modifiers == 0 ? "—" : h.description }
+}
+
+/// A quiet text button ("Clear").
+private struct TextLink: View {
+    let text: String
+    let help: String
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(verbatim: text)
+                .font(Theme.font(.xs, .semibold))
+                .foregroundStyle(hover ? Theme.primary : Theme.secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 16)
+                .background(Capsule().fill(Color.white.opacity(hover ? 0.12 : 0.06)))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(help)
+        .fixedSize()
     }
 }
 

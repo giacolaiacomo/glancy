@@ -56,7 +56,7 @@ enum SettingsCatalog {
             return m.hotkeys.enabled ? WindowsSection.summary(m.hotkeys) : tr("Shortcuts off")
         case .agents:
             return FileManager.default.fileExists(atPath: AgentsModule.defaultLogURL.path) ? tr("Hook log found") : tr("No hook log")
-        case .notifications:
+        case .notifications, .command, .control, .notes:
             return ""
         }
     }
@@ -74,6 +74,9 @@ enum SettingsCatalog {
         case .clipboard: "Clipboard history"
         case .windows: "Window tiling"
         case .notifications: "Notifications in the notch"
+        case .command: "Launcher, calculator, every action"
+        case .control: "Quick toggles and system tools"
+        case .notes: "Quick notes"
         }
     }
 }
@@ -108,7 +111,7 @@ struct ModuleSection: View {
         case .clipboard: if let m = context.module(ClipboardModule.self) { ClipboardSection(module: m, context: context) }
         case .windows: if let m = context.module(WindowsModule.self) { WindowsSection(module: m, context: context) }
         case .agents: AgentsSection()
-        case .notifications: EmptyView()
+        case .notifications, .command, .control, .notes: EmptyView()
         }
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 
 public enum ModuleID: String, CaseIterable, Codable, Sendable {
     case agents, calendar, media, hud, power, timer, shelf, clipboard, windows, notifications
+    case command, control, notes
 }
 
 /// What the surface is doing right now. Modules use it to start/stop work that only matters
@@ -28,12 +29,40 @@ public protocol GlancyModule: AnyObject {
     var tab: PanelTab? { get }
     /// A compact card for the Home tab, or nil when the module has nothing worth a glance.
     func homeCard() -> AnyView?
+    /// Fixed actions this module offers to the command bar (filtered there by title/keywords).
+    /// Built on demand when the bar opens; never cached across opens.
+    func commands() -> [GlancyCommand]
+    /// Results computed from what the user typed (search, a calculation…). Must be fast (< 5 ms)
+    /// and synchronous; return [] when the query is not for this module.
+    func results(for query: String) -> [GlancyCommand]
 }
 
 public extension GlancyModule {
     func visibilityChanged(_ visibility: SurfaceVisibility) {}
     var tab: PanelTab? { nil }
     func homeCard() -> AnyView? { nil }
+    func commands() -> [GlancyCommand] { [] }
+    func results(for query: String) -> [GlancyCommand] { [] }
+}
+
+/// One entry of the command bar (⌃⌥K style launcher in the notch).
+public struct GlancyCommand: Identifiable {
+    public var id: String               // stable, "<module>.<action>[.<arg>]"
+    public var module: ModuleID
+    public var title: String            // localized, shown as-is
+    public var subtitle: String?
+    public var symbol: String           // SF Symbol
+    public var keywords: [String]       // extra match terms (EN + IT)
+    /// Higher wins when scores tie; results(for:) entries usually 50–100, commands() 0.
+    public var rank: Int
+    /// true = the bar closes the panel after running; false = keeps it open (e.g. a toggle).
+    public var closesPanel: Bool
+    public var run: @MainActor () -> Void
+    public init(id: String, module: ModuleID, title: String, subtitle: String? = nil, symbol: String,
+                keywords: [String] = [], rank: Int = 0, closesPanel: Bool = true, run: @escaping @MainActor () -> Void) {
+        self.id = id; self.module = module; self.title = title; self.subtitle = subtitle; self.symbol = symbol
+        self.keywords = keywords; self.rank = rank; self.closesPanel = closesPanel; self.run = run
+    }
 }
 
 public struct PanelTab {

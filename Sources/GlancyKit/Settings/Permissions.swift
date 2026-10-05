@@ -1,4 +1,6 @@
 import AppKit
+import AVFoundation
+import Speech
 import ApplicationServices
 import CoreBluetooth
 import EventKit
@@ -7,7 +9,7 @@ import UserNotifications
 
 /// The permissions Glancy can use (SPEC §4 onboarding checklist).
 public enum PermissionKind: String, CaseIterable, Sendable {
-    case calendar, accessibility, bluetooth, notifications, automation, fullDiskAccess
+    case calendar, accessibility, bluetooth, notifications, automation, fullDiskAccess, microphone, camera, speech
 }
 
 public enum PermissionStatus: Sendable, Equatable {
@@ -41,6 +43,9 @@ public struct PermissionProbe: Sendable {
         out[.fullDiskAccess] = SystemPermissions.fullDiskAccess()
         out[.notifications] = await SystemPermissions.notifications()
         out[.automation] = await SystemPermissions.automation()
+        out[.microphone] = SystemPermissions.capture(.audio, usage: "NSMicrophoneUsageDescription")
+        out[.camera] = SystemPermissions.capture(.video, usage: "NSCameraUsageDescription")
+        out[.speech] = SystemPermissions.speech()
         return out
     }
 }
@@ -187,6 +192,25 @@ public final class PermissionCenter {
             }
         case .fullDiskAccess:
             openSettings(p)
+        case .microphone, .camera:
+            guard status(p) == .notDetermined else { return openSettings(p) }
+            asking = p
+            let media: AVMediaType = p == .microphone ? .audio : .video
+            Task { [weak self] in
+                _ = await AVCaptureDevice.requestAccess(for: media)
+                self?.asking = nil
+                self?.refresh()
+            }
+        case .speech:
+            guard status(.speech) == .notDetermined else { return openSettings(p) }
+            asking = .speech
+            Task { [weak self] in
+                _ = await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+                    SFSpeechRecognizer.requestAuthorization { _ in c.resume() }
+                }
+                self?.asking = nil
+                self?.refresh()
+            }
         }
     }
 
@@ -203,6 +227,9 @@ public final class PermissionCenter {
         case .automation: pane = "com.apple.preference.security?Privacy_Automation"
         case .fullDiskAccess: pane = "com.apple.preference.security?Privacy_AllFiles"
         case .notifications: pane = "com.apple.preference.notifications"
+        case .microphone: pane = "com.apple.preference.security?Privacy_Microphone"
+        case .camera: pane = "com.apple.preference.security?Privacy_Camera"
+        case .speech: pane = "com.apple.preference.security?Privacy_SpeechRecognition"
         }
         return URL(string: "x-apple.systempreferences:" + pane)!
     }
@@ -211,6 +238,26 @@ public final class PermissionCenter {
 /// Reads permission statuses without prompting. Everything here is safe off the main thread.
 enum SystemPermissions {
     static var inBundle: Bool { Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil }
+
+    /// Microphone / camera. Without the usage string macOS kills the process on a request, so a
+    /// run outside the app bundle reports `unavailable`.
+    static func capture(_ media: AVMediaType, usage key: String) -> PermissionStatus {
+        guard inBundle, Bundle.main.object(forInfoDictionaryKey: key) != nil else { return .unavailable }
+        switch AVCaptureDevice.authorizationStatus(for: media) {
+        case .authorized: return .granted
+        case .notDetermined: return .notDetermined
+        default: return .denied
+        }
+    }
+
+    static func speech() -> PermissionStatus {
+        guard inBundle, Bundle.main.object(forInfoDictionaryKey: "NSSpeechRecognitionUsageDescription") != nil else { return .unavailable }
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized: return .granted
+        case .notDetermined: return .notDetermined
+        default: return .denied
+        }
+    }
 
     /// IOBluetooth / CoreBluetooth kill a process that lacks the usage string (tests, renders).
     static var bluetoothUsable: Bool {

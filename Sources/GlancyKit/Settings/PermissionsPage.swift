@@ -14,6 +14,9 @@ enum PermissionRows {
         if ids.contains(.timer) { out.append(.notifications) }
         if context.module(MediaModule.self)?.model.source == .scripts { out.append(.automation) }
         if ids.contains(.notifications), context.settings.isEnabled(.notifications) { out.append(.fullDiskAccess) }
+        if !ids.isDisjoint(with: [.notes, .hud]) { out.append(.microphone) }
+        if ids.contains(.notes) { out.append(.speech) }
+        if ids.contains(.control) { out.append(.camera) }
         return out
     }
 
@@ -32,6 +35,9 @@ enum PermissionRows {
         case .notifications: tr("Notifications")
         case .automation: tr("Automation")
         case .fullDiskAccess: tr("Full Disk Access")
+        case .microphone: tr("Microphone")
+        case .camera: tr("Camera")
+        case .speech: tr("Speech Recognition")
         }
     }
 
@@ -43,6 +49,9 @@ enum PermissionRows {
         case .notifications: tr("An alert when a timer ends")
         case .automation: tr("Music and Spotify controls")
         case .fullDiskAccess: tr("Your notifications in the notch")
+        case .microphone: tr("Voice notes and the mic mute")
+        case .camera: tr("The camera mirror")
+        case .speech: tr("Voice notes written out, on this Mac")
         }
     }
 
@@ -54,6 +63,9 @@ enum PermissionRows {
         case .notifications: "bell.badge"
         case .automation: "music.note"
         case .fullDiskAccess: "externaldrive"
+        case .microphone: "mic"
+        case .camera: "camera"
+        case .speech: "waveform"
         }
     }
 }

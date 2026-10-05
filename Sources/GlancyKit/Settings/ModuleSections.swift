@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 enum SettingsCatalog {
     static func hasSection(_ id: ModuleID) -> Bool {
-        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power, .notes, .command].contains(id)
+        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power, .notes, .command, .control].contains(id)
     }
 
     static func generalSummary(_ s: AppSettings) -> String {
@@ -62,7 +62,9 @@ enum SettingsCatalog {
             guard let m = context.module(CommandModule.self) else { return "" }
             let key = m.model.settings.hotkey
             return key.modifiers == 0 ? tr("None") : key.description
-        case .notifications, .control:
+        case .control:
+            return context.module(ControlModule.self).map { ControlText.summary($0.settings) } ?? ""
+        case .notifications:
             return ""
         }
     }
@@ -119,7 +121,8 @@ struct ModuleSection: View {
         case .agents: AgentsSection()
         case .notes: if let m = context.module(NotesModule.self) { NotesSettingsSection(module: m, context: context) }
         case .command: if let m = context.module(CommandModule.self) { CommandSection(module: m, context: context) }
-        case .notifications, .control: EmptyView()
+        case .control: if let m = context.module(ControlModule.self) { ControlSection(module: m) }
+        case .notifications: EmptyView()
         }
     }
 }

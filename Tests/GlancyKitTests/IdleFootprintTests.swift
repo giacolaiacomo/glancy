@@ -4,8 +4,7 @@ import Testing
 @testable import GlancyKit
 
 // The idle-memory regression (wave 4): what the app builds and keeps when nothing is on screen.
-// - The panel's SwiftUI graph is rebuilt after every collapse, so the expanded pages leave nothing
-//   in it (help/style inputs grew with every open).
+// - The panel's hosting view is NOT rebuilt on collapse (it flashed and made opens stutter).
 // - The Agents launch rebuild folds the log into the session store one line at a time (the
 //   2 MB parse used to leave ~10 MB of freed-but-dirty heap at idle).
 // - No module builds a window or a hosting view when it starts (scripts/lint.sh checks the
@@ -20,33 +19,18 @@ private let notched = ScreenInfo(
 @MainActor
 @Suite("Idle footprint")
 struct IdleFootprintTests {
-    @Test func collapsingRebuildsTheHostingViewOnce() throws {
+    @Test func collapsingKeepsTheSameHostingView() throws {
+        // Rebuilding the host on collapse saved 1–3 MB but blanked the notch for a frame (a flash
+        // under the menu bar) and made every open cold (stutter): the host lives as long as the panel.
         let h = SurfaceHarness([notched])
         let s = try #require(h.builtinSurface)
         let first = s.hostForTest
-        #expect(s.hostRebuildsForTest == 0)
-
-        // Wings coming and going while collapsed never rebuild anything.
-        s.model.setHovering(true); s.model.setHovering(false)
-        #expect(s.hostRebuildsForTest == 0)
-        #expect(s.hostForTest === first)
-
         h.manager.open(s)
-        s.model.select(tab: nil)
-        #expect(s.hostRebuildsForTest == 0, "never while open")
         h.manager.close(s)
-        #expect(s.hostRebuildsForTest == 1)
-        let second = s.hostForTest
-        #expect(second !== first)
-        #expect(first.superview == nil, "the old graph is out of the window")
-        #expect(second.frame == first.frame)
-
-        // It still works: a click on the collapsed notch opens the panel again.
+        #expect(s.hostForTest === first)
         let p = NSPoint(x: s.hostBoundsForTest.midX, y: 4)
         #expect(s.clickForTest(p))
         #expect(s.model.expanded)
-        h.manager.close(s)
-        #expect(s.hostRebuildsForTest == 2)
     }
 
     @Test func buildingTheModulesAndStartingTheInertOnesOpensNoWindow() {

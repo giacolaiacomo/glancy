@@ -47,6 +47,8 @@ public enum SurfaceKeyFocus {
     }
     /// The panel collapsed: nobody holds the keyboard any more.
     static func reset() { owners.removeAll() }
+    /// Whether `owner` currently holds the keyboard (tests, diagnostics).
+    public static func holds(_ owner: String) -> Bool { owners.contains(owner) }
 }
 
 /// Hosts the SwiftUI surface. Takes the first click (the panel is never key), reports hover via

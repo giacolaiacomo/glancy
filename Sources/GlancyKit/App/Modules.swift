@@ -13,8 +13,13 @@ public enum Modules {
         let hud = HUDModule()
         let power = PowerModule()
         power.sound = hud
-        return [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power, NotificationsModule(),
-                NotesModule()]
+        var list: [any GlancyModule] = [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power,
+                                        NotificationsModule(), NotesModule()]
+        // Command bar: every other module's commands()/results(for:), held weakly.
+        let command = CommandModule()
+        command.sources = CommandModule.weakly(list)
+        list.append(command)
+        return list
     }
 
     /// The real modules, plus the demo ones when launched with `--demo` (never overriding a real

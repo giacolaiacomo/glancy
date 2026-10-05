@@ -14,6 +14,7 @@ public final class SurfaceContext {
 
     public init(hub: ActivityHub, settings: AppSettings, launchAtLogin: LaunchAtLogin, modules: [any GlancyModule]) {
         self.hub = hub; self.settings = settings; self.launchAtLogin = launchAtLogin; self.modules = modules
+        for case let m as SurfaceContextAware in modules { m.attach(self) }
     }
 
     /// Enabled modules, in the SPEC's tab order.
@@ -21,11 +22,17 @@ public final class SurfaceContext {
         modules.filter { settings.isEnabled($0.id) }.sorted { Self.order($0.id) < Self.order($1.id) }
     }
 
-    /// The tabs of the panel, Home excluded, left to right.
+    /// The tabs of the panel, Home excluded, left to right (the command bar's included).
     public var tabs: [PanelTab] { enabledModules.compactMap(\.tab) }
 
-    /// Home first (nil), then each module tab.
-    public var tabSequence: [ModuleID?] { [nil] + tabs.map(\.module) }
+    /// Pages that open only on request (a hotkey) and have no icon in the strip.
+    public static let hiddenFromStrip: Set<ModuleID> = [.command]
+
+    /// The tabs with an icon in the strip, left to right.
+    public var stripTabs: [PanelTab] { tabs.filter { !Self.hiddenFromStrip.contains($0.module) } }
+
+    /// Home first (nil), then each strip tab (what a swipe walks through).
+    public var tabSequence: [ModuleID?] { [nil] + stripTabs.map(\.module) }
 
     static func order(_ id: ModuleID) -> Int {
         let order: [ModuleID] = [.agents, .calendar, .media, .timer, .notes, .shelf, .clipboard, .windows, .control, .notifications, .hud, .power, .command]
@@ -67,4 +74,18 @@ public final class SurfaceContext {
         case .notes: "note.text"
         }
     }
+}
+
+/// A module that needs the app's context (enabled modules, settings) gets it when the context is
+/// built. Called once per context; the renderer builds several.
+@MainActor
+public protocol SurfaceContextAware: AnyObject {
+    func attach(_ context: SurfaceContext)
+}
+
+/// Routes into the panel that only the surface can take. Wired by `SurfaceManager`; nil before.
+@MainActor
+public enum SurfaceRoute {
+    /// Opens the panel on Settings (nil = the index, or a section).
+    public static var openSettings: ((SettingsRoute?) -> Void)?
 }

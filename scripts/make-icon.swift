@@ -1,5 +1,5 @@
 // Draws the Glancy app icon: the notch, as a black mask hanging from the top edge, with two eyes
-// glancing to the side, on a violet-to-coral plate. Usage: swift make-icon.swift <out.iconset>
+// glancing to the side, on a deep-teal-to-aqua plate. Usage: swift make-icon.swift <out.iconset>
 import AppKit
 
 let out = URL(fileURLWithPath: CommandLine.arguments.dropFirst().first ?? "AppIcon.iconset")
@@ -48,12 +48,12 @@ func draw(px: Int) -> Data {
 
     ctx.saveGState()
     ctx.setShadow(offset: CGSize(width: 0, height: -s * 0.012), blur: s * 0.03, color: rgb(0x000000, 0.35))
-    ctx.addPath(squircle); ctx.setFillColor(rgb(0x2A2F7A)); ctx.fillPath()
+    ctx.addPath(squircle); ctx.setFillColor(rgb(0x0B3D5C)); ctx.fillPath()
     ctx.restoreGState()
 
     ctx.saveGState()
     ctx.addPath(squircle); ctx.clip()
-    ctx.drawLinearGradient(gradient([rgb(0x2A2F7A), rgb(0x6C3FC4), rgb(0xF0787A)], [0, 0.55, 1]),
+    ctx.drawLinearGradient(gradient([rgb(0x0B3D5C), rgb(0x1F8A9E), rgb(0x7FE0C2)], [0, 0.55, 1]),
                            start: CGPoint(x: body.minX, y: body.maxY), end: CGPoint(x: body.maxX, y: body.minY), options: [])
     ctx.drawLinearGradient(gradient([rgb(0xFFFFFF, 0.16), rgb(0xFFFFFF, 0)], [0, 1]),
                            start: CGPoint(x: 0, y: body.maxY), end: CGPoint(x: 0, y: body.midY), options: [])

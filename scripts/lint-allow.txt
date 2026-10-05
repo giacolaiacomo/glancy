@@ -18,3 +18,10 @@ Sources/GlancyKit/Control/ControlMirror.swift:AVCaptureSession\(
 Sources/glancy-render/main.swift:NSHostingView\(
 Sources/glancy-render/main.swift:NSWindow\(
 Sources/glancy-render/main.swift:ImageRenderer\(
+# AppleScript: the one place NSAppleScript is created (serial queue, never main).
+Sources/GlancyKit/Support/AppleScriptRunner.swift:NSAppleScript\(
+# @objc entry points only ever called on main.
+# The panel re-registers drop types on SurfaceDrop.changed, posted by SurfaceDrop.target's setter (main actor).
+Sources/GlancyKit/Surface/NotchPanel.swift:isolation:@objc private func registerDropTypes()
+# NSMenuItem action of the Shelf's context menu (AppKit delivers menu actions on main).
+Sources/GlancyKit/Shelf/ShelfActions.swift:isolation:@objc private func fire()

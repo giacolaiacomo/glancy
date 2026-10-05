@@ -37,6 +37,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         self.manager = manager
         manager.start()
         startPermissions()
+        // Glancy crashed since the last launch? One look, a few seconds in, off main.
+        if !demo { CrashReports.checkAtLaunch(hub: hub) }
         if CommandLine.arguments.contains("--selftest") { manager.runSelfTest() }
         if let i = CommandLine.arguments.firstIndex(of: "--tour") {
             // `--tour [home|tabs|all|<module>] [rounds]`: see SurfaceManager.runTour (diagnostics).

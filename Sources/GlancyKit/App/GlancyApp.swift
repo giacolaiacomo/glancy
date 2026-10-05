@@ -8,6 +8,11 @@ public enum GlancyApp {
     @MainActor public static func run() {
         let args = CommandLine.arguments
         if args.contains("--self-test") { runSelfCheck() }
+        if args.contains("--crashes") {
+            // Summaries of Glancy's crash reports (App/CrashReports.swift), then exit.
+            print(CrashReports.printAll(), terminator: "")
+            exit(0)
+        }
         if let i = args.firstIndex(of: "--login-item") { loginItem(args.dropFirst(i + 1).first) }
         Diagnostics.markLaunch()
         let diagnose = args.contains("--diagnose")

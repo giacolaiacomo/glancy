@@ -76,12 +76,31 @@ final class WindowsModel {
     /// What a commit would do right now; drawn on the map and on the real screen.
     private(set) var preview: ArrangePlan?
     private(set) var outcome: OutcomeReport?
-    private(set) var busy = false
+    /// A commit, undo or workspace restore is running (set by the workspace extension too).
+    var busy = false
     private(set) var canUndo = false
     var showDiagnostics = false
     private(set) var probeLines: [String] = []
     private(set) var probeRunning = false
     var failedHotkeys: [String] = []
+
+    // Workspaces (WindowsModel+Workspaces.swift)
+    /// The saved workspaces (the module's store; in memory until the module hands its own).
+    @ObservationIgnored var workspaces = WorkspaceStore(url: nil)
+    @ObservationIgnored var restorer = WorkspaceRestorer(launcher: WorkspaceAppLauncher())
+    /// The workspaces pane instead of the layout thumbnails.
+    var showWorkspaces = false
+    /// The name being typed: saving a new workspace (`renaming` nil) or renaming one.
+    var naming: String?
+    var renaming: UUID?
+    /// The workspace card under the pointer: its windows on this display show on the real screen.
+    var workspaceHover: UUID?
+    var workspacePreview: ArrangePlan?
+    /// The workspace being restored (launching apps can take seconds).
+    var restoringWorkspace: UUID?
+    /// What the pane's status line says after a save or a restore.
+    var workspaceStatus: WorkspaceStatus?
+    @ObservationIgnored var workspaceStatusTask: Task<Void, Never>?
 
     /// Reported by the views, in Cocoa screen coordinates (drag mode maps the pointer with them).
     @ObservationIgnored var mapScreenRect: CGRect?
@@ -102,7 +121,7 @@ final class WindowsModel {
     @ObservationIgnored var onPeek: ((String) -> Void)?
     @ObservationIgnored var probe: (Bool) async -> [String] = { move in await TilingProbe.run(move: move) }
     /// The last in-flight commit / undo / probe, so callers (and tests) can await it.
-    @ObservationIgnored private(set) var pending: Task<Void, Never>?
+    @ObservationIgnored var pending: Task<Void, Never>?
     /// The cell last placed into, per display: "the focused cell" for the Agents link.
     @ObservationIgnored private(set) var lastCell: [String: CellRect] = [:]
     @ObservationIgnored private(set) var lastDirect: HalvesCycle.Last?
@@ -253,6 +272,10 @@ final class WindowsModel {
             guard !showMore else { return }
             showMore = true
             showHelp = false
+            showWorkspaces = false
+            naming = nil
+            renaming = nil
+            hoverWorkspace(nil)
             layoutHover = nil
             applyHover = false
             recomputePreview()
@@ -273,7 +296,10 @@ final class WindowsModel {
         recomputePreview()
     }
 
-    func toggleHelp() { showHelp.toggle() }
+    func toggleHelp() {
+        showHelp.toggle()
+        if showHelp { showWorkspaces = false; naming = nil; renaming = nil; hoverWorkspace(nil) }
+    }
 
     var dragWindowID: CGWindowID? { if case let .drag(id, _) = mode { id } else { nil } }
 
@@ -356,6 +382,11 @@ final class WindowsModel {
     private func resetLayouts() {
         showMore = false
         showHelp = false
+        showWorkspaces = false
+        naming = nil
+        renaming = nil
+        workspaceHover = nil
+        workspacePreview = nil
         layoutChoice = Self.suggestedID
         layoutHover = nil
         applyHover = false
@@ -681,6 +712,11 @@ final class WindowsModel {
     @discardableResult
     func handle(_ key: Key) -> Bool {
         guard trusted else { return false }
+        // Typing a workspace name: the field gets every key; Esc stops typing.
+        if naming != nil {
+            if key == .escape { cancelNaming(); return true }
+            return false
+        }
         switch key {
         case let .arrow(d, shift):
             guard map != nil else { return true }
@@ -708,6 +744,8 @@ final class WindowsModel {
             // The picked windows go first, then the preview, then More, then the panel.
             if showHelp {
                 showHelp = false
+            } else if showWorkspaces {
+                setWorkspaces(false)
             } else if !picks.isEmpty {
                 clearPicks()
             } else if strategy != nil || selection != nil || hoverCell != nil {
@@ -739,6 +777,13 @@ final class WindowsModel {
             undo()
             return true
         case let .digit(n):
+            // Digits restore the saved workspaces (the older saved layouts when there are none).
+            let saved = workspaces.workspaces
+            if !saved.isEmpty {
+                guard n <= saved.count else { return true }
+                restoreFromTab(saved[n - 1].id)
+                return true
+            }
             let layouts = backend.layouts
             guard n >= 1, n <= layouts.count else { return true }
             let plans = backend.planLayout(layouts[n - 1])
@@ -848,8 +893,8 @@ final class WindowsModel {
 
     /// The real screen shows the map's preview; on the main surface only while a thumbnail (or
     /// Apply) is under the pointer, so opening the tab never covers the screen with boxes.
-    private func pushOverlay() {
-        let onScreen = preview ?? (layoutHover != nil || applyHover ? layoutPlan : nil)
+    func pushOverlay() {
+        let onScreen = preview ?? workspacePreview ?? (layoutHover != nil || applyHover ? layoutPlan : nil)
         guard onScreen != lastOverlay else { return }
         lastOverlay = onScreen
         onPreview?(onScreen, onScreen == nil ? nil : display)

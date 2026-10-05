@@ -16,7 +16,10 @@ public final class WindowsModule: GlancyModule {
     private let drag = DragMonitor()
     private let hotkeysURL: URL?
     public private(set) var hotkeys: WindowsHotkeys
-    private var hub: ActivityHub?
+    /// Saved workspaces (workspaces.json; in memory when `hotkeysURL` is nil, as in tests).
+    let workspaces: WorkspaceStore
+    let displayWatcher = DisplaySetupWatcher()
+    private(set) var hub: ActivityHub?
     private var tokens: [HotkeyManager.Token] = []
     private var trustObserver: NSObjectProtocol?
     private var keyMonitor: Any?
@@ -34,12 +37,16 @@ public final class WindowsModule: GlancyModule {
     private var tabHighlight: (window: TrackedWindow, display: Display?)?
 
     /// - Parameter hotkeysURL: where the bindings persist; nil = defaults, in memory (tests).
-    public init(engine: TilingEngine = TilingEngine(), hotkeysURL: URL? = WindowsHotkeys.defaultURL) {
+    /// - Parameter workspacesURL: where workspaces persist; ignored (in memory) when `hotkeysURL` is nil.
+    public init(engine: TilingEngine = TilingEngine(), hotkeysURL: URL? = WindowsHotkeys.defaultURL,
+                workspacesURL: URL = WorkspaceFile.defaultURL) {
         self.engine = engine
         self.hotkeysURL = hotkeysURL
         hotkeys = hotkeysURL.map { WindowsHotkeys.load(from: $0) } ?? WindowsHotkeys()
+        workspaces = WorkspaceStore(url: hotkeysURL == nil ? nil : workspacesURL)
         model = WindowsModel(backend: engine)
         model.hotkeys = hotkeys
+        model.workspaces = workspaces
     }
 
     // MARK: Lifecycle
@@ -68,6 +75,12 @@ public final class WindowsModule: GlancyModule {
         drag.onTrack = { [weak self] p in self?.dragMoved(p) }
         drag.onDrop = { [weak self] p in self?.dropped(p) }
         registerHotkeys()
+        workspaces.onChange = { [weak self] in
+            guard let self, self.running else { return }
+            self.registerHotkeys()
+        }
+        displayWatcher.onSetupChange = { [weak self] displays in self?.displaySetupChanged(displays) }
+        displayWatcher.start()
         if engine.isTrusted { startEngine() } else { watchTrust() }
     }
 
@@ -76,6 +89,9 @@ public final class WindowsModule: GlancyModule {
         running = false
         for t in tokens { HotkeyManager.shared.unregister(t) }
         tokens.removeAll()
+        workspaces.onChange = nil
+        displayWatcher.stop()
+        displayWatcher.onSetupChange = nil
         stopWatchingTrust()
         removeKeyMonitor()
         drag.stop()
@@ -234,6 +250,14 @@ public final class WindowsModule: GlancyModule {
                 tokens.append(t)
             }
         }
+        for w in workspaces.workspaces where w.hotkey.modifiers != 0 {
+            let id = w.id
+            if let t = HotkeyManager.shared.register(w.hotkey, action: { [weak self] in self?.restoreWorkspace(id) }) {
+                tokens.append(t)
+            } else {
+                failed.append(w.hotkey.description)
+            }
+        }
         model.failedHotkeys = failed
     }
 
@@ -264,7 +288,7 @@ public final class WindowsModule: GlancyModule {
         hub.requestOpen(.windows)
     }
 
-    private func direct(_ action: DirectAction) {
+    func direct(_ action: DirectAction) {
         guard engine.registry.isRunning else { openFromHotkey(); return }   // shows the permission page
         Task { [weak self] in
             guard let self else { return }
@@ -284,12 +308,58 @@ public final class WindowsModule: GlancyModule {
 
     /// ⌃⌥A (⇧ = front app only): the suggested layout on the display under the pointer, at once,
     /// outcome as a peek. Without Accessibility it moves nothing and the peek says why.
-    private func autoArrange(appOnly: Bool) {
+    func autoArrange(appOnly: Bool) {
         Task { [weak self] in
             guard let self else { return }
             let line = await self.model.autoArrangeShortcut(appOnly: appOnly)
             self.hub?.show(PeekEvent(module: .windows, duration: 3, content: AnyView(WindowsPeek(text: line))))
         }
+    }
+
+    // MARK: Workspaces
+
+    /// A hotkey, the command bar or Settings: restore now, outcome as a peek (the tab's status line
+    /// says it when the tab is open). Apps that are not running are opened.
+    func restoreWorkspace(_ id: UUID) {
+        Task { [weak self] in
+            guard let self else { return }
+            let outcome = await self.model.restoreWorkspace(id) { [weak self] apps in
+                self?.peek(WindowsText.f("Opening %@…", ListFormatter.localizedString(byJoining: apps)))
+            }
+            if let outcome { self.peek(outcome.name + " · " + outcome.line) }
+        }
+    }
+
+    /// The command bar / Settings: save every display's windows now, under the next free name.
+    @discardableResult
+    func saveWorkspaceNow(named name: String? = nil) -> Workspace? {
+        guard tilingReady else { peek(WindowsText.t("Windows needs Accessibility")); return nil }
+        guard let w = model.saveWorkspace(named: name) else { peek(WindowsText.t("No windows to save")); return nil }
+        peek(WindowsText.f("Saved %@ · %d windows", w.name, w.windows.count))
+        return w
+    }
+
+    /// A display came or went and things settled: the workspace saved on this setup that opted
+    /// in is applied (windows of running apps only; nothing is launched). Undo with ⌃⌥Z.
+    func displaySetupChanged(_ displays: [Display]) {
+        guard tilingReady, let w = model.workspaceForSetup(displays) else { return }
+        Task { [weak self] in
+            guard let self, let outcome = await self.model.restoreWorkspace(w.id, launchMissing: false) else { return }
+            let undo = self.hotkeys.undo.modifiers != 0 ? " · " + WindowsText.f("%@ undoes", self.hotkeys.undo.description) : ""
+            self.peek(WindowsText.f("Display setup: %@", outcome.name) + " · " + outcome.line + undo)
+        }
+    }
+
+    /// The workspace hotkeys, for Settings' conflict checks.
+    var workspaceHotkeyBindings: [HotkeyBinding] {
+        workspaces.workspaces.filter { $0.hotkey.modifiers != 0 }.map {
+            HotkeyBinding(id: "windows.workspace.\($0.id.uuidString)", title: WindowsText.f("Restore %@", $0.name), hotkey: $0.hotkey)
+        }
+    }
+
+    func peek(_ text: String) {
+        guard !tabVisible || !model.showWorkspaces else { return }
+        hub?.show(PeekEvent(module: .windows, duration: 3, content: AnyView(WindowsPeek(text: text))))
     }
 
     // MARK: Drag to the notch
@@ -453,6 +523,38 @@ public final class WindowsModule: GlancyModule {
         case list
         /// Two windows ⌘-picked (Mail #1, Notes #2) previewed in 2×1: #1 left, #2 right, others dimmed.
         case selection
+        /// The workspaces pane with nothing saved yet.
+        case workspacesNone
+        /// Two saved (Dev on both displays with ⌃⌥1 and "on connect", Call on the built-in), Dev hovered.
+        case workspaces
+        /// Typing the name of a new one.
+        case workspaceSave
+        /// After restoring Dev: placed 5, launched 2, 1 not found.
+        case workspaceRestored
+    }
+
+    /// What the renders show as saved (synthetic, never written to disk).
+    static func sampleWorkspaces() -> [Workspace] {
+        let displays = SampleWindowsBackend.standardDisplays.map(WorkspaceDisplay.init)
+        func win(_ b: String, _ app: String, _ title: String, _ d: Int, _ r: UnitRect, _ o: Int) -> WorkspaceWindow {
+            WorkspaceWindow(bundleID: b, appName: app, title: title, display: d, frame: r, order: o)
+        }
+        let dev = Workspace(id: UUID(uuidString: "6D0E1C3A-0000-4000-8000-000000000001")!, name: "Dev",
+                            created: Date(timeIntervalSince1970: 1_790_000_000), displays: displays, windows: [
+            win("com.microsoft.VSCode", "Code", "TilingEngine.swift", 1, UnitRect(x: 0.003, y: 0.006, w: 0.594, h: 0.988), 0),
+            win("com.apple.Terminal", "Terminal", "glancy — zsh", 0, UnitRect(x: 0.005, y: 0.009, w: 0.493, h: 0.982), 1),
+            win("com.google.Chrome", "Chrome", "Docs", 1, UnitRect(x: 0.6, y: 0.006, w: 0.397, h: 0.988), 2),
+            win("com.apple.Safari", "Safari", "Glancy — spec", 0, UnitRect(x: 0.502, y: 0.009, w: 0.493, h: 0.982), 3),
+            win("com.tinyspeck.slackmacgap", "Slack", "general", 0, UnitRect(x: 0.25, y: 0.2, w: 0.5, h: 0.6), 4),
+            win("com.figma.Desktop", "Figma", "Glancy icon", 1, UnitRect(x: 0.2, y: 0.2, w: 0.5, h: 0.6), 5),
+        ], hotkey: Hotkey(keyCode: 18, modifiers: WindowsHotkeys.ctrlOpt), applyOnConnect: true)
+        let call = Workspace(id: UUID(uuidString: "6D0E1C3A-0000-4000-8000-000000000002")!, name: "Call",
+                             created: Date(timeIntervalSince1970: 1_790_100_000), displays: [displays[0]], windows: [
+            win("us.zoom.xos", "zoom.us", "Zoom Meeting", 0, UnitRect(x: 0.005, y: 0.009, w: 0.66, h: 0.982), 0),
+            win("com.apple.Notes", "Notes", "Ideas", 0, UnitRect(x: 0.67, y: 0.009, w: 0.325, h: 0.49), 1),
+            win("com.apple.mail", "Mail", "Inbox", 0, UnitRect(x: 0.67, y: 0.505, w: 0.325, h: 0.486), 2),
+        ])
+        return [dev, call]
     }
 
     public func prepareForRender(_ state: RenderState) {
@@ -460,6 +562,14 @@ public final class WindowsModule: GlancyModule {
         let sample = SampleWindowsBackend()
         sample.isTrusted = state != .permission
         model.replaceBackend(sample)
+        workspaces.replaceAll(state == .workspacesNone ? [] : Self.sampleWorkspaces())
+        model.showWorkspaces = false
+        model.naming = nil
+        model.renaming = nil
+        model.workspaceHover = nil
+        model.workspacePreview = nil
+        model.workspaceStatusTask?.cancel()
+        model.workspaceStatus = nil
         model.showDiagnostics = state == .diagnostics
         if state == .diagnostics {
             model.setProbeLines([
@@ -537,6 +647,15 @@ public final class WindowsModule: GlancyModule {
         case .windowScope:
             model.prepare(mode: .browse, display: nil, hover: CellRect(col: 2, row: 0, w: 1, h: 2), selection: nil, strategy: nil,
                           outcome: nil, scope: .window, more: true)
+        case .workspacesNone, .workspaces, .workspaceSave, .workspaceRestored:
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil,
+                          outcome: state == .workspaceRestored ? [] : nil)
+            model.setWorkspaces(true)
+            if state == .workspaces { model.hoverWorkspace(Self.sampleWorkspaces()[0].id) }
+            if state == .workspaceSave { model.beginSave() }
+            if state == .workspaceRestored {
+                model.setWorkspaceStatus(.restored(RestoreOutcome(name: "Dev", placed: 5, launched: 2, notFound: 1)), sticky: true)
+            }
         }
     }
 }

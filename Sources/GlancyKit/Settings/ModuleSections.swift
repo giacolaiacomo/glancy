@@ -435,6 +435,7 @@ enum GlancyHotkeys {
             for a in WindowsSection.actions + WindowsSection.arrangeActions {
                 out.append(HotkeyBinding(id: a.id, title: tr(a.title), hotkey: w.hotkeys[keyPath: a.key]))
             }
+            out += w.workspaceHotkeyBindings
         }
         return out
     }
@@ -498,6 +499,10 @@ private struct WindowsSection: View {
             }
             .opacity(hotkeys.enabled ? 1 : 0.4)
             .disabled(!hotkeys.enabled)
+            WorkspacesSettings(module: module) { id, key in
+                HotkeyConflict.find(HotkeyBinding(id: id, title: "", hotkey: key), among: GlancyHotkeys.bindings(context),
+                                    system: system, failed: Set([key].filter { module.failedHotkeys.contains($0.description) }))
+            }
         }
         .onAppear { system = HotkeyConflict.systemHotkeys() }
     }

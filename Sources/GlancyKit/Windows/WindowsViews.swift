@@ -21,7 +21,13 @@ struct WindowsTab: View {
                 if model.showDiagnostics {
                     DiagnosticsPane(model: model)
                 } else if !model.showsMap {
-                    if model.showHelp { HelpCard(model: model) } else { LayoutPane(model: model) }
+                    if model.showHelp {
+                        HelpCard(model: model)
+                    } else if model.showWorkspaces {
+                        WorkspacesPane(model: model)
+                    } else {
+                        LayoutPane(model: model)
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .top, spacing: 12) {
@@ -756,6 +762,16 @@ private struct PaneHeader: View {
     let model: WindowsModel
 
     var body: some View {
+        // "Workspaces" folds to its icon before the label is cut.
+        ViewThatFits(in: .horizontal) {
+            row(compact: false)
+            row(compact: true)
+        }
+        .frame(height: 18)
+        .animation(Theme.peek, value: model.canUndo)
+    }
+
+    private func row(compact: Bool) -> some View {
         HStack(spacing: 6) {
             SectionLabel(text: WindowsText.t("Layout") + " ·")
             Text(verbatim: Self.count(model).uppercased())
@@ -769,10 +785,9 @@ private struct PaneHeader: View {
                     .transition(.opacity)
             }
             IconButton(symbol: "questionmark", help: WindowsText.t("Shortcuts"), on: model.showHelp) { model.toggleHelp() }
+            WorkspacesButton(model: model, compact: compact)
             MoreButton(model: model)
         }
-        .frame(height: 18)
-        .animation(Theme.peek, value: model.canUndo)
     }
 
     @MainActor static func count(_ model: WindowsModel) -> String {
@@ -783,7 +798,7 @@ private struct PaneHeader: View {
 }
 
 /// "More ⌄": the full map with cells, grid, scope and strategies.
-private struct MoreButton: View {
+struct MoreButton: View {
     let model: WindowsModel
     @State private var hover = false
 
@@ -968,7 +983,8 @@ private struct HelpCard: View {
                 line(Self.key(h.undo), WindowsText.t("Undo the last change"))
                 line(Self.key(h.open), WindowsText.t("Open the map with the keyboard"))
                 line(Self.key(h.leftHalf) + " " + Self.key(h.rightHalf), WindowsText.t("Halves: ½ → ⅔ → ⅓ on repeat"))
-                line("⏎  ⌘Z", WindowsText.t("Apply the layout") + " · " + WindowsText.t("Undo"))
+                line("⏎ ⌘Z 1–9", WindowsText.t("Apply the layout") + " · " + WindowsText.t("Undo") + " · "
+                     + WindowsText.t("a saved workspace"))
                 line(WindowsText.t("click"), WindowsText.t("Choose windows: click · range: ⇧-click · clear: Esc"))
                 line("↗", WindowsText.t("Drag a window to the notch: drop it on a cell"))
             }
@@ -998,7 +1014,7 @@ private struct HelpCard: View {
 }
 
 /// A quiet text button ("Clear").
-private struct TextLink: View {
+struct TextLink: View {
     let text: String
     let help: String
     let action: () -> Void
@@ -1227,7 +1243,7 @@ enum Permission {
 
 // MARK: - Small controls
 
-private struct SectionLabel: View {
+struct SectionLabel: View {
     let text: String
     var body: some View {
         Text(verbatim: text.uppercased())
@@ -1310,7 +1326,7 @@ private struct StepButton: View {
     }
 }
 
-private struct IconButton: View {
+struct IconButton: View {
     let symbol: String
     let help: String
     let on: Bool

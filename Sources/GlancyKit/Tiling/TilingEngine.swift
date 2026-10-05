@@ -196,20 +196,31 @@ public final class TilingEngine {
     /// app threads), outcomes awaited, history recorded. Main never blocks.
     @discardableResult
     public func commit(_ plan: ArrangePlan, label: String? = nil) async -> [PlacementResult] {
-        guard !plan.moves.isEmpty else { return [] }
+        await commit([plan], label: label ?? Self.defaultLabel(plan.kind))
+    }
+
+    /// Several plans (a workspace spans displays) as one operation: one undo puts every window back.
+    @discardableResult
+    public func commit(_ plans: [ArrangePlan], label: String) async -> [PlacementResult] {
+        let plans = plans.filter { !$0.moves.isEmpty }
+        guard !plans.isEmpty else { return [] }
         let all = displays()
         // The frames the plan was made from (planned right before the commit). For a drop that is
         // the pre-drag frame, which the registry no longer holds; undo must go back there.
         var before: [CGWindowID: CGRect] = [:]
-        for m in plan.moves { before[m.windowID] = m.from }
-        let snapshot: [CGWindowID: CGRect] = plan.isMultiWindow
-            ? Dictionary(registry.windows.filter {
-                $0.isOnScreen && ScreenSpace.display(for: $0.frame, in: all)?.id == plan.displayID
-            }.map { ($0.id, $0.frame) }, uniquingKeysWith: { a, _ in a })
-            : [:]
-        let tolerance = plan.grid.clamped().outerGap + 2
-        let requests = plan.moves.map {
-            PlacementRequest(windowID: $0.windowID, target: $0.to, usable: plan.usable, edgeTolerance: tolerance)
+        var snapshot: [CGWindowID: CGRect] = [:]
+        var requests: [PlacementRequest] = []
+        for plan in plans {
+            for m in plan.moves { before[m.windowID] = m.from }
+            if plan.isMultiWindow || plans.count > 1 {
+                for w in registry.windows where w.isOnScreen && ScreenSpace.display(for: w.frame, in: all)?.id == plan.displayID {
+                    if snapshot[w.id] == nil { snapshot[w.id] = w.frame }
+                }
+            }
+            let tolerance = plan.grid.clamped().outerGap + 2
+            requests += plan.moves.map {
+                PlacementRequest(windowID: $0.windowID, target: $0.to, usable: plan.usable, edgeTolerance: tolerance)
+            }
         }
         isPlacing = true
         let results = await placer.place(requests)
@@ -221,8 +232,7 @@ public final class TilingEngine {
             requested[r.windowID] = r.requested
             landed[r.windowID] = r.landed
         }
-        history.record(label: label ?? Self.defaultLabel(plan.kind), before: before, requested: requested,
-                       landed: landed, screenSnapshot: snapshot)
+        history.record(label: label, before: before, requested: requested, landed: landed, screenSnapshot: snapshot)
         return results
     }
 

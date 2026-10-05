@@ -33,6 +33,10 @@ protocol WindowsBackend: AnyObject {
     func planLayout(_ layout: SavedLayout) -> [ArrangePlan]
 
     func commit(_ plan: ArrangePlan, label: String?) async -> [PlacementResult]
+    /// Several plans as one undoable operation (a workspace spanning displays).
+    func commit(_ plans: [ArrangePlan], label: String) async -> [PlacementResult]
+    /// Every known window, minimised, hidden and other-Space ones included, front to back.
+    func allWindows() -> [TrackedWindow]
     var canUndo: Bool { get }
     func undo() async -> [PlacementResult]
 }
@@ -52,6 +56,7 @@ extension TilingEngine: WindowsBackend {
     var defaultStrategy: ArrangeStrategy { config.defaultStrategy }
     var layouts: [SavedLayout] { config.layouts }
     func initialFrame(for id: CGWindowID) -> CGRect? { history.initialFrame(for: id) }
+    func allWindows() -> [TrackedWindow] { registry.windows }
 }
 
 // MARK: - Sample (tests, renderer)
@@ -74,7 +79,9 @@ final class SampleWindowsBackend: WindowsBackend {
     private(set) var undoCount = 0
     /// What each committed window reports; default `.exact`.
     var outcomes: [CGWindowID: PlacementOutcome] = [:]
-    private var changeHandler: (@MainActor () -> Void)?
+    /// Plans committed together through `commit(_ plans:label:)`, one entry per call.
+    private(set) var groupCommits: [[ArrangePlan]] = []
+    private var changeHandlers: [@MainActor () -> Void] = []
 
     init(displays: [Display] = SampleWindowsBackend.standardDisplays,
          windows: [TrackedWindow] = SampleWindowsBackend.standardWindows, target: CGWindowID? = 11) {
@@ -115,9 +122,10 @@ final class SampleWindowsBackend: WindowsBackend {
     func start() { isRunning = true }
     func stop() { isRunning = false }
     func refresh() async {}
-    func onWindowsChange(_ body: @escaping @MainActor () -> Void) { changeHandler = body }
-    /// Tests: simulate the registry changing.
-    func fireChange() { let h = changeHandler; changeHandler = nil; h?() }
+    func onWindowsChange(_ body: @escaping @MainActor () -> Void) { changeHandlers.append(body) }
+    /// Tests: simulate the registry changing (every armed handler fires once, as the engine's do).
+    func fireChange() { let hs = changeHandlers; changeHandlers = []; for h in hs { h() } }
+    func allWindows() -> [TrackedWindow] { windows }
 
     func window(_ id: CGWindowID) -> TrackedWindow? { windows.first { $0.id == id } }
     func displays() -> [Display] { sampleDisplays }
@@ -195,6 +203,19 @@ final class SampleWindowsBackend: WindowsBackend {
                                    landed: outcome == .unreachable ? nil : landed, attempts: 1, euiWasOn: false,
                                    note: nil, elapsed: 0.04)
         }
+    }
+
+    func commit(_ plans: [ArrangePlan], label: String) async -> [PlacementResult] {
+        let plans = plans.filter { !$0.moves.isEmpty }
+        guard !plans.isEmpty else { return [] }
+        groupCommits.append(plans)
+        var out: [PlacementResult] = []
+        for p in plans { out += await commit(p, label: label) }
+        // One operation: `commit` counted each plan.
+        commits.removeLast(plans.count)
+        commits.append(ArrangePlan(kind: .layout, displayID: plans[0].displayID, usable: plans[0].usable, grid: plans[0].grid,
+                                   moves: plans.flatMap(\.moves)))
+        return out
     }
 
     var canUndo: Bool { !commits.isEmpty && undoCount < commits.count }

@@ -24,13 +24,22 @@ public final class MediaModel {
     public internal(set) var appIcon: NSImage?
     public internal(set) var appName: String?
 
+    /// Synced lyrics for the current track (its own observable: only the lyrics views read it).
+    @ObservationIgnored public let lyrics: LyricsModel
+    @ObservationIgnored public let lyricsSettings: LyricsSettings
+
     @ObservationIgnored var onToggle: () -> Void = {}
     @ObservationIgnored var onNext: () -> Void = {}
     @ObservationIgnored var onPrevious: () -> Void = {}
     @ObservationIgnored var onSeek: (TimeInterval) -> Void = { _ in }
     @ObservationIgnored var onOpenApp: () -> Void = {}
 
-    public init() {}
+    public convenience init() { self.init(lyrics: LyricsModel(), lyricsSettings: LyricsSettings()) }
+
+    init(lyrics: LyricsModel, lyricsSettings: LyricsSettings) {
+        self.lyrics = lyrics
+        self.lyricsSettings = lyricsSettings
+    }
 
     public var playing: Bool { info?.playing == true }
 

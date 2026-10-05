@@ -120,6 +120,28 @@ enum Render {
             }
             shelf.endRender()
         }
+        // Lyrics (lot NL): the Media tab's lyrics page and the opt-in lyric wing, on a made-up track
+        // with made-up words; no player is read and nothing goes to the network.
+        if let media = modules.compactMap({ $0 as? MediaModule }).first {
+            for state in MediaModule.RenderState.allCases {
+                media.prepareForRender(state)
+                let hub = ActivityHub()
+                media.stop()
+                media.start(hub: hub)
+                let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [media])
+                switch state {
+                case .lyrics:
+                    media.visibilityChanged(.expanded(.media))
+                    shot("11-media-lyrics", ctx) { $0.expand(tab: .media) }
+                case .lyricsWing:
+                    media.visibilityChanged(.collapsed)
+                    shot("11-media-lyrics-wing", ctx)
+                }
+            }
+            media.prepareForRender(nil)
+            media.stop()
+            media.start(hub: live.hub)
+        }
         // Settings: the index, every section, and the first-run welcome. Permission statuses are
         // fixed (a mix of every state) so nothing is asked of macOS.
         let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,

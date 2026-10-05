@@ -236,8 +236,13 @@ struct MediaHomeTile: View {
 struct MediaTabView: View {
     let model: MediaModel
     var body: some View {
+        let settings = model.lyricsSettings
         if let info = model.info {
-            NowPlayingPage(model: model, info: info)
+            if settings.tabEnabled, settings.shown, model.lyrics.hasWords {
+                LyricsNowPlayingPage(model: model, info: info, lyrics: model.lyrics, settings: settings)
+            } else {
+                NowPlayingPage(model: model, info: info)
+            }
         } else {
             MediaEmpty(model: model)
         }
@@ -262,6 +267,11 @@ private struct NowPlayingPage: View {
                     Text(verbatim: info.title).font(Theme.font(.xl, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                     Spacer(minLength: 4)
                     LiveLevelGlyph(model: model)
+                    if model.lyricsSettings.tabEnabled {
+                        LyricsToggle(settings: model.lyricsSettings, available: model.lyrics.hasWords)
+                            .padding(-4)
+                            .offset(y: 2)
+                    }
                 }
                 Text(verbatim: subtitle(info, album: true)).font(Theme.font(.m)).foregroundStyle(Theme.secondary)
                     .lineLimit(1).padding(.top, 2)

@@ -62,53 +62,30 @@ private func iops(_ changes: [String: Any]) -> [String: Any] {
     let battery = PowerState(hasBattery: true, percent: 50, onAC: false)
 
     @Test func launchIsSilent() {
-        #expect(PowerLogic.transition(from: nil, to: ac, lowWarned: false).event == nil)
-        #expect(PowerLogic.transition(from: nil, to: battery, lowWarned: false).event == nil)
+        #expect(PowerLogic.transition(from: nil, to: ac) == nil)
+        #expect(PowerLogic.transition(from: nil, to: battery) == nil)
     }
 
     @Test func plugAndUnplug() {
-        #expect(PowerLogic.transition(from: battery, to: ac, lowWarned: false).event == .pluggedIn)
-        #expect(PowerLogic.transition(from: ac, to: battery, lowWarned: false).event == .unplugged)
-        #expect(PowerLogic.transition(from: ac, to: ac, lowWarned: false).event == nil)
+        #expect(PowerLogic.transition(from: battery, to: ac) == .pluggedIn)
+        #expect(PowerLogic.transition(from: ac, to: battery) == .unplugged)
+        #expect(PowerLogic.transition(from: ac, to: ac) == nil)
     }
 
-    @Test func lowOncePerDischarge() {
-        var s = battery
-        var warned = false
-        var lows = 0
-        for p in stride(from: 15, through: 3, by: -1) {
-            let old = s
-            s.percent = p
-            let r = PowerLogic.transition(from: old, to: s, lowWarned: warned)
-            warned = r.lowWarned
-            if r.event == .low { lows += 1; #expect(p == 10) }
-        }
-        #expect(lows == 1)
-        // Plugging in re-arms it; the next discharge warns again.
-        let plugged = PowerState(hasBattery: true, percent: 5, onAC: true, isCharging: true)
-        let r1 = PowerLogic.transition(from: s, to: plugged, lowWarned: warned)
-        #expect(r1.event == .pluggedIn && r1.lowWarned == false)
-        let unplugged = PowerState(hasBattery: true, percent: 6, onAC: false)
-        let r2 = PowerLogic.transition(from: plugged, to: unplugged, lowWarned: r1.lowWarned)
-        #expect(r2.event == .low && r2.lowWarned)
-    }
-
-    @Test func lowAtLaunchWarnsOnce() {
-        let low = PowerState(hasBattery: true, percent: 7, onAC: false)
-        let r = PowerLogic.transition(from: nil, to: low, lowWarned: false)
-        #expect(r.event == .low && r.lowWarned)
-        #expect(PowerLogic.transition(from: low, to: low, lowWarned: r.lowWarned).event == nil)
+    @Test func lowIsNotAWingAnyMore() {
+        // Low battery is a peek (BatteryAlerts, DevicesTests); the wing only follows plug / LPM.
+        var low = battery; low.percent = 9
+        #expect(PowerLogic.transition(from: battery, to: low) == nil)
     }
 
     @Test func lowPowerMode() {
         var on = battery; on.lowPowerMode = true
-        #expect(PowerLogic.transition(from: battery, to: on, lowWarned: false).event == .lowPowerMode(true))
-        #expect(PowerLogic.transition(from: on, to: battery, lowWarned: false).event == .lowPowerMode(false))
+        #expect(PowerLogic.transition(from: battery, to: on) == .lowPowerMode(true))
+        #expect(PowerLogic.transition(from: on, to: battery) == .lowPowerMode(false))
     }
 
     @Test func noBatteryNeverShows() {
-        let r = PowerLogic.transition(from: .noBattery, to: .noBattery, lowWarned: false)
-        #expect(r.event == nil)
+        #expect(PowerLogic.transition(from: .noBattery, to: .noBattery) == nil)
     }
 
     @Test func homeCardOnlyWhenNotable() {

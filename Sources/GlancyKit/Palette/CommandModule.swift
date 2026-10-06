@@ -54,6 +54,7 @@ public final class CommandModule: GlancyModule, SurfaceContextAware {
     public func attach(_ context: SurfaceContext) {
         let settings = context.settings
         model.isEnabled = { [weak settings] id in settings?.isEnabled(id) ?? true }
+        model.appSettings = settings
     }
 
     // MARK: Lifecycle

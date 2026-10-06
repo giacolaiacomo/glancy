@@ -23,6 +23,8 @@ public final class CommandModel {
     @ObservationIgnored public var sources: () -> [any GlancyModule] = { [] }
     /// Whether a module is turned on (from the surface's settings).
     @ObservationIgnored public var isEnabled: (ModuleID) -> Bool = { _ in true }
+    /// The app's settings, for "Size: …" (set when the bar is attached to the surface).
+    @ObservationIgnored public weak var appSettings: AppSettings?
     /// Closes the panel (after a row that closes it).
     @ObservationIgnored var close: () -> Void = {}
     /// Opens the panel on a tab.

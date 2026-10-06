@@ -10,6 +10,11 @@ import Foundation
 ///
 /// SIGUSR1 runs the tour (`GLANCY_LAB_ROUNDS`, default 1; `GLANCY_LAB_SCOPE`); SIGUSR2 prints the process's memory as
 /// one `lab:` line. Both are dispatch sources: nothing wakes while the lab idles.
+///
+/// `GLANCY_LAB_STATE=<name>` (scripts/cpu-lab.sh): one state of `CollapsedStates`, its modules only, on
+/// two off-screen displays (a notch and an external display's pill); the `lab:` line then carries
+/// each surface's layout passes, and `GLANCY_LAB_SCOPE=cycle` makes SIGUSR1 open and close the panel
+/// on each display in turn.
 public enum Lab {
     public nonisolated static let isActive: Bool =
         CommandLine.arguments.contains("--lab") || ProcessInfo.processInfo.environment["GLANCY_LAB"] == "1"
@@ -56,6 +61,35 @@ public enum Lab {
         return s
     }
 
+    /// An external display without a notch, beside the lab's notch (far off-screen too): its pill.
+    @MainActor static func pillScreen() -> ScreenInfo {
+        let x = offset - 6_000
+        return ScreenInfo(uuid: "lab-pill", frame: CGRect(x: x, y: 0, width: 2560, height: 1440),
+                          visibleFrame: CGRect(x: x, y: 0, width: 2560, height: 1415), safeTop: 0,
+                          auxLeft: nil, auxRight: nil, isBuiltin: false, scale: 2)
+    }
+
+    /// `GLANCY_LAB_STATE`: the collapsed state the lab is put in (nil = the memory lab's demo).
+    @MainActor static var state: CollapsedStates.Case? {
+        ProcessInfo.processInfo.environment["GLANCY_LAB_STATE"].flatMap(CollapsedStates.named)
+    }
+
+    /// Each surface's layout passes so far ("uuid:n,…"), for the `lab:` line.
+    @MainActor static var passes: (() -> String)?
+
+    /// Opens and closes the panel on every display in turn (`GLANCY_LAB_SCOPE=cycle`).
+    @MainActor static func cycle(_ manager: SurfaceManager) {
+        Task { @MainActor in
+            for s in manager.surfacesForTest.sorted(by: { $0.uuid < $1.uuid }) {
+                manager.open(s)
+                try? await Delay.sleep(for: .seconds(1.2))
+                manager.close(s)
+                try? await Delay.sleep(for: .seconds(1))
+            }
+            print("tour: done"); fflush(stdout)
+        }
+    }
+
     /// Every status as granted: the settings pages look like a set-up Mac; nothing is asked.
     static let permissions = PermissionProbe.fixed(Dictionary(uniqueKeysWithValues: PermissionKind.allCases.map { ($0, .granted) }))
 
@@ -78,7 +112,9 @@ public enum Lab {
             let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
             source.setEventHandler { @Sendable in
                 MainActor.assumeIsolated {
-                    if sig == SIGUSR1 { tour() } else { print(report("now")); fflush(stdout) }
+                    if sig == SIGUSR1 { tour() } else {
+                        print(report("now") + (passes.map { " passes=\($0())" } ?? "")); fflush(stdout)
+                    }
                 }
             }
             source.resume()

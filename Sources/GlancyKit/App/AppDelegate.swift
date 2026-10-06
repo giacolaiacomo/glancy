@@ -74,19 +74,35 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         for id in AppSettings.defaultDisabled { settings.setEnabled(id, true) }
         let set = DemoData.make(root: Lab.root.appendingPathComponent("data", isDirectory: true))
         labSuites = set.removeDefaults
-        let context = SurfaceContext(hub: ActivityHub(), settings: settings, launchAtLogin: LaunchAtLogin(), modules: set.modules)
+        // GLANCY_LAB_STATE (scripts/cpu-lab.sh): one collapsed state, its modules only, on a notch
+        // and an external display's pill.
+        let state = Lab.state
+        if state != nil { settings.externalPill = true }
+        let modules = state?.modules.map { ids in set.modules.filter { ids.contains($0.id) } } ?? set.modules
+        let context = SurfaceContext(hub: ActivityHub(), settings: settings, launchAtLogin: LaunchAtLogin(), modules: modules)
         context.quit = { NSApp.terminate(nil) }
         self.context = context
+        let rig = CollapsedStates.Rig(set: set, hub: context.hub, context: context)
+        state?.prepare?(rig)
         for m in context.enabledModules { start(m) }
         let screen = Lab.screen()
-        let manager = SurfaceManager(context: context, screens: { [screen] }, fullscreenSpaces: { [] },
+        let screens = state == nil ? [screen] : [screen, Lab.pillScreen()]
+        let manager = SurfaceManager(context: context, screens: { screens }, fullscreenSpaces: { [] },
                                      events: SystemEvents(), menuBar: nil, presents: true)
         self.manager = manager
         manager.start()
         // Inert unless GLANCY_UPDATE_FEED points the lab at a test feed (scripts/update-e2e.sh).
         startUpdates(defaults: defaults)
-        Lab.installSignals { [weak manager] in manager?.runTour(after: 0, scope: Lab.scope, rounds: Lab.rounds) }
-        print("lab: ready pid=\(getpid()) root=\(Lab.root.path) surface=\(Int(screen.frame.minX)),\(Int(screen.frame.minY))")
+        state?.apply?(rig)
+        Lab.passes = { [weak manager] in
+            (manager?.surfacesForTest ?? []).sorted { $0.uuid < $1.uuid }.map { "\($0.uuid):\($0.layoutPasses)" }.joined(separator: ",")
+        }
+        Lab.installSignals { [weak manager] in
+            guard let manager else { return }
+            if Lab.scope == "cycle" { Lab.cycle(manager) } else { manager.runTour(after: 0, scope: Lab.scope, rounds: Lab.rounds) }
+        }
+        print("lab: ready pid=\(getpid()) root=\(Lab.root.path) surface=\(Int(screen.frame.minX)),\(Int(screen.frame.minY))"
+              + (state.map { " state=\($0.name) settle=\($0.settle)" } ?? ""))
         fflush(stdout)
     }
 

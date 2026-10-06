@@ -50,15 +50,39 @@ struct MemoryTests {
         #expect(h.manager.pendingRelief)
         h.manager.open(tab: nil)                 // reopened before it ran: cancelled
         #expect(!h.manager.pendingRelief)
-        try await Task.sleep(for: .milliseconds(400))
+        try await Delay.sleep(for: .milliseconds(400))
         #expect(purged == 0)
 
         let runs = MemoryRelief.runs
         h.manager.closeAll()
-        try await Task.sleep(for: .milliseconds(500))
+        try await Delay.sleep(for: .milliseconds(500))
         #expect(MemoryRelief.runs == runs + 1)
         #expect(purged == 1)
         #expect(!h.manager.pendingRelief)
+    }
+
+    /// Delay.sleep waits as long as asked, and a cancelled one ends at once (its timer goes with it).
+    @Test func delayWaitsAndLetsGoWhenCancelled() async throws {
+        let clock = ContinuousClock()
+        var t0 = clock.now
+        try await Delay.sleep(for: .milliseconds(120))
+        let slept = clock.now - t0
+        #expect(slept >= .milliseconds(115) && slept < .milliseconds(600))
+
+        t0 = clock.now
+        let task = Task { () -> Bool in
+            do { try await Delay.sleep(for: .seconds(3600)); return false } catch { return error is CancellationError }
+        }
+        try await Delay.sleep(for: .milliseconds(50))
+        task.cancel()
+        #expect(await task.value)
+        #expect(clock.now - t0 < .seconds(2))
+
+        let early = Task { () -> Bool in
+            withUnsafeCurrentTask { $0?.cancel() }
+            do { try await Delay.sleep(for: .seconds(3600)); return false } catch { return true }
+        }
+        #expect(await early.value)
     }
 
     /// An English Glancy never builds the Italian tables.
@@ -104,15 +128,15 @@ struct MemoryTests {
         guard let surface = manager.surfacesForTest.first else { Issue.record("no surface"); return }
 
         manager.open(tab: .agents)
-        try await Task.sleep(for: .milliseconds(1200))
+        try await Delay.sleep(for: .milliseconds(1200))
         let open = surface.layoutPasses
-        try await Task.sleep(for: .milliseconds(600))
+        try await Delay.sleep(for: .milliseconds(600))
         // Sanity: the harness really draws (the working dots pulse while open).
         #expect(surface.layoutPasses > open)
         manager.closeAll()
-        try await Task.sleep(for: .milliseconds(1500))   // the close spring settles
+        try await Delay.sleep(for: .milliseconds(1500))   // the close spring settles
         let settled = surface.layoutPasses
-        try await Task.sleep(for: .seconds(2))
+        try await Delay.sleep(for: .seconds(2))
         #expect(surface.layoutPasses == settled, "the collapsed surface kept laying out")
     }
 }

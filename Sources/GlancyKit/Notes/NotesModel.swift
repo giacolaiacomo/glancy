@@ -197,7 +197,7 @@ public final class NotesModel {
         let delay = immediate ? Duration.zero : debounce
         pending[id] = Task { [weak self] in
             if delay > .zero {
-                try? await Task.sleep(for: delay)
+                try? await Delay.sleep(for: delay)
                 guard !Task.isCancelled else { return }
             }
             await self?.write(id)

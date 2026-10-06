@@ -120,7 +120,7 @@ public final class PermissionCenter {
     private func accessibilityMayHaveChanged() {
         axRecheck?.cancel()
         axRecheck = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Delay.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
             self?.refresh()
         }

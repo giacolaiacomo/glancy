@@ -147,7 +147,7 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         let reopen = openedForDrag
         openedForDrag = false
         Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
+            try? await Delay.sleep(for: .milliseconds(400))
             guard let self, !self.dragOver else { return }
             self.hideDropTargets()
             if reopen && !self.droppedThisDrag { self.hub?.requestClose() }

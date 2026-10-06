@@ -180,7 +180,7 @@ public enum Diagnostics {
     /// Wired by `GlancyApp.run()` for `--diagnose`.
     static func scheduleReport(after delay: TimeInterval, stay: Bool) {
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delay))
+            try? await Delay.sleep(for: .seconds(delay))
             let text = await report(delegate: NSApp.delegate as AnyObject?)
             print(text)
             if let url = write(text) { print("written: \(url.path)") }

@@ -174,7 +174,7 @@ public final class SurfaceManager {
         resume()
         settleTask?.cancel()
         settleTask = Task { [weak self] in
-            try? await Task.sleep(for: Self.settleDelay)
+            try? await Delay.sleep(for: Self.settleDelay)
             guard !Task.isCancelled, let self, self.started, !self.events.paused else { return }
             self.settleTask = nil
             self.resume()
@@ -316,7 +316,7 @@ public final class SurfaceManager {
         reliefTask?.cancel()
         let delay = reliefDelay
         reliefTask = Task { [weak self] in
-            try? await Task.sleep(for: delay)
+            try? await Delay.sleep(for: delay)
             guard !Task.isCancelled, let self else { return }
             self.reliefTask = nil
             MemoryRelief.run()

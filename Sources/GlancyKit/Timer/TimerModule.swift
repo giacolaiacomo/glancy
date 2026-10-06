@@ -241,7 +241,7 @@ public final class TimerModule: GlancyModule {
         let target = TimerSchedule.nextWake(now: now, deadline: deadline, minuteText: visibility == .collapsed)
         wake = Task { [weak self] in
             // +50 ms so the boundary has strictly passed when we look again.
-            try? await Task.sleep(for: .seconds(max(0.05, target.timeIntervalSinceNow + 0.05)))
+            try? await Delay.sleep(for: .seconds(max(0.05, target.timeIntervalSinceNow + 0.05)))
             guard !Task.isCancelled else { return }
             self?.refresh(announce: true)
         }
@@ -254,7 +254,7 @@ public final class TimerModule: GlancyModule {
         guard ticker == nil else { return }
         ticker = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                try? await Delay.sleep(for: .seconds(1))
                 guard !Task.isCancelled, let self else { return }
                 self.model.now = .now
             }

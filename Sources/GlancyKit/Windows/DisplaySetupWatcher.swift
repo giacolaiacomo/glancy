@@ -39,7 +39,7 @@ final class DisplaySetupWatcher {
         pending?.cancel()
         let wait = debounce
         pending = Task { [weak self] in
-            try? await Task.sleep(for: wait)
+            try? await Delay.sleep(for: wait)
             guard !Task.isCancelled, let self else { return }
             self.pending = nil
             self.settled()

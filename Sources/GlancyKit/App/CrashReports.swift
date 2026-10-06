@@ -165,7 +165,7 @@ public enum CrashReports {
     /// crashed since it last looked.
     @MainActor static func checkAtLaunch(hub: ActivityHub) {
         Task.detached(priority: .utility) {
-            try? await Task.sleep(for: launchDelay)
+            try? await Delay.sleep(for: launchDelay)
             let fresh = check(defaults: .standard)
             guard let last = fresh.last else { return }
             await MainActor.run { show(hub: hub, summary: last, count: fresh.count) }

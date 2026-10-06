@@ -254,7 +254,7 @@ public final class AgentsModel {
         wakeTask?.cancel()
         wakeAt = next
         wakeTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(max(0.05, next.timeIntervalSince(t)) + 0.05))
+            try? await Delay.sleep(for: .seconds(max(0.05, next.timeIntervalSince(t)) + 0.05))
             guard !Task.isCancelled, let self else { return }
             self.wakeTask = nil
             self.wakeAt = nil

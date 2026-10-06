@@ -198,7 +198,7 @@ public final class LyricsController {
         let provider = provider, cache = cache
         fetchTask = Task { [weak self] in
             if delay > .zero {
-                try? await Task.sleep(for: delay)
+                try? await Delay.sleep(for: delay)
                 guard !Task.isCancelled else { return }
             }
             if let hit = await cache?.get(query) {
@@ -249,7 +249,7 @@ public final class LyricsController {
         let wait = delay + 0.03
         nextWake = t.addingTimeInterval(wait)
         wakeTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(wait))
+            try? await Delay.sleep(for: .seconds(wait))
             guard let self, !Task.isCancelled else { return }
             self.wakes += 1
             self.reschedule()

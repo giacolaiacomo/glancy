@@ -210,7 +210,7 @@ public final class MonitorSampler {
                 let snap = await worker.sample(gpu: gpu)
                 guard !Task.isCancelled, let self else { return }
                 self.adopt(snap)
-                try? await Task.sleep(for: interval)
+                try? await Delay.sleep(for: interval)
             }
         }
     }

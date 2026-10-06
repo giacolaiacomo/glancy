@@ -245,7 +245,7 @@ final class MenuBarWatcher {
         add(DistributedNotificationCenter.default(), Notification.Name("com.apple.accessibility.api")) { me, _ in
             me.axRetry?.cancel()
             me.axRetry = Task { [weak me] in
-                try? await Task.sleep(for: .milliseconds(600))
+                try? await Delay.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled else { return }
                 me?.cache.removeAll()
                 me?.refresh()

@@ -51,7 +51,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if settings.needsOnboarding, !CommandLine.arguments.contains("--selftest") {
             welcomeTask = Task { [weak self] in
                 // Let the surfaces settle after launch, then open once.
-                try? await Task.sleep(for: .milliseconds(700))
+                try? await Delay.sleep(for: .milliseconds(700))
                 self?.showWelcome()
             }
         }
@@ -82,7 +82,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                                      events: SystemEvents(), menuBar: nil, presents: true)
         self.manager = manager
         manager.start()
-        Lab.installSignals { [weak manager] in manager?.runTour(after: 0, scope: "all", rounds: Lab.rounds) }
+        Lab.installSignals { [weak manager] in manager?.runTour(after: 0, scope: Lab.scope, rounds: Lab.rounds) }
         print("lab: ready pid=\(getpid()) root=\(Lab.root.path) surface=\(Int(screen.frame.minX)),\(Int(screen.frame.minY))")
         fflush(stdout)
     }

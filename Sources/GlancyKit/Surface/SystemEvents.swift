@@ -112,7 +112,7 @@ final class SystemEvents {
         add(dn, Notification.Name("com.apple.accessibility.api")) { me in
             me.dockRetry?.cancel()
             me.dockRetry = Task { [weak me] in
-                try? await Task.sleep(for: .milliseconds(600))
+                try? await Delay.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled else { return }
                 me?.attachDock()
             }

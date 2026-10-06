@@ -16,7 +16,7 @@ extension SurfaceManager {
                     print(line); lines.append(line)
                 }
             }
-            func pause(_ s: Double) async { try? await Task.sleep(for: .seconds(s)) }
+            func pause(_ s: Double) async { try? await Delay.sleep(for: .seconds(s)) }
             guard let s = self.surfacesForTest.first else {
                 print("selftest: no notched display")
                 if CommandLine.arguments.contains("--exit") { NSApp.terminate(nil) }
@@ -50,9 +50,9 @@ extension SurfaceManager {
     /// mid-way is reported as "interrupted".
     func runTour(after delay: Double, scope: String, rounds: Int = 1) {
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delay))
+            try? await Delay.sleep(for: .seconds(delay))
             guard let s = self.surfacesForTest.first else { return }
-            func pause(_ t: Double = 0.7) async { try? await Task.sleep(for: .seconds(t)) }
+            func pause(_ t: Double = 0.7) async { try? await Delay.sleep(for: .seconds(t)) }
             @MainActor func log(_ step: String) {
                 let (now, peak) = Self.footprint()
                 var stats = malloc_statistics_t()

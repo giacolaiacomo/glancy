@@ -35,6 +35,12 @@ PATTERNS+=(
   'NSSharingServicePicker\('
 )
 
+# A cancelled Task.sleep keeps its task until the original deadline (an hour-long wait re-armed on
+# every open left one behind each time): waits go through Delay.sleep (Support/Delay.swift).
+PATTERNS+=(
+  'Task\.sleep\('
+)
+
 # NSAppleScript is not thread-safe and may block on the Automation prompt: every script runs on
 # AppleScriptRunner's one serial queue (Support/AppleScriptRunner.swift), never on main.
 PATTERNS+=(

@@ -73,7 +73,7 @@ final class PreviewOverlay {
         guard panel != nil, teardown == nil else { return }
         withAnimation(.easeIn(duration: 0.14)) { state.shown = false }
         teardown = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(180))
+            try? await Delay.sleep(for: .milliseconds(180))
             guard let self, !Task.isCancelled else { return }
             self.destroy()
         }

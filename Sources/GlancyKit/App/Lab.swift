@@ -8,7 +8,7 @@ import Foundation
 /// 20 000 pt left of every display, so it never shows on anyone's screen and never sees the pointer.
 /// It runs beside an installed Glancy without touching it.
 ///
-/// SIGUSR1 runs the tour (`GLANCY_LAB_ROUNDS`, default 1); SIGUSR2 prints the process's memory as
+/// SIGUSR1 runs the tour (`GLANCY_LAB_ROUNDS`, default 1; `GLANCY_LAB_SCOPE`); SIGUSR2 prints the process's memory as
 /// one `lab:` line. Both are dispatch sources: nothing wakes while the lab idles.
 public enum Lab {
     public nonisolated static let isActive: Bool =
@@ -85,6 +85,9 @@ public enum Lab {
             sources.append(source)
         }
     }
+
+    /// `GLANCY_LAB_SCOPE`: home, tabs, all (default) or a module id (open that tab and hold).
+    static var scope: String { ProcessInfo.processInfo.environment["GLANCY_LAB_SCOPE"] ?? "all" }
 
     static var rounds: Int {
         ProcessInfo.processInfo.environment["GLANCY_LAB_ROUNDS"].flatMap(Int.init) ?? 1

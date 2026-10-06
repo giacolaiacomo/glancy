@@ -942,7 +942,7 @@ final class WindowsModel {
             closeTask?.cancel()
             let delay = closeDelay
             closeTask = Task { [weak self] in
-                try? await Task.sleep(for: delay)
+                try? await Delay.sleep(for: delay)
                 guard let self, !Task.isCancelled, self.visible else { return }
                 self.onRequestClose?()
             }
@@ -955,7 +955,7 @@ final class WindowsModel {
         guard visible else { return }
         let d = outcomeDuration
         outcomeTask = Task { [weak self] in
-            try? await Task.sleep(for: d)
+            try? await Delay.sleep(for: d)
             guard let self, !Task.isCancelled else { return }
             self.outcome = nil
         }

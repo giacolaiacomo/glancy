@@ -41,7 +41,7 @@ public actor ClipboardDisk {
         pendingSave?.cancel()
         let delay = debounce
         pendingSave = Task {
-            try? await Task.sleep(for: delay)
+            try? await Delay.sleep(for: delay)
             guard !Task.isCancelled else { return }
             self.save(items)
         }

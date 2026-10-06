@@ -329,7 +329,7 @@ public final class TilingEngine {
             guard w.isTileable, !w.isProvisional else { continue }
             pendingAutoFit[id] = nil
             Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await Delay.sleep(for: .milliseconds(300))
                 guard let self, self.config.autoFitNewWindows, let plan = self.planFit(id) else { return }
                 await self.commit(plan, label: String(localized: "Auto-fit"))
             }

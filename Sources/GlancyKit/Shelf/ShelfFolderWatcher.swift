@@ -187,7 +187,7 @@ final class ShelfFolderWatcher {
         guard !pending.isEmpty else { settleTask = nil; return }
         let wait = settle
         settleTask = Task { [weak self] in
-            try? await Task.sleep(for: wait)
+            try? await Delay.sleep(for: wait)
             guard !Task.isCancelled else { return }
             self?.settleNow()
         }

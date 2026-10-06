@@ -134,7 +134,7 @@ public final class TaskWakeScheduler: WakeScheduling {
     public func schedule(at date: Date, _ fire: @escaping @MainActor () -> Void) -> WakeToken {
         let task = Task { @MainActor in
             // +50 ms so the deadline has strictly passed when the handler looks.
-            try? await Task.sleep(for: .seconds(max(0.05, date.timeIntervalSinceNow + 0.05)))
+            try? await Delay.sleep(for: .seconds(max(0.05, date.timeIntervalSinceNow + 0.05)))
             guard !Task.isCancelled else { return }
             fire()
         }

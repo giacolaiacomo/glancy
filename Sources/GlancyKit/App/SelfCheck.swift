@@ -106,7 +106,7 @@ public enum SelfCheck {
         let end = Date.now.addingTimeInterval(seconds)
         while !cond() {
             if Date.now > end { return false }
-            try? await Task.sleep(for: .milliseconds(50))
+            try? await Delay.sleep(for: .milliseconds(50))
         }
         return true
     }

@@ -173,10 +173,10 @@ final class SurfaceController: SurfaceModelDelegate {
         let entry = panel.convertPoint(toScreen: event.locationInWindow)
         intent.entered(at: entry, time: ProcessInfo.processInfo.systemUptime)
         hoverTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(HoverIntent.sampleDelay))
+            try? await Delay.sleep(for: .seconds(HoverIntent.sampleDelay))
             guard let self, !Task.isCancelled else { return }
             self.intent.sample(at: NSEvent.mouseLocation, time: ProcessInfo.processInfo.systemUptime)
-            try? await Task.sleep(for: .seconds(HoverIntent.dwell - HoverIntent.sampleDelay))
+            try? await Delay.sleep(for: .seconds(HoverIntent.dwell - HoverIntent.sampleDelay))
             guard !Task.isCancelled else { return }
             if self.intent.shouldOpen(stillInside: self.model.hovering) { self.manager?.open(self) }
         }
@@ -186,7 +186,7 @@ final class SurfaceController: SurfaceModelDelegate {
     private func scheduleLeaveClose() {
         leaveTask?.cancel()
         leaveTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(400))
+            try? await Delay.sleep(for: .milliseconds(400))
             guard let self, !Task.isCancelled, !self.model.hovering else { return }
             self.manager?.close(self)
         }

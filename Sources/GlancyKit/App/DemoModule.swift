@@ -58,11 +58,11 @@ public final class DemoModule: GlancyModule {
         guard started, cyclesPeeks, kind == .media, visibility == .collapsed else { return }
         loop = Task { [weak self] in
             var n = 0
-            try? await Task.sleep(for: .seconds(3))
+            try? await Delay.sleep(for: .seconds(3))
             while !Task.isCancelled {
                 self?.showSamplePeek(n)
                 n += 1
-                try? await Task.sleep(for: .seconds(30))
+                try? await Delay.sleep(for: .seconds(30))
             }
         }
     }

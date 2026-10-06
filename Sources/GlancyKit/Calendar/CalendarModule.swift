@@ -124,7 +124,7 @@ public final class CalendarModule: GlancyModule {
     private func storeChanged() {
         debounce?.cancel()
         debounce = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Delay.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
             self?.refresh()
         }
@@ -267,7 +267,7 @@ public final class CalendarModule: GlancyModule {
         guard let target = [CalendarLogic.nextBoundary(model.events, after: now, endWarning: warning), midnight].compactMap({ $0 }).min() else { return }
         wake = Task { [weak self] in
             // +0.5 s so the boundary has strictly passed when we re-evaluate.
-            try? await Task.sleep(for: .seconds(max(0.5, target.timeIntervalSinceNow + 0.5)))
+            try? await Delay.sleep(for: .seconds(max(0.5, target.timeIntervalSinceNow + 0.5)))
             guard !Task.isCancelled else { return }
             self?.refresh()
         }

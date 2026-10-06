@@ -250,7 +250,7 @@ public final class StatsSampler {
                 self.snapshot = self.engine.snapshot
                 self.samples = self.engine.samples
                 tick += 1
-                try? await Task.sleep(for: interval)
+                try? await Delay.sleep(for: interval)
             }
         }
     }

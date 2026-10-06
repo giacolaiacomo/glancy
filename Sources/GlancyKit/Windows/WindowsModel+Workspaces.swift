@@ -144,7 +144,7 @@ extension WindowsModel {
         guard !sticky else { return }
         let d = outcomeDuration + .seconds(1)
         workspaceStatusTask = Task { [weak self] in
-            try? await Task.sleep(for: d)
+            try? await Delay.sleep(for: d)
             guard let self, !Task.isCancelled else { return }
             self.workspaceStatus = nil
         }

@@ -277,7 +277,7 @@ public final class ControlModule: GlancyModule {
         guard wasOpen else { work(self); return }
         let delay = closeDelay
         Task { [weak self] in
-            try? await Task.sleep(for: delay)
+            try? await Delay.sleep(for: delay)
             guard let self else { return }
             work(self)
         }
@@ -372,7 +372,7 @@ public final class ControlModule: GlancyModule {
             model.prompt = .note(text, symbol: symbol)
             noteClear?.cancel()
             noteClear = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(3))
+                try? await Delay.sleep(for: .seconds(3))
                 guard !Task.isCancelled, let self else { return }
                 if case .note = model.prompt { model.prompt = nil }
             }

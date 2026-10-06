@@ -161,7 +161,7 @@ public final class WindowRegistry {
         while let handle = apps[pid], let attempt = registrationAttempts[pid], attempt < 6 {
             if await handle.perform({ $0.registerAppObservers() }) == true { registrationAttempts[pid] = nil; return }
             registrationAttempts[pid] = attempt + 1
-            try? await Task.sleep(for: .milliseconds(100 * (attempt + 1) * (attempt + 1)))
+            try? await Delay.sleep(for: .milliseconds(100 * (attempt + 1) * (attempt + 1)))
         }
     }
 
@@ -196,7 +196,7 @@ public final class WindowRegistry {
         if let pids { pendingPids.formUnion(pids) } else { pendingFull = true }
         reconcileTask?.cancel()
         reconcileTask = Task { [weak self] in
-            if delay > .zero { try? await Task.sleep(for: delay) }
+            if delay > .zero { try? await Delay.sleep(for: delay) }
             guard !Task.isCancelled else { return }
             await self?.reconcile()
         }

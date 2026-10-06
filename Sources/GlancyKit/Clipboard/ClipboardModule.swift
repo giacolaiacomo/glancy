@@ -143,10 +143,10 @@ public final class ClipboardModule: GlancyModule {
         pending?.cancel()
         let source = NSWorkspace.shared.frontmostApplication
         pending = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
+            try? await Delay.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
             self?.model.check(source: Self.notUs(source))
-            try? await Task.sleep(for: .milliseconds(450))
+            try? await Delay.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }
             self?.model.check(source: Self.notUs(source))
         }
@@ -172,11 +172,11 @@ public final class ClipboardModule: GlancyModule {
         pasteTask?.cancel()
         pasteTask = Task {
             // Let the panel close (and the target take focus back) before the keystroke.
-            try? await Task.sleep(for: .milliseconds(160))
+            try? await Delay.sleep(for: .milliseconds(160))
             guard !Task.isCancelled else { return }
             if let target, !target.isActive {
                 target.activate()
-                try? await Task.sleep(for: .milliseconds(120))
+                try? await Delay.sleep(for: .milliseconds(120))
             }
             Self.postPaste()
         }

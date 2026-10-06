@@ -222,7 +222,7 @@ public final class MonitorModule: GlancyModule {
         model.note = text
         noteClear?.cancel()
         noteClear = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Delay.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             self?.model.note = nil
         }

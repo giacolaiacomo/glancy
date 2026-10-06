@@ -288,7 +288,7 @@ public final class PowerModule: GlancyModule {
         readTasks[address] = Task { [weak self] in
             var elapsed: TimeInterval = 0
             for at in Self.connectReads {
-                try? await Task.sleep(for: .seconds(at - elapsed))
+                try? await Delay.sleep(for: .seconds(at - elapsed))
                 elapsed = at
                 guard !Task.isCancelled, let self else { return }
                 self.refreshBatteries()
@@ -330,7 +330,7 @@ public final class PowerModule: GlancyModule {
         let run = BluetoothBatteryReader.ProfilerRun()
         profilerRun = run
         profilerTask = Task { [weak self] in
-            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            if delay > 0 { try? await Delay.sleep(for: .seconds(delay)) }
             guard !Task.isCancelled else { return }
             let devices = await run.run()
             guard !Task.isCancelled, let self else { return }

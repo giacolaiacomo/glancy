@@ -98,7 +98,7 @@ public final class MediaModule: GlancyModule {
             // One retry: the test client occasionally misses its 3 s setup window under load.
             var ok = await adapter.healthCheck()
             if !ok, !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Delay.sleep(for: .seconds(2))
                 ok = await adapter.healthCheck()
             }
             guard let self, self.started, self.generation == gen else { return }
@@ -190,7 +190,7 @@ public final class MediaModule: GlancyModule {
     private func trigger() {
         guard started, model.source == .adapter, !stream.isRunning, triggerTask == nil else { return }
         triggerTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
+            try? await Delay.sleep(for: .milliseconds(300))
             guard let self, !Task.isCancelled else { return }
             self.triggerTask = nil
             self.ensureStream()
@@ -253,7 +253,7 @@ public final class MediaModule: GlancyModule {
         }
         restartTask?.cancel()
         restartTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            try? await Delay.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             self?.ensureStream()
         }
@@ -352,7 +352,7 @@ public final class MediaModule: GlancyModule {
         }
         guard let deadline else { return }
         lingerTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(max(0.5, deadline.timeIntervalSinceNow + 0.5)))
+            try? await Delay.sleep(for: .seconds(max(0.5, deadline.timeIntervalSinceNow + 0.5)))
             guard !Task.isCancelled else { return }
             self?.lingerFired()
         }
@@ -381,7 +381,7 @@ public final class MediaModule: GlancyModule {
         model.now = .now
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Delay.sleep(for: .milliseconds(500))
                 guard let self, !Task.isCancelled else { return }
                 self.model.now = .now
                 self.model.level &+= 1
@@ -399,7 +399,7 @@ public final class MediaModule: GlancyModule {
         artworkTask = Task { [weak self] in
             // Players publish artwork a beat after the title; try three times, then give up.
             for delay in [0.25, 1.5, 4.0] {
-                try? await Task.sleep(for: .seconds(delay))
+                try? await Delay.sleep(for: .seconds(delay))
                 guard !Task.isCancelled else { return }
                 guard let r = await adapter.fetch(artwork: true), !Task.isCancelled else { continue }
                 guard let self, self.started, self.generation == gen, self.session.info?.trackKey == key else { return }
@@ -428,7 +428,7 @@ public final class MediaModule: GlancyModule {
         guard let key = session.info?.trackKey else { return }
         peekTask?.cancel()
         peekTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(700))
+            try? await Delay.sleep(for: .milliseconds(700))
             guard let self, !Task.isCancelled, self.started, self.session.info?.trackKey == key,
                   self.session.isPlaying else { return }
             self.showPeek()

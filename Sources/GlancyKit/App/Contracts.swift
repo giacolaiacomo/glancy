@@ -155,7 +155,7 @@ public final class ActivityHub {
         let next = peekQueue.removeFirst()
         peek = next
         peekTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(next.duration))
+            try? await Delay.sleep(for: .seconds(next.duration))
             guard !Task.isCancelled else { return }
             self?.advancePeek()
         }
@@ -172,7 +172,7 @@ public final class ActivityHub {
         expiryTask?.cancel()
         if let soonest = activities.values.compactMap(\.expires).min() {
             expiryTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(max(0, soonest.timeIntervalSinceNow)))
+                try? await Delay.sleep(for: .seconds(max(0, soonest.timeIntervalSinceNow)))
                 guard !Task.isCancelled else { return }
                 self?.recompute()
             }

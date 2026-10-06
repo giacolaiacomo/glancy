@@ -104,7 +104,7 @@ final class WorkspaceRestorer {
             }
             if !launched.isEmpty {
                 let wanted = need.filter { launched.contains($0.key) }
-                if await waitForWindows(wanted, backend: backend) { try? await Task.sleep(for: settle) }
+                if await waitForWindows(wanted, backend: backend) { try? await Delay.sleep(for: settle) }
                 await backend.refresh()
                 plan = Self.plan(w, backend)
             }
@@ -142,7 +142,7 @@ final class WorkspaceRestorer {
             MainActor.assumeIsolated {
                 gate.continuation = cont
                 gate.timeout = Task { @MainActor in
-                    try? await Task.sleep(for: timeout)
+                    try? await Delay.sleep(for: timeout)
                     gate.finish(false)
                 }
                 @MainActor func arm() {

@@ -143,7 +143,7 @@ public final class VoiceNotes {
         let limit = maxLength
         deadline = Task { [weak self] in
             // One wake-up at the limit (the recorder also stops itself there).
-            try? await Task.sleep(for: .seconds(limit))
+            try? await Delay.sleep(for: .seconds(limit))
             guard !Task.isCancelled else { return }
             await self?.stop()
         }
@@ -356,7 +356,7 @@ public final class VoiceNotes {
         tick()
         tickTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: interval)
+                try? await Delay.sleep(for: interval)
                 guard !Task.isCancelled, let self else { return }
                 self.tick()
             }

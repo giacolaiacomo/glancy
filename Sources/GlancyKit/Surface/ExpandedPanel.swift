@@ -55,6 +55,7 @@ private struct TabBand: View {
         let symbol: String
         let title: String
         let selected: Bool
+        var badge = false
         let action: () -> Void
     }
 
@@ -63,7 +64,10 @@ private struct TabBand: View {
         // Home + tabs split in two; the gear always closes the right side.
         let leftCount = TabBandLayout.leftCount(items: items.count)
         let left = Array(items.prefix(leftCount)), right = Array(items.dropFirst(leftCount))
-        let gear = Item(id: "gear", symbol: "gearshape", title: tr("Settings"), selected: model.showingSettings) {
+        // A found update: a dot on the gear (Settings shows "Update to X.Y.Z").
+        let update = context.updates?.available != nil
+        let gear = Item(id: "gear", symbol: "gearshape", title: update ? tr("Update available") : tr("Settings"),
+                        selected: model.showingSettings, badge: update) {
             model.toggleSettings()
         }
         GeometryReader { geo in
@@ -82,7 +86,7 @@ private struct TabBand: View {
     }
 
     private func icon(_ i: Item, _ slot: CGFloat) -> some View {
-        TabIcon(symbol: i.symbol, title: i.title, selected: i.selected, action: i.action)
+        TabIcon(symbol: i.symbol, title: i.title, selected: i.selected, badge: i.badge, action: i.action)
             .frame(width: slot)
     }
 
@@ -132,6 +136,7 @@ private struct TabIcon: View {
     let symbol: String
     let title: String
     let selected: Bool
+    var badge = false
     let action: () -> Void
     @State private var hover = false
 
@@ -146,6 +151,11 @@ private struct TabIcon: View {
                 .foregroundStyle(selected ? Theme.primary : hover ? Theme.secondary : Theme.tertiary)
                 .frame(width: Self.iconWidth, height: 22)
                 .background(Capsule().fill(selected ? Theme.card : .clear))
+                .overlay(alignment: .topTrailing) {
+                    if badge {
+                        Circle().fill(Theme.done).frame(width: 5, height: 5).offset(x: -6, y: 4)
+                    }
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

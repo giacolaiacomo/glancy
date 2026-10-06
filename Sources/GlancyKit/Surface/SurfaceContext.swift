@@ -11,6 +11,8 @@ public final class SurfaceContext {
     /// App-level actions, wired by the AppDelegate (no-ops in the renderer).
     public var setModuleEnabled: (ModuleID, Bool) -> Void = { _, _ in }
     public var quit: () -> Void = {}
+    /// In-app updates (Sparkle); nil in the renderer, tests and dev builds that can't update.
+    public var updates: AppUpdates?
 
     public init(hub: ActivityHub, settings: AppSettings, launchAtLogin: LaunchAtLogin, modules: [any GlancyModule]) {
         self.hub = hub; self.settings = settings; self.launchAtLogin = launchAtLogin; self.modules = modules

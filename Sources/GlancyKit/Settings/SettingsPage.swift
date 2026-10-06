@@ -62,10 +62,13 @@ private struct SettingsIndex: View {
                     }
                 }
             }
-            HStack {
+            HStack(spacing: 8) {
                 Text(verbatim: "Glancy \(SettingsPage.version)")
                     .font(Theme.font(.xs))
                     .foregroundStyle(Theme.tertiary)
+                if let updates = context.updates, let v = updates.available {
+                    UpdateButton(updates: updates, version: v)
+                }
                 Spacer()
                 NotchTextButton(tr("Quit Glancy")) { context.quit() }
             }
@@ -146,6 +149,7 @@ private struct GeneralSection: View {
                     SettingsRow(tr("Pill on external displays"), note: tr("A small notch on screens without one")) {
                         NotchSwitch(isOn: $settings.externalPill)
                     }
+                    UpdatesSettingsRows(updates: context.updates, version: SettingsPage.version)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }

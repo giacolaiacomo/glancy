@@ -132,6 +132,7 @@ enum BuiltinCommands {
             PaletteItem(id: "system.displaysleep", title: CommandText.t("Turn Off Displays"), icon: .symbol("display"), tag: CommandText.t("System"),
                         keywords: ["display sleep", "screen off", "spegni schermo", "monitor"], primary: CommandText.t("Run")) { PaletteActions.sleepDisplays() },
         ]
+        out += updateItems(tag: glancy)
         // Every tab on the strip.
         let open = model.openTab
         for m in model.enabledSources() {
@@ -144,6 +145,19 @@ enum BuiltinCommands {
         }
         out.append(PaletteItem(id: "tab.home", title: L10n.tr(CommandText.t("Open %@"), tr("Home")), icon: .symbol("house"), tag: glancy,
                                keywords: ["home", "tab"], closesPanel: false, primary: CommandText.t("Open")) { open(nil) })
+        return out
+    }
+
+    /// "Check for Updates", and "Install Update X.Y.Z" (suggested) once a check found one.
+    static func updateItems(tag: String, updates: AppUpdates? = AppUpdates.current) -> [PaletteItem] {
+        guard let updates, updates.isSupported else { return [] }
+        let keywords = ["update", "updates", "upgrade", "version", "aggiorna", "aggiornamento", "aggiornamenti", "versione"]
+        var out = [PaletteItem(id: "glancy.updates.check", title: L10n.tr("Check for Updates"), icon: .symbol("arrow.triangle.2.circlepath"),
+                               tag: tag, keywords: keywords, primary: CommandText.t("Run")) { updates.checkNow() }]
+        if let v = updates.available {
+            out.append(PaletteItem(id: "glancy.updates.install", title: L10n.tr("Install Update %@", v), icon: .symbol("arrow.down.circle"),
+                                   tag: tag, keywords: keywords, rank: 60, primary: CommandText.t("Run")) { updates.install() })
+        }
         return out
     }
 }

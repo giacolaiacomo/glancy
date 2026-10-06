@@ -37,6 +37,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let manager = SurfaceManager(context: context)
         self.manager = manager
         manager.start()
+        startUpdates(defaults: .standard)
         startPermissions()
         // Glancy crashed since the last launch? One look, a few seconds in, off main.
         if !demo { CrashReports.checkAtLaunch(hub: hub) }
@@ -82,6 +83,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                                      events: SystemEvents(), menuBar: nil, presents: true)
         self.manager = manager
         manager.start()
+        // Inert unless GLANCY_UPDATE_FEED points the lab at a test feed (scripts/update-e2e.sh).
+        startUpdates(defaults: defaults)
         Lab.installSignals { [weak manager] in manager?.runTour(after: 0, scope: Lab.scope, rounds: Lab.rounds) }
         print("lab: ready pid=\(getpid()) root=\(Lab.root.path) surface=\(Int(screen.frame.minX)),\(Int(screen.frame.minY))")
         fflush(stdout)
@@ -94,9 +97,26 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard let context else { return }
         welcomeTask?.cancel()
+        updatesTask?.cancel()
         context.settings.permissions.stop()
         for m in context.modules where running.contains(m.id) { m.stop() }
         manager?.stop()
+    }
+
+    // MARK: Updates
+
+    private var updatesTask: Task<Void, Never>?
+
+    /// The updater (built on its first check) and the launch check, once the surface is up.
+    private func startUpdates(defaults: UserDefaults) {
+        guard let context else { return }
+        let updates = AppUpdates.live(defaults: defaults)
+        context.updates = updates
+        updatesTask = Task {
+            try? await Delay.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            updates.appLaunched()
+        }
     }
 
     // MARK: Permissions and first run

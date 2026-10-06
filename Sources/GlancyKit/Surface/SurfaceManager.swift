@@ -311,6 +311,8 @@ public final class SurfaceManager {
         for m in context.enabledModules { m.visibilityChanged(v) }
         if case .expanded = v {
             reliefTask?.cancel(); reliefTask = nil
+            // Opening the panel is the moment to look for an update (at most once a day).
+            if !wasExpanded { context.updates?.panelOpened() }
         } else if wasExpanded {
             scheduleRelief()
         }

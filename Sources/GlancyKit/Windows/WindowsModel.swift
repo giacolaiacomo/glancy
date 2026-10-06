@@ -207,10 +207,29 @@ final class WindowsModel {
         return picks.ids.compactMap { byID[$0] }
     }
 
-    /// The thumbnails for the current windows: Suggested first, then what makes sense for N.
+    /// The thumbnails for the current windows: Suggested first, then what makes sense for N;
+    /// with one window and others beside it, "Fill empty space" last.
     var layoutOptions: [WindowsAutoLayout.Option] {
         guard let d = display else { return [] }
-        return WindowsAutoLayout.options(count: layoutWindows.count, usable: d.usableFrame, gaps: grid)
+        let options = WindowsAutoLayout.options(count: layoutWindows.count, usable: d.usableFrame, gaps: grid)
+        return canFill ? options + [WindowsAutoLayout.fillOption] : options
+    }
+
+    /// One window to place and at least one other window taking room on this display.
+    var canFill: Bool {
+        let chosen = layoutWindows
+        guard chosen.count == 1, let id = chosen.first?.id else { return false }
+        return map?.windows.contains { $0.id != id && FreeSpace.occupies($0) } == true
+    }
+
+    /// The fill thumbnail is the one shown, and there is no free area big enough for it.
+    var fillHasNoRoom: Bool { shownLayout?.shape.kind == .fill && layoutPlan == nil }
+
+    /// What the fill thumbnail draws: the other windows and the free area, in screen coordinates.
+    var fillSketch: (others: [CGRect], free: CGRect?) {
+        guard let id = layoutWindows.first?.id else { return ([], nil) }
+        let others = (map?.windows ?? []).filter { $0.id != id && FreeSpace.occupies($0) }.map(\.frame)
+        return (others, backend.planFit(id)?.moves.first?.to)
     }
 
     /// The thumbnail shown on the map: the hovered one, else the chosen one (Suggested when the
@@ -234,6 +253,11 @@ final class WindowsModel {
 
     func planLayout(_ option: WindowsAutoLayout.Option) -> ArrangePlan? {
         guard let d = display else { return nil }
+        if option.shape.kind == .fill {
+            // The one chosen window into the largest area no other window covers.
+            guard canFill, let id = layoutWindows.first?.id else { return nil }
+            return backend.planFit(id)
+        }
         let windows = layoutWindows.map { PlanWindow(id: $0.id, frame: $0.frame, bundleID: $0.bundleID, title: $0.title) }
         guard !windows.isEmpty else { return nil }
         return WindowsAutoLayout.plan(option.shape, windows: windows, order: picks.isEmpty ? .minTravel : .given,
@@ -1030,6 +1054,7 @@ final class WindowsModel {
                                moves: [PlannedMove(windowID: id, from: w.frame, to: initial, cell: nil)])
         case .fit:
             plan = backend.planFit(id)
+            if plan == nil { return WindowsText.t("No empty space on this display") }
         case .undo:
             break
         }

@@ -17,6 +17,9 @@ public enum WindowsAutoLayout {
     /// What a layout is called (the thumbnails' captions).
     public enum Kind: String, Sendable, CaseIterable {
         case full, leftHalf, rightHalf, sideBySide, stacked, twoThirds, mainStack, columns, rows, grid
+        /// One window into the largest empty area of its screen (`FreeSpace`): not a grid shape,
+        /// its frame depends on where the other windows are.
+        case fill
     }
 
     /// A layout: cells of a grid, in reading order (top row first, left to right). Cell `i` goes to
@@ -79,6 +82,11 @@ public enum WindowsAutoLayout {
         public let suggested: Bool
     }
 
+    /// The "Fill empty space" thumbnail (one window chosen, other windows on the screen).
+    public static let fillOption = Option(
+        id: Kind.fill.rawValue,
+        shape: Shape(kind: .fill, cols: 1, rows: 1, cells: [CellRect(col: 0, row: 0)], label: nil), suggested: false)
+
     /// How windows meet cells: by least total movement, or in the given order (#1 → first cell).
     public enum Order: Sendable { case minTravel, given }
 
@@ -133,6 +141,7 @@ public enum WindowsAutoLayout {
         case .columns: return columns(Array(repeating: 1, count: max(1, n)), kind: .columns)
         case .rows: return columns(Array(repeating: 1, count: max(1, n)), kind: .rows).transposed()
         case .grid: return grid(n, cols: 2)
+        case .fill: return fillOption.shape
         }
     }
 

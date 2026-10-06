@@ -34,6 +34,7 @@ enum WindowsText {
         case .columns: return f("%d columns", n)
         case .rows: return f("%d rows", n)
         case .grid: return s.label.map { "\($0.cols)×\($0.rows)" } ?? f("%d windows", n)
+        case .fill: return t("Fill empty space")
         }
     }
 
@@ -52,6 +53,11 @@ enum WindowsText {
         "Full screen": "Schermo intero",
         "Left half": "Metà sinistra",
         "Right half": "Metà destra",
+        "Fill empty space": "Riempi il vuoto",
+        "No empty space on this display": "Nessuno spazio vuoto su questo schermo",
+        "Where no other window is": "Dove non c'è nessun'altra finestra",
+        "The front window, where no other window is": "La finestra davanti, dove non c'è nessun'altra finestra",
+        "Fill the empty space": "Riempi lo spazio vuoto",
         "Side by side": "Affiancate",
         "Stacked": "Una sopra l'altra",
         "Main + %d": "Principale + %d",

@@ -509,6 +509,11 @@ public final class WindowsModule: GlancyModule {
         case picked2
         /// Three picked, "3 columns" chosen instead of the suggestion.
         case picked3
+        /// One picked (Notes), Safari moved to the ultrawide: "Fill empty space" chosen, the free
+        /// right side of the built-in previewed on the map.
+        case fill
+        /// One picked, Safari covering the rest of the screen: nothing free to fill.
+        case fillNoRoom
         /// "?" open: the shortcuts.
         case help
         /// "More": the full map with grid, scope and strategies.
@@ -591,6 +596,14 @@ public final class WindowsModule: GlancyModule {
         case .picked3:
             model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, picked: [12, 11, 14],
                           layout: "columns")
+        case .fill, .fillNoRoom:
+            // Safari off to the ultrawide leaves the right of the built-in free; or over all of it.
+            if let i = sample.windows.firstIndex(where: { $0.id == 12 }) {
+                sample.windows[i].frame = state == .fill ? CGRect(x: 1200, y: 1300, width: 900, height: 740)
+                    : SampleWindowsBackend.builtIn.usableFrame
+            }
+            model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, picked: [14],
+                          layout: WindowsAutoLayout.fillOption.id)
         case .help:
             model.prepare(mode: .browse, display: nil, hover: nil, selection: nil, strategy: nil, outcome: nil, help: true)
         case .more:

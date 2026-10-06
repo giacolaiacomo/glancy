@@ -183,6 +183,16 @@ extension WindowsModel {
         return await commitCommand(plan, title: WindowsText.t("Center"))
     }
 
+    /// The front window into the largest area no other window covers on its display.
+    func fillCommand() async -> String {
+        let title = WindowsText.t("Fill empty space")
+        guard backend.isTrusted, backend.isRunning else { return WindowsText.t("Windows needs Accessibility") }
+        guard !busy else { return WindowsText.t("Busy — try again") }
+        guard let id = backend.targetWindowID, backend.window(id) != nil else { return WindowsText.t("No app in front") }
+        guard let plan = backend.planFit(id) else { return title + " · " + WindowsText.t("No empty space on this display") }
+        return await commitCommand(plan, title: title)
+    }
+
     nonisolated static func centred(_ frame: CGRect, in usable: CGRect) -> CGRect {
         let size = CGSize(width: min(frame.width, usable.width), height: min(frame.height, usable.height))
         return CGRect(x: (usable.midX - size.width / 2).rounded(), y: (usable.midY - size.height / 2).rounded(),

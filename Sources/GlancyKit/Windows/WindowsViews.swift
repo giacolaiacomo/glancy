@@ -837,8 +837,15 @@ private struct LayoutThumb: View {
         let shape = RoundedRectangle(cornerRadius: 8.ui, style: .continuous)
         Button { model.chooseLayout(option.id) } label: {
             VStack(spacing: 3.ui) {
-                MiniScreen(shape: option.shape, highlighted: chosen || hovered)
-                    .frame(width: width, height: height)
+                Group {
+                    if option.shape.kind == .fill, let d = model.display {
+                        let sketch = model.fillSketch
+                        FillScreen(usable: d.usableFrame, others: sketch.others, free: sketch.free, highlighted: chosen || hovered)
+                    } else {
+                        MiniScreen(shape: option.shape, highlighted: chosen || hovered)
+                    }
+                }
+                .frame(width: width, height: height)
                 Text(verbatim: WindowsText.caption(option))
                     .font(Theme.font(.xs, chosen ? .semibold : .medium))
                     .foregroundStyle(option.suggested ? WindowsStyle.accent : chosen || hovered ? Theme.primary : Theme.secondary)
@@ -894,6 +901,59 @@ private struct MiniScreen: View {
     }
 }
 
+/// "Fill empty space" as a small screen: the other windows faint, the free area where the chosen
+/// window goes in the accent (dashed when nothing is free).
+private struct FillScreen: View {
+    let usable: CGRect
+    let others: [CGRect]
+    let free: CGRect?
+    let highlighted: Bool
+
+    var body: some View {
+        GeometryReader { geo in
+            let inset: CGFloat = 3.ui
+            let sx = (geo.size.width - 2 * inset) / max(1, usable.width)
+            let sy = (geo.size.height - 2 * inset) / max(1, usable.height)
+            let toLocal = { (r: CGRect) -> CGRect in
+                let c = r.intersection(usable)
+                return CGRect(x: inset + (c.minX - usable.minX) * sx, y: inset + (usable.maxY - c.maxY) * sy,
+                              width: c.width * sx, height: c.height * sy)
+            }
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 5.ui, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                    .overlay(RoundedRectangle(cornerRadius: 5.ui, style: .continuous).strokeBorder(Color.white.opacity(0.16), lineWidth: 1.ui))
+                ForEach(Array(others.enumerated()), id: \.offset) { _, o in
+                    let r = toLocal(o)
+                    if r.width > 1, r.height > 1 {
+                        RoundedRectangle(cornerRadius: 1.5.ui, style: .continuous)
+                            .fill(Color.white.opacity(0.10))
+                            .overlay(RoundedRectangle(cornerRadius: 1.5.ui, style: .continuous).strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5.ui))
+                            .frame(width: r.width, height: r.height)
+                            .offset(x: r.minX, y: r.minY)
+                    }
+                }
+                if let free {
+                    let r = toLocal(free)
+                    RoundedRectangle(cornerRadius: 2.5.ui, style: .continuous)
+                        .fill(highlighted ? WindowsStyle.accent.opacity(0.42) : Color.white.opacity(0.16))
+                        .overlay(RoundedRectangle(cornerRadius: 2.5.ui, style: .continuous)
+                            .strokeBorder(WindowsStyle.accent.opacity(highlighted ? 0.9 : 0.5), style: StrokeStyle(lineWidth: 1.ui, dash: [2.ui, 1.5.ui])))
+                        .overlay {
+                            if r.width >= 9, r.height >= 9 {
+                                Text(verbatim: "1")
+                                    .font(.system(size: min(9.ui, r.height * 0.6), weight: .bold, design: .rounded))
+                                    .foregroundStyle(highlighted ? Theme.primary : Theme.secondary)
+                            }
+                        }
+                        .frame(width: max(1, r.width), height: max(1, r.height))
+                        .offset(x: r.minX, y: r.minY)
+                }
+            }
+        }
+    }
+}
+
 /// The map as the result of the shown layout, what it is, and Undo / Apply.
 private struct ResultRow: View {
     let model: WindowsModel
@@ -925,8 +985,12 @@ private struct ResultRow: View {
     @ViewBuilder private var detail: some View {
         if let o = model.outcome {
             Text(verbatim: o.line).foregroundStyle(o.allExact ? Theme.secondary : Theme.waiting).help(o.line)
+        } else if model.fillHasNoRoom {
+            Text(verbatim: WindowsText.t("No empty space on this display")).foregroundStyle(Theme.waiting)
         } else if model.layoutInPlace {
             Text(verbatim: WindowsText.t("Already in place")).foregroundStyle(Theme.done)
+        } else if model.shownLayout?.shape.kind == .fill {
+            Text(verbatim: WindowsText.t("Where no other window is")).foregroundStyle(Theme.secondary)
         } else if let p = model.layoutPlan, !p.untouched.isEmpty {
             Text(verbatim: WindowsText.f("%d left as they are", p.untouched.count)).foregroundStyle(Theme.waiting)
         } else if model.picks.count >= 2 {

@@ -1,7 +1,8 @@
 // Windows — what the command bar can do here: auto-arrange, the layouts for the display under the
-// pointer (halves, thirds, 2×2, left / right half, maximize, center), undo, save a workspace, and
-// restore each saved one. `results(for:)` answers a workspace's name, "layout 2x2" and
-// "save workspace <name>". Everything runs at once and reports in a peek; undo with ⌃⌥Z.
+// pointer (halves, thirds, 2×2, left / right half, maximize, fill the empty space, center), undo,
+// save a workspace, and restore each saved one. `results(for:)` answers a workspace's name,
+// "layout 2x2" and "save workspace <name>". Everything runs at once and reports in a peek; undo
+// with ⌃⌥Z.
 
 import Foundation
 
@@ -100,8 +101,13 @@ extension WindowsModule {
         LayoutCommand(id: "right", title: "Right half", subtitle: "The front window", symbol: "rectangle.righthalf.filled",
                       keywords: ["right", "half", "destra", "metà"], aliases: ["right", "right half", "destra"]),
         LayoutCommand(id: "maximize", title: "Maximize", subtitle: "The front window", symbol: "arrow.up.left.and.arrow.down.right",
-                      keywords: ["maximize", "maximise", "full", "fill", "massimizza", "intero"],
-                      aliases: ["maximize", "maximise", "max", "full", "fill", "massimizza"]),
+                      keywords: ["maximize", "maximise", "full", "massimizza", "intero"],
+                      aliases: ["maximize", "maximise", "max", "full", "massimizza"]),
+        LayoutCommand(id: "fill", title: "Fill the empty space", subtitle: "The front window, where no other window is",
+                      symbol: "rectangle.dashed",
+                      keywords: ["fill", "empty", "free", "space", "gap", "hole", "riempi", "vuoto", "libero", "spazio"],
+                      aliases: ["fill", "fill empty space", "fill space", "empty space", "free space", "riempi", "spazio vuoto",
+                                "spazio libero"]),
         LayoutCommand(id: "center", title: "Center", subtitle: "The front window, at its size", symbol: "rectangle.center.inset.filled",
                       keywords: ["center", "centre", "middle", "centra", "centro"], aliases: ["center", "centre", "centra", "centro"]),
     ]
@@ -119,6 +125,7 @@ extension WindowsModule {
                 case "halves": line = await self.model.layoutCommand(.sideBySide, count: 2)
                 case "thirds": line = await self.model.layoutCommand(.columns, count: 3)
                 case "grid": line = await self.model.layoutCommand(.grid, count: 4)
+                case "fill": line = await self.model.fillCommand()
                 default: line = await self.model.centerCommand()
                 }
                 self.peek(line)

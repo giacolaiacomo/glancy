@@ -78,12 +78,7 @@ public enum Lab {
             let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
             source.setEventHandler { @Sendable in
                 MainActor.assumeIsolated {
-                    if sig == SIGUSR1 { tour() } else {
-                        if ProcessInfo.processInfo.environment["GLANCY_LAB_TRACE"] != nil {
-                            for w in NSApp.windows { print("TRACE window \(type(of: w)) \(w.frame) visible=\(w.isVisible) content=\(String(describing: w.contentView.map { type(of: $0) })) sub=\(w.contentView?.subviews.map { String(describing: type(of: $0)) } ?? [])") }
-                        }
-                        print(report("now")); fflush(stdout)
-                    }
+                    if sig == SIGUSR1 { tour() } else { print(report("now")); fflush(stdout) }
                 }
             }
             source.resume()

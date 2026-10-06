@@ -11,8 +11,8 @@ struct ShelfScreenshotPeek: View {
     let url: URL
 
     var body: some View {
-        HStack(spacing: 8) {
-            ShelfPeekThumb(url: url, size: CGSize(width: 46, height: 28))
+        HStack(spacing: 8.ui) {
+            ShelfPeekThumb(url: url, size: CGSize(width: 46.ui, height: 28.ui))
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: L10n.tr("Screenshot"))
                     .font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
@@ -20,15 +20,15 @@ struct ShelfScreenshotPeek: View {
                     .font(Theme.font(.xs)).foregroundStyle(Theme.tertiary).lineLimit(1)
             }
             .fixedSize()
-            Spacer(minLength: 6)
-            HStack(spacing: 3) {
+            Spacer(minLength: 6.ui)
+            HStack(spacing: 3.ui) {
                 ShelfPeekButton(symbol: "doc.on.doc", help: L10n.tr("Copy")) { shelf.copyImage(url) }
                 ShelfPeekButton(symbol: "pencil.tip.crop.circle", help: L10n.tr("Annotate")) { shelf.annotate(url) }
                 ShelfPeekButton(symbol: "tray.and.arrow.down", help: L10n.tr("Keep on the shelf")) { shelf.keep(url) }
                 ShelfPeekButton(symbol: "trash", help: L10n.tr("Delete")) { shelf.trash(url) }
             }
         }
-        .frame(width: 290)
+        .frame(width: 290.ui)
     }
 }
 
@@ -38,9 +38,9 @@ struct ShelfDownloadPeek: View {
 
     var body: some View {
         let one = urls.count == 1 ? urls.first : nil
-        HStack(spacing: 8) {
-            ShelfPeekThumb(url: urls[0], urls: urls, size: CGSize(width: 24, height: 24), icon: true)
-            HStack(spacing: 4) {
+        HStack(spacing: 8.ui) {
+            ShelfPeekThumb(url: urls[0], urls: urls, size: CGSize(width: 24.ui, height: 24.ui), icon: true)
+            HStack(spacing: 4.ui) {
                 Text(verbatim: L10n.tr("Downloaded"))
                     .font(Theme.font(.m)).foregroundStyle(Theme.secondary)
                 Text(verbatim: one?.lastPathComponent ?? ShelfText.files(urls.count))
@@ -48,10 +48,10 @@ struct ShelfDownloadPeek: View {
                     .truncationMode(.middle)
             }
             .lineLimit(1)
-            .frame(maxWidth: 220, alignment: .leading)
+            .frame(maxWidth: 220.ui, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 6)
-            HStack(spacing: 3) {
+            Spacer(minLength: 6.ui)
+            HStack(spacing: 3.ui) {
                 if let one {
                     ShelfPeekButton(title: L10n.tr("Open"), help: L10n.tr("Open")) {
                         NSWorkspace.shared.open(one)
@@ -67,7 +67,7 @@ struct ShelfDownloadPeek: View {
                 }
             }
         }
-        .frame(minWidth: 250)
+        .frame(minWidth: 250.ui)
     }
 }
 
@@ -76,8 +76,8 @@ struct ShelfNotePeek: View {
     let symbol: String
     let text: String
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
+        HStack(spacing: 7.ui) {
+            Image(systemName: symbol).font(.system(size: 12.ui, weight: .medium)).foregroundStyle(Theme.secondary)
             Text(verbatim: text).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
         }
         .fixedSize()
@@ -102,9 +102,9 @@ struct ShelfPeekThumb: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: icon ? 0 : 5, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: icon ? 0 : 5.ui, style: .continuous))
         .overlay {
-            if !icon { RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1) }
+            if !icon { RoundedRectangle(cornerRadius: 5.ui, style: .continuous).strokeBorder(Theme.hairline, lineWidth: 1.ui) }
         }
         .overlay(ShelfMouseArea(onDrag: { view, event in
             let all = urls ?? [url]
@@ -141,13 +141,13 @@ struct ShelfPeekButton: View {
     var body: some View {
         Group {
             if let title {
-                Text(verbatim: title).font(Theme.font(.s, .semibold)).padding(.horizontal, 9)
+                Text(verbatim: title).font(Theme.font(.s, .semibold)).padding(.horizontal, 9.ui)
             } else if let symbol {
-                Image(systemName: symbol).font(.system(size: 11, weight: .medium)).frame(width: 24)
+                Image(systemName: symbol).font(.system(size: 11.ui, weight: .medium)).frame(width: 24.ui)
             }
         }
         .foregroundStyle(hover ? Theme.primary : Theme.secondary)
-        .frame(height: 22)
+        .frame(height: 22.ui)
         .background(Capsule().fill(hover ? Theme.hairline : Theme.card))
         .overlay(ShelfClickTarget(action: action))
         .onHover { hover = $0 }

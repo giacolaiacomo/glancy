@@ -78,12 +78,12 @@ struct PermissionsSection: View {
     var body: some View {
         let center = context.settings.permissions
         let rows = PermissionRows.visible(context)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             if welcome {
-                HStack(spacing: 8) {
+                HStack(spacing: 8.ui) {
                     GlancyGlyph()
                         .fill(Theme.secondary)
-                        .frame(width: 18, height: 9)
+                        .frame(width: 18.ui, height: 9.ui)
                     Text(verbatim: tr("Welcome to Glancy"))
                         .font(Theme.font(.xl, .semibold))
                         .foregroundStyle(Theme.primary)
@@ -93,10 +93,10 @@ struct PermissionsSection: View {
                         .font(Theme.font(.s))
                         .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
-                    Spacer(minLength: 6)
+                    Spacer(minLength: 6.ui)
                     NotchTextButton(tr("Done")) { context.settings.navigation.go(.index) }
                 }
-                .frame(height: 24)
+                .frame(height: 24.ui)
             } else {
                 SettingsHeader(context: context, title: tr("Permissions"))
             }
@@ -121,28 +121,28 @@ private struct PermissionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Circle()
                 .fill(dot)
-                .frame(width: 6, height: 6)
+                .frame(width: 6.ui, height: 6.ui)
             Image(systemName: PermissionRows.symbol(permission))
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11.ui, weight: .medium))
                 .foregroundStyle(Theme.secondary)
-                .frame(width: 16)
+                .frame(width: 16.ui)
             Text(verbatim: PermissionRows.title(permission))
                 .font(Theme.font(.m, .medium))
                 .foregroundStyle(Theme.primary)
                 .lineLimit(1)
-                .frame(width: 112, alignment: .leading)
+                .frame(width: 112.ui, alignment: .leading)
             Text(verbatim: PermissionRows.purpose(permission))
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.tertiary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             control
         }
-        .frame(height: 26)
+        .frame(height: 26.ui)
     }
 
     private var dot: Color {

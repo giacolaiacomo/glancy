@@ -29,7 +29,7 @@ struct NoteEditor: NSViewRepresentable {
         tv.isAutomaticTextReplacementEnabled = false
         tv.isContinuousSpellCheckingEnabled = false
         tv.insertionPointColor = .white
-        tv.textContainerInset = NSSize(width: 6, height: 8)
+        tv.textContainerInset = NSSize(width: 6.ui, height: 8.ui)
         tv.font = NoteStyle.font
         tv.typingAttributes = NoteStyle.base
         tv.selectedTextAttributes = [.backgroundColor: NSColor.white.withAlphaComponent(0.22)]
@@ -113,19 +113,19 @@ struct NoteEditor: NSViewRepresentable {
     }
 }
 
-/// Text attributes of the editor.
+/// Text attributes of the editor, at the chosen size (Settings → General → Size).
 @MainActor
 enum NoteStyle {
-    static let font = NSFont.systemFont(ofSize: 12.5)
+    static var font: NSFont { NSFont.systemFont(ofSize: 12.5.ui) }
     static let ink = NSColor.white.withAlphaComponent(0.92)
     static let done = NSColor.white.withAlphaComponent(0.38)
-    static let paragraph: NSParagraphStyle = {
+    static var paragraph: NSParagraphStyle {
         let p = NSMutableParagraphStyle()
-        p.lineSpacing = 2.5
+        p.lineSpacing = 2.5.ui
         return p
-    }()
-    static let base: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph]
-    static let heading = NSFont.systemFont(ofSize: 14, weight: .semibold)
+    }
+    static var base: [NSAttributedString.Key: Any] { [.font: font, .foregroundColor: ink, .paragraphStyle: paragraph] }
+    static var heading: NSFont { NSFont.systemFont(ofSize: 14.ui, weight: .semibold) }
     /// The dash and space before a box shrink to almost nothing: the box starts the line.
     static let tiny = NSFont.systemFont(ofSize: 1)
 }
@@ -187,7 +187,7 @@ final class NoteTextView: NSTextView {
         guard let lm = layoutManager, let tc = textContainer else { return .zero }
         let glyphs = lm.glyphRange(forCharacterRange: m.box, actualCharacterRange: nil)
         let r = lm.boundingRect(forGlyphRange: glyphs, in: tc).offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
-        let side: CGFloat = 12
+        let side: CGFloat = 12.ui
         // Centre on the line's text (the line fragment includes the line spacing below).
         let lineFont = NoteStyle.font
         let midY = r.minY + (lineFont.ascender - lineFont.descender) / 2 + 0.5
@@ -199,22 +199,24 @@ final class NoteTextView: NSTextView {
         for m in markers {
             let r = boxRect(m)
             guard r.intersects(dirtyRect) else { continue }
-            let path = NSBezierPath(roundedRect: r, xRadius: 3.5, yRadius: 3.5)
+            // Drawn for a 12 pt box, scaled with it (`k`) at a larger size.
+            let k = r.width / 12
+            let path = NSBezierPath(roundedRect: r, xRadius: 3.5 * k, yRadius: 3.5 * k)
             if m.checked {
                 NSColor.white.withAlphaComponent(0.8).setFill()
                 path.fill()
                 let tick = NSBezierPath()
-                tick.move(to: NSPoint(x: r.minX + 3, y: r.midY + 0.2))
-                tick.line(to: NSPoint(x: r.minX + 5.2, y: r.maxY - 3))
-                tick.line(to: NSPoint(x: r.maxX - 2.8, y: r.minY + 3.2))
-                tick.lineWidth = 1.6
+                tick.move(to: NSPoint(x: r.minX + 3 * k, y: r.midY + 0.2 * k))
+                tick.line(to: NSPoint(x: r.minX + 5.2 * k, y: r.maxY - 3 * k))
+                tick.line(to: NSPoint(x: r.maxX - 2.8 * k, y: r.minY + 3.2 * k))
+                tick.lineWidth = 1.6 * k
                 tick.lineCapStyle = .round
                 tick.lineJoinStyle = .round
                 NSColor.black.setStroke()
                 tick.stroke()
             } else {
                 NSColor.white.withAlphaComponent(0.5).setStroke()
-                path.lineWidth = 1.2
+                path.lineWidth = 1.2 * k
                 path.stroke()
             }
         }

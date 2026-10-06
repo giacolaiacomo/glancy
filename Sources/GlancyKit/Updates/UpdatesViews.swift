@@ -9,13 +9,13 @@ struct UpdateButton: View {
 
     var body: some View {
         Button { updates.install() } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "arrow.down.circle.fill").font(.system(size: 10, weight: .semibold))
+            HStack(spacing: 4.ui) {
+                Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.ui, weight: .semibold))
                 Text(verbatim: L10n.tr("Update to %@", version)).font(Theme.font(.s, .semibold))
             }
             .foregroundStyle(Color.black)
-            .padding(.horizontal, 9)
-            .frame(height: 22)
+            .padding(.horizontal, 9.ui)
+            .frame(height: 22.ui)
             .background(Capsule().fill(Theme.done.opacity(hover ? 1 : 0.9)))
             .contentShape(Capsule())
         }

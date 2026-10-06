@@ -10,13 +10,13 @@ struct ClipboardTabView: View {
     let onPasteSetting: (Bool) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8.ui) {
             ClipHeader(model: model, onPasteSetting: onPasteSetting)
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: 10.ui) {
                 ClipList(model: model)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 ClipPreview(model: model, item: model.previewItem)
-                    .frame(width: 176)
+                    .frame(width: 176.ui)
                     .frame(maxHeight: .infinity)
             }
         }
@@ -32,8 +32,8 @@ private struct ClipHeader: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
+        HStack(spacing: 8.ui) {
+            HStack(spacing: 6.ui) {
                 Image(systemName: "magnifyingglass")
                     .font(Theme.font(.s, .medium))
                     .foregroundStyle(Theme.tertiary)
@@ -56,21 +56,21 @@ private struct ClipHeader: View {
                     .font(Theme.font(.xs, .medium).monospacedDigit())
                     .foregroundStyle(Theme.tertiary)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 24)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.card))
+            .padding(.horizontal, 8.ui)
+            .frame(height: 24.ui)
+            .background(RoundedRectangle(cornerRadius: 8.ui, style: .continuous).fill(Theme.card))
             .onAppear { focused = true }
 
             if !model.copyKeysSeen {
                 Button { CopyKeyTap.requestPermission() } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4.ui) {
                         Image(systemName: "exclamationmark.circle")
                         Text(ClipText.t("⌘C not seen"))
                     }
                     .font(Theme.font(.xs, .medium))
                     .foregroundStyle(Theme.secondary)
-                    .padding(.horizontal, 7)
-                    .frame(height: 22)
+                    .padding(.horizontal, 7.ui)
+                    .frame(height: 22.ui)
                     .background(Capsule().fill(Theme.card))
                 }
                 .buttonStyle(.plain)
@@ -79,14 +79,14 @@ private struct ClipHeader: View {
 
             if model.settings.paused {
                 Button { model.settings.paused = false } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4.ui) {
                         Image(systemName: "pause.fill")
                         Text(ClipText.t("History paused"))
                     }
                     .font(Theme.font(.xs, .medium))
                     .foregroundStyle(Theme.waiting)
-                    .padding(.horizontal, 7)
-                    .frame(height: 22)
+                    .padding(.horizontal, 7.ui)
+                    .frame(height: 22.ui)
                     .background(Capsule().fill(Theme.card))
                 }
                 .buttonStyle(.plain)
@@ -125,7 +125,7 @@ private struct ClipMenu: View {
             Image(systemName: "ellipsis")
                 .font(Theme.font(.m, .semibold))
                 .foregroundStyle(Theme.secondary)
-                .frame(width: 26, height: 22)
+                .frame(width: 26.ui, height: 22.ui)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -150,19 +150,19 @@ private struct ClipList: View {
             } else {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 1) {
+                        LazyVStack(alignment: .leading, spacing: 1.ui) {
                             if !sections.pinned.isEmpty {
                                 ClipSectionTitle(ClipText.t("Pinned"))
                                 ForEach(sections.pinned) { item in
                                     ClipRow(model: model, item: item, selected: item.id == selectedID).id(item.id)
                                 }
-                                ClipSectionTitle(ClipText.t("Recent")).padding(.top, 3)
+                                ClipSectionTitle(ClipText.t("Recent")).padding(.top, 3.ui)
                             }
                             ForEach(sections.recent) { item in
                                 ClipRow(model: model, item: item, selected: item.id == selectedID).id(item.id)
                             }
                         }
-                        .padding(.bottom, model.confirmingClear ? 40 : 0)
+                        .padding(.bottom, model.confirmingClear ? 40.ui : 0)
                     }
                     .onChange(of: selectedID) { _, id in
                         guard let id, model.hovered == nil else { return }
@@ -181,10 +181,10 @@ private struct ClipSectionTitle: View {
     var body: some View {
         Text(text.uppercased())
             .font(Theme.font(.xs, .semibold))
-            .tracking(0.6)
+            .tracking(0.6.ui)
             .foregroundStyle(Theme.tertiary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, 6.ui)
+            .padding(.vertical, 2.ui)
     }
 }
 
@@ -195,7 +195,7 @@ private struct ClipRow: View {
     @State private var hover = false
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             ClipGlyph(model: model, item: item, side: 22)
             (item.kind == .image
                 ? Text(ClipText.kind(.image)) + Text("  " + item.preview).foregroundColor(Theme.tertiary)
@@ -213,23 +213,23 @@ private struct ClipRow: View {
             } else {
                 if item.pinned {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: 8, weight: .semibold))
+                        .font(.system(size: 8.ui, weight: .semibold))
                         .foregroundStyle(Theme.tertiary)
                 }
                 if let icon = model.thumbs.icon(item.sourceBundleID) {
-                    Image(nsImage: icon).resizable().frame(width: 14, height: 14)
+                    Image(nsImage: icon).resizable().frame(width: 14.ui, height: 14.ui)
                 }
                 Text(ClipText.relative(item.date, now: model.now))
                     .font(Theme.font(.xs).monospacedDigit())
                     .foregroundStyle(Theme.tertiary)
-                    .frame(minWidth: 24, alignment: .trailing)
+                    .frame(minWidth: 24.ui, alignment: .trailing)
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .frame(minHeight: 27)
+        .padding(.horizontal, 6.ui)
+        .padding(.vertical, 3.ui)
+        .frame(minHeight: 27.ui)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 7.ui, style: .continuous)
                 .fill(selected ? Theme.card : hover ? Theme.hairline.opacity(0.6) : .clear))
         .contentShape(Rectangle())
         .onHover { on in
@@ -262,7 +262,7 @@ private struct ClipIconButton: View {
             Image(systemName: symbol)
                 .font(Theme.font(.s, .medium))
                 .foregroundStyle(hover ? Theme.primary : Theme.secondary)
-                .frame(width: 22, height: 20)
+                .frame(width: 22.ui, height: 20.ui)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -281,11 +281,11 @@ private struct ClipGlyph: View {
     var body: some View {
         let px = Int(side * 2) * 2
         ZStack {
-            RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Theme.card)
+            RoundedRectangle(cornerRadius: 5.ui, style: .continuous).fill(Theme.card)
             if let img = model.thumbs.image(item, pixels: px) {
                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
                     .frame(width: side, height: side)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 5.ui, style: .continuous))
             } else {
                 Image(systemName: item.kind.symbol)
                     .font(.system(size: side * 0.48, weight: .medium))
@@ -305,9 +305,9 @@ private struct ClipEmpty: View {
     init(title: String, body: String?) { self.title = title; self.body_ = body }
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 6.ui) {
             Image(systemName: "doc.on.clipboard")
-                .font(.system(size: 18, weight: .light))
+                .font(.system(size: 18.ui, weight: .light))
                 .foregroundStyle(Theme.tertiary)
             Text(ClipText.t(title))
                 .font(Theme.font(.l, .semibold))
@@ -317,7 +317,7 @@ private struct ClipEmpty: View {
                     .font(Theme.font(.s))
                     .foregroundStyle(Theme.tertiary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 240)
+                    .frame(maxWidth: 240.ui)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -328,7 +328,7 @@ private struct ClipClearBar: View {
     let model: ClipboardModel
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Text(L10n.tr("Clear all %d items, pinned included?", model.items.count))
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.primary)
@@ -343,10 +343,10 @@ private struct ClipClearBar: View {
                 .font(Theme.font(.s, .semibold))
                 .foregroundStyle(Theme.failed)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 32)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.black))
-        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(Theme.hairline))
+        .padding(.horizontal, 10.ui)
+        .frame(height: 32.ui)
+        .background(RoundedRectangle(cornerRadius: 9.ui, style: .continuous).fill(Color.black))
+        .overlay(RoundedRectangle(cornerRadius: 9.ui, style: .continuous).stroke(Theme.hairline))
     }
 }
 
@@ -357,16 +357,16 @@ private struct ClipPreview: View {
     let item: ClipItem?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
             if let item {
                 content(item)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 footer(item)
             }
         }
-        .padding(9)
+        .padding(9.ui)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.card))
+        .background(RoundedRectangle(cornerRadius: 12.ui, style: .continuous).fill(Theme.card))
     }
 
     @ViewBuilder private func content(_ item: ClipItem) -> some View {
@@ -374,7 +374,7 @@ private struct ClipPreview: View {
         case .image:
             ClipPreviewImage(model: model, item: item)
         case .url:
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3.ui) {
                 Text(URL(string: item.text)?.host ?? item.text)
                     .font(Theme.font(.l, .semibold))
                     .foregroundStyle(Theme.primary)
@@ -385,10 +385,10 @@ private struct ClipPreview: View {
                     .lineLimit(5)
             }
         case .files:
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4.ui) {
                 ForEach(item.fileURLs.prefix(5), id: \.self) { url in
-                    HStack(spacing: 6) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().frame(width: 16, height: 16)
+                    HStack(spacing: 6.ui) {
+                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().frame(width: 16.ui, height: 16.ui)
                         Text(url.lastPathComponent)
                             .font(Theme.font(.s))
                             .foregroundStyle(Theme.primary)
@@ -413,22 +413,22 @@ private struct ClipPreview: View {
             Text(String(item.text.prefix(1200)))
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.secondary)
-                .lineSpacing(1)
+                .lineSpacing(1.ui)
                 .clipped()
         }
     }
 
     private func footer(_ item: ClipItem) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 5.ui) {
             if let icon = model.thumbs.icon(item.sourceBundleID) {
-                Image(nsImage: icon).resizable().frame(width: 12, height: 12)
+                Image(nsImage: icon).resizable().frame(width: 12.ui, height: 12.ui)
             }
             Text([item.sourceName, ClipText.relative(item.date, now: model.now)]
                 .compactMap { $0 }.joined(separator: " · "))
                 .font(Theme.font(.xs))
                 .foregroundStyle(Theme.tertiary)
                 .lineLimit(1)
-            Spacer(minLength: 4)
+            Spacer(minLength: 4.ui)
             Text(ClipText.t(model.settings.pasteAfterChoosing ? "⏎ paste" : "⏎ copy"))
                 .font(Theme.font(.xs, .medium))
                 .foregroundStyle(Theme.tertiary)
@@ -445,7 +445,7 @@ private struct ClipPreviewImage: View {
         Group {
             if let img = model.thumbs.image(item, pixels: Self.pixels) {
                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 6.ui, style: .continuous))
             } else {
                 Color.clear
             }

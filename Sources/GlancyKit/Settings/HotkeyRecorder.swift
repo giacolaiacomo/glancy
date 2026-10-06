@@ -156,7 +156,7 @@ struct HotkeyField: View {
     var body: some View {
         let recorder = HotkeyRecorder.shared
         let recording = recorder.recording == id
-        VStack(alignment: .trailing, spacing: 1) {
+        VStack(alignment: .trailing, spacing: 1.ui) {
             Button {
                 if recording { recorder.end() } else { recorder.begin(id, commit: onChange) }
             } label: {
@@ -164,12 +164,12 @@ struct HotkeyField: View {
                     .font(Theme.font(.s, recording ? .regular : .medium).monospacedDigit())
                     .foregroundStyle(recording ? Theme.secondary : hotkey.modifiers == 0 ? Theme.tertiary : Theme.primary)
                     .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .frame(minWidth: 64)
-                    .frame(height: 20)
+                    .padding(.horizontal, 8.ui)
+                    .frame(minWidth: 64.ui)
+                    .frame(height: 20.ui)
                     .background(Capsule().fill(recording || hover ? Color.white.opacity(0.12) : Theme.card))
                     .overlay(Capsule().strokeBorder(recording ? Theme.secondary : conflict != nil ? Theme.waiting.opacity(0.7) : .clear,
-                                                    lineWidth: 1))
+                                                    lineWidth: 1.ui))
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -177,7 +177,7 @@ struct HotkeyField: View {
             .help(tr("Click, then press the new shortcut. Esc cancels, ⌫ clears."))
             if let note = note(recording: recording, refused: recorder.refused) {
                 Text(verbatim: note)
-                    .font(.system(size: 9.5))
+                    .font(.system(size: 9.5.ui))
                     .foregroundStyle(recording ? Theme.tertiary : Theme.waiting)
                     .lineLimit(1)
                     .truncationMode(.tail)

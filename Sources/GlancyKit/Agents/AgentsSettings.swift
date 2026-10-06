@@ -12,11 +12,11 @@ struct AgentsSettingsSection: View {
 
     var body: some View {
         let _ = tick
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             ForEach(module.availableSources, id: \.self) { kind in
                 let status = module.sourceStatus(kind)
                 SettingsRow(kind.name, note: status.line, noteColor: color(status.level)) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 8.ui) {
                         if kind == .opencode, module.isSourceEnabled(kind), let installer = module.openCodeInstaller {
                             pluginButton(installer)
                         }

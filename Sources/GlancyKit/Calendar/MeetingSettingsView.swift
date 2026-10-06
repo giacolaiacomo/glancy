@@ -33,11 +33,11 @@ struct MeetingSettingsView: View {
     var body: some View {
         @Bindable var settings = module.settings
         let _ = tick
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .top, spacing: 22) {
+        VStack(alignment: .leading, spacing: 4.ui) {
+            HStack(alignment: .top, spacing: 22.ui) {
                 // Label and note over the choice: the three options need the column's width.
-                VStack(alignment: .leading, spacing: 4) {
-                    VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 4.ui) {
+                    VStack(alignment: .leading, spacing: 1.ui) {
                         Text(verbatim: CalL10n.focusSwitch).font(Theme.font(.m)).foregroundStyle(Theme.primary).lineLimit(1)
                         Text(verbatim: CalL10n.focusNote).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary).lineLimit(1)
                     }
@@ -48,9 +48,9 @@ struct MeetingSettingsView: View {
                                                      }),
                                   options: [(nil, CalL10n.off), (.calls, CalL10n.withLink), (.busy, CalL10n.anyBusy)])
                 }
-                .padding(.top, 3)
+                .padding(.top, 3.ui)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 4.ui) {
                     SettingsRow(CalL10n.endWarning, note: CalL10n.endWarningNote) {
                         NotchSegments(selection: $settings.endWarningMinutes,
                                       options: MeetingEndLogic.warningChoices.map { ($0, $0 == 0 ? CalL10n.off : "\($0)′") })
@@ -67,7 +67,7 @@ struct MeetingSettingsView: View {
             if settings.focusDuringMeetings, let focus = module.focus {
                 FocusSetupCard(focus: focus)
             }
-            SettingsGroupTitle(CalL10n.calendarsTitle).padding(.top, 8)
+            SettingsGroupTitle(CalL10n.calendarsTitle).padding(.top, 8.ui)
         }
         .onAppear { system = HotkeyConflict.systemHotkeys() }
     }
@@ -87,13 +87,13 @@ struct FocusSetupCard: View {
     var body: some View {
         Group {
             if focus.setup == .ready && !focus.lastRunFailed {
-                HStack(spacing: 6) {
-                    Circle().fill(Theme.done).frame(width: 6, height: 6)
+                HStack(spacing: 6.ui) {
+                    Circle().fill(Theme.done).frame(width: 6.ui, height: 6.ui)
                     Text(verbatim: FocusText.ready).font(Theme.font(.xs)).foregroundStyle(Theme.secondary)
-                    Spacer(minLength: 6)
+                    Spacer(minLength: 6.ui)
                     NotchTextButton(FocusText.checkAgain) { focus.checkSetup() }
                 }
-                .frame(minHeight: 24)
+                .frame(minHeight: 24.ui)
             } else {
                 card
             }
@@ -102,12 +102,12 @@ struct FocusSetupCard: View {
     }
 
     private var card: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 6) {
-                Image(systemName: "moon.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.waiting)
+        VStack(alignment: .leading, spacing: 5.ui) {
+            HStack(spacing: 6.ui) {
+                Image(systemName: "moon.fill").font(.system(size: 10.ui, weight: .semibold)).foregroundStyle(Theme.waiting)
                 Text(verbatim: FocusText.setupTitle).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                 Text(verbatim: status).font(Theme.font(.xs)).foregroundStyle(statusColor).lineLimit(1)
-                Spacer(minLength: 6)
+                Spacer(minLength: 6.ui)
                 NotchTextButton(FocusText.newShortcut) { FocusController.openShortcutsEditor() }
                 NotchTextButton(FocusText.checkAgain) { focus.checkSetup() }
             }
@@ -116,26 +116,26 @@ struct FocusSetupCard: View {
             Text(verbatim: FocusText.setupBody).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.waiting.opacity(0.25), lineWidth: 1))
+        .padding(.horizontal, 10.ui).padding(.vertical, 8.ui)
+        .background(RoundedRectangle(cornerRadius: 10.ui, style: .continuous).fill(Theme.card))
+        .overlay(RoundedRectangle(cornerRadius: 10.ui, style: .continuous).strokeBorder(Theme.waiting.opacity(0.25), lineWidth: 1.ui))
     }
 
     private func step(_ n: Int, _ name: String, _ action: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Text(verbatim: "\(n)").font(Theme.font(.xs, .bold)).foregroundStyle(.black)
-                .frame(width: 15, height: 15).background(Circle().fill(Theme.secondary))
+                .frame(width: 15.ui, height: 15.ui).background(Circle().fill(Theme.secondary))
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(name, forType: .string)
                 copied = name
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 4.ui) {
                     Text(verbatim: name).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
-                    Image(systemName: copied == name ? "checkmark" : "doc.on.doc").font(.system(size: 8, weight: .semibold))
+                    Image(systemName: copied == name ? "checkmark" : "doc.on.doc").font(.system(size: 8.ui, weight: .semibold))
                         .foregroundStyle(Theme.tertiary)
                 }
-                .padding(.horizontal, 7).frame(height: 18)
+                .padding(.horizontal, 7.ui).frame(height: 18.ui)
                 .background(Capsule().fill(Color.white.opacity(0.08)))
                 .contentShape(Capsule())
             }
@@ -170,7 +170,7 @@ struct TimerMoreSettingsView: View {
 
     var body: some View {
         @Bindable var settings = module.settings
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsRow(L10n.tr("Start the next phase automatically"), note: L10n.tr("Otherwise each phase waits for Start")) {
                 NotchSwitch(isOn: $settings.autoStartNext)
             }
@@ -181,6 +181,6 @@ struct TimerMoreSettingsView: View {
                 if settings.focusDuringWork, let focus = module.focus { FocusSetupCard(focus: focus) }
             }
         }
-        .padding(.top, 4)
+        .padding(.top, 4.ui)
     }
 }

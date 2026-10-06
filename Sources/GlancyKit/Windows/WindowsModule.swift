@@ -664,16 +664,16 @@ public final class WindowsModule: GlancyModule {
 private struct WindowsPeek: View {
     let text: String
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Image(systemName: "rectangle.split.2x2")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 12.ui, weight: .semibold))
                 .foregroundStyle(WindowsStyle.accent)
             Text(verbatim: text)
                 .font(Theme.font(.m, .medium))
                 .foregroundStyle(Theme.primary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 12.ui)
         .fixedSize()
     }
 }

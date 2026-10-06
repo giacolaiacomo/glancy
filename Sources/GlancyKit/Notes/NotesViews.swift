@@ -19,10 +19,10 @@ struct NotesTabView: View {
     let actions: NotesActions
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 10.ui) {
             NotesList(model: model, voice: voice, actions: actions)
-                .frame(width: 162)
-            VStack(spacing: 4) {
+                .frame(width: 162.ui)
+            VStack(spacing: 4.ui) {
                 if voice.phase == .recording || voice.phase == .saving {
                     VoiceRecordingPanel(voice: voice, stop: actions.stopRecording, cancel: { voice.cancel() })
                 } else if let card = voice.card {
@@ -34,8 +34,8 @@ struct NotesTabView: View {
                         if voice.speechAskID == note.id { VoiceSpeechAsk(voice: voice, noteID: note.id) }
                     }
                     NoteEditor(model: model, noteID: note.id, text: note.text, focusToken: model.focusToken)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.card))
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .background(RoundedRectangle(cornerRadius: 10.ui, style: .continuous).fill(Theme.card))
+                        .clipShape(RoundedRectangle(cornerRadius: 10.ui, style: .continuous))
                 } else {
                     NotesEmpty(model: model)
                 }
@@ -52,21 +52,21 @@ private struct NotesList: View {
     let actions: NotesActions
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 4) {
-                HStack(spacing: 5) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.tertiary)
+        VStack(spacing: 6.ui) {
+            HStack(spacing: 4.ui) {
+                HStack(spacing: 5.ui) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 10.ui, weight: .medium)).foregroundStyle(Theme.tertiary)
                     TextField("", text: Bindable(model).query,
                               prompt: Text(verbatim: L10n.tr("Search")).foregroundStyle(Theme.tertiary))
                         .textFieldStyle(.plain)
                         .font(Theme.font(.s))
                         .foregroundStyle(Theme.primary)
                 }
-                .padding(.horizontal, 7)
-                .frame(height: 22)
+                .padding(.horizontal, 7.ui)
+                .frame(height: 22.ui)
                 .background(Capsule().fill(Theme.card))
                 NotesIconButton(symbol: "square.and.pencil", label: L10n.tr("New note")) { model.create() }
-                    .padding(.trailing, -6)
+                    .padding(.trailing, -6.ui)
                 if voice.isRecording {
                     NotesIconButton(symbol: "stop.circle.fill", label: L10n.tr("Stop recording"), tint: Theme.failed) { actions.stopRecording() }
                 } else {
@@ -81,7 +81,7 @@ private struct NotesList: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 1) {
+                    LazyVStack(spacing: 1.ui) {
                         ForEach(list) { note in
                             NoteRow(note: note, selected: note.id == model.selectedID,
                                     pinned: note.id == model.settings.pinnedID) { model.select(note.id) }
@@ -102,23 +102,23 @@ private struct NoteRow: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: 1.ui) {
+                HStack(spacing: 4.ui) {
                     Text(verbatim: note.title ?? L10n.tr(note.audio == nil ? "New note" : "Voice note"))
                         .font(Theme.font(.s, .semibold))
                         .foregroundStyle(note.title == nil ? Theme.tertiary : Theme.primary)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if pinned {
-                        Image(systemName: "pin.fill").font(.system(size: 8)).foregroundStyle(Theme.tertiary)
+                        Image(systemName: "pin.fill").font(.system(size: 8.ui)).foregroundStyle(Theme.tertiary)
                     }
                 }
-                HStack(spacing: 5) {
+                HStack(spacing: 5.ui) {
                     Text(verbatim: NotesFormat.short(note.modified))
                         .foregroundStyle(Theme.secondary)
                     if let audio = note.audio {
-                        HStack(spacing: 2) {
-                            Image(systemName: "waveform").font(.system(size: 8, weight: .semibold))
+                        HStack(spacing: 2.ui) {
+                            Image(systemName: "waveform").font(.system(size: 8.ui, weight: .semibold))
                             Text(verbatim: VoiceTime.format(audio.duration)).monospacedDigit()
                         }
                         .foregroundStyle(Theme.secondary)
@@ -129,10 +129,10 @@ private struct NoteRow: View {
                 }
                 .font(Theme.font(.xs))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8.ui)
+            .padding(.vertical, 5.ui)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .background(RoundedRectangle(cornerRadius: 8.ui, style: .continuous)
                 .fill(selected ? Color.white.opacity(0.12) : hover ? Theme.card : .clear))
             .contentShape(Rectangle())
         }
@@ -148,7 +148,7 @@ private struct NoteToolbar: View {
     let actions: NotesActions
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 2.ui) {
             Group {
                 if voice.transcribing.contains(note.id) {
                     Text(verbatim: L10n.tr("Transcribing…")).foregroundStyle(Theme.secondary)
@@ -158,8 +158,8 @@ private struct NoteToolbar: View {
             }
             .font(Theme.font(.xs))
             .lineLimit(1)
-            .padding(.leading, 4)
-            Spacer(minLength: 4)
+            .padding(.leading, 4.ui)
+            Spacer(minLength: 4.ui)
             NotesIconButton(symbol: "checklist", label: L10n.tr("Add a checklist item")) { addChecklistItem() }
             let pinned = model.settings.pinnedID == note.id
             NotesIconButton(symbol: pinned ? "pin.fill" : "pin", label: L10n.tr(pinned ? "Unpin from Home" : "Pin to Home"),
@@ -181,20 +181,20 @@ private struct NoteToolbar: View {
                 Divider()
                 Button(L10n.tr("Open in Notes")) { actions.openInNotes(note) }
             } label: {
-                Image(systemName: "square.and.arrow.up").font(.system(size: 11, weight: .medium))
+                Image(systemName: "square.and.arrow.up").font(.system(size: 11.ui, weight: .medium))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
             .foregroundStyle(Theme.secondary)
-            .frame(width: 26, height: 22)
+            .frame(width: 26.ui, height: 22.ui)
             .help(L10n.tr("Send to…"))
             .disabled(note.isBlank)
             if model.confirmingDelete {
                 Button { model.delete(note.id) } label: {
                     Text(verbatim: L10n.tr("Delete?"))
                         .font(Theme.font(.xs, .semibold)).foregroundStyle(Theme.failed)
-                        .padding(.horizontal, 7).frame(height: 20)
+                        .padding(.horizontal, 7.ui).frame(height: 20.ui)
                         .background(Capsule().fill(Theme.failed.opacity(0.15)))
                 }
                 .buttonStyle(.plain)
@@ -202,7 +202,7 @@ private struct NoteToolbar: View {
                 NotesIconButton(symbol: "trash", label: L10n.tr("Delete note")) { model.confirmingDelete = true }
             }
         }
-        .frame(height: 22)
+        .frame(height: 22.ui)
     }
 
     /// A new "- [ ] " line at the end of the note, keyboard in the editor.
@@ -217,8 +217,8 @@ private struct NoteToolbar: View {
 private struct NotesEmpty: View {
     let model: NotesModel
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "note.text").font(.system(size: 22, weight: .light)).foregroundStyle(Theme.tertiary)
+        VStack(spacing: 8.ui) {
+            Image(systemName: "note.text").font(.system(size: 22.ui, weight: .light)).foregroundStyle(Theme.tertiary)
             Text(verbatim: L10n.tr("No notes yet")).font(Theme.font(.l, .semibold)).foregroundStyle(Theme.secondary)
             NotchTextButton(L10n.tr("New note")) { model.create() }
         }
@@ -237,9 +237,9 @@ struct NotesIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 11.ui, weight: .medium))
                 .foregroundStyle(tint ?? (on || hover ? Theme.primary : Theme.secondary))
-                .frame(width: 26, height: 22)
+                .frame(width: 26.ui, height: 22.ui)
                 .background(Capsule().fill(hover ? Theme.card : .clear))
                 .contentShape(Rectangle())
         }
@@ -259,10 +259,10 @@ struct NotesHomeCard: View {
     let open: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 3.ui) {
             Button(action: open) {
-                HStack(spacing: 5) {
-                    Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(Theme.tertiary)
+                HStack(spacing: 5.ui) {
+                    Image(systemName: "pin.fill").font(.system(size: 9.ui)).foregroundStyle(Theme.tertiary)
                     Text(verbatim: note.title ?? L10n.tr("New note"))
                         .font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                     Spacer(minLength: 0)
@@ -271,11 +271,11 @@ struct NotesHomeCard: View {
             }
             .buttonStyle(.plain)
             ForEach(Array(NotesFormat.previewLines(note.text, max: 3).enumerated()), id: \.offset) { _, line in
-                HStack(spacing: 5) {
+                HStack(spacing: 5.ui) {
                     if let box = line.box {
                         Button { model.toggleCheck(note.id, at: box) } label: {
                             Image(systemName: line.checked ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 10)).foregroundStyle(line.checked ? Theme.tertiary : Theme.secondary)
+                                .font(.system(size: 10.ui)).foregroundStyle(line.checked ? Theme.tertiary : Theme.secondary)
                         }
                         .buttonStyle(.plain)
                     }

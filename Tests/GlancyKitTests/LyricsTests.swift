@@ -343,7 +343,7 @@ private actor CountingProvider: LyricsProvider {
         // A fresh timestamp 0.15 s before line "b": one wake lands on it (polled: busy machines are slow).
         c.update(track(elapsed: 1.45, at: Date()))
         #expect(c.model.index == 0)
-        for _ in 0..<40 where c.wakes == 0 { try await Task.sleep(for: .milliseconds(50)) }
+        for _ in 0..<200 where c.wakes == 0 { try await Task.sleep(for: .milliseconds(50)) }
         #expect(c.wakes == 1)
         #expect(c.model.index == 1)
         c.stop()

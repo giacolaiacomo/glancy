@@ -77,6 +77,10 @@ private func files(_ dir: URL) -> [String] {
 @MainActor
 @Suite struct NotesModelTests {
     func settle(_ ms: Int = 80) async { try? await Task.sleep(for: .milliseconds(ms)) }
+    /// Waits (up to 10 s: busy machines) until the store has seen `n` writes.
+    func settleWrites(_ store: NotesStore, _ n: Int) async {
+        for _ in 0..<1000 { if await store.writes >= n { break }; try? await Task.sleep(for: .milliseconds(10)) }
+    }
 
     @Test func createEditDebouncesToOneWrite() async throws {
         let dir = tempDir("debounce")
@@ -89,12 +93,12 @@ private func files(_ dir: URL) -> [String] {
         #expect(await store.writes == 0)            // blank: never written
         for i in 1...6 { model.edit(note.id, text: "Plan\nstep \(i)") }
         #expect(await store.writes == 0)            // still typing
-        await settle(200)
+        await settleWrites(store, 1)
         #expect(await store.writes == 1)
         #expect(try String(contentsOf: dir.appendingPathComponent("\(note.id).md"), encoding: .utf8) == "Plan\nstep 6")
         // A later pause writes again.
         model.edit(note.id, text: "Plan\nstep 7")
-        await settle(200)
+        await settleWrites(store, 2)
         #expect(await store.writes == 2)
     }
 

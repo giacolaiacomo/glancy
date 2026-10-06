@@ -108,10 +108,11 @@ The [GitHub Actions workflow](.github/workflows/release.yml) builds and checks e
 **Homebrew** (installs the notarized app)
 
 ```sh
+brew trust giacolaiacomo/tap        # once: recent Homebrew asks before loading casks from a third-party tap
 brew install --cask giacolaiacomo/tap/glancy
 ```
 
-To update: `brew upgrade --cask glancy`. To remove it: `brew uninstall --cask glancy` (add `--zap` to also remove its data and settings). If you installed the old formula, which built from source, run `brew uninstall glancy` first. To start it at login, turn on **Launch at login** in Settings → General.
+Glancy then updates itself (Homebrew knows, so `brew upgrade` leaves it alone); `brew upgrade --cask glancy` also works. To remove it: `brew uninstall --cask glancy` (add `--zap` to also remove its data and settings). If you installed the old formula, which built from source, run `brew uninstall glancy` first. To start it at login, turn on **Launch at login** in Settings → General.
 
 **From source**
 

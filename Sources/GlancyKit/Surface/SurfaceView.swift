@@ -124,7 +124,7 @@ private struct Wings: View {
                     .id(hub.top?.id)
                     .padding(outerLeading ? .leading : .trailing, SurfaceLayout.wingOuterPad - 4)
                     .padding(outerLeading ? .trailing : .leading, SurfaceLayout.wingInnerGap - 4)
-                    .transition(.blurReplace)
+                    .transition(.blurFade)
             }
         }
         .frame(width: width, height: notch.height)
@@ -153,7 +153,7 @@ private struct PeekDrop: View {
                         model.showPeek(peek.id, contentWidth: w)
                     }
                     .id(peek.id)
-                    .transition(.blurReplace)
+                    .transition(.blurFade)
             }
         }
         .frame(height: Theme.peekEventDrop)

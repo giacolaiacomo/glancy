@@ -31,14 +31,14 @@ struct ExpandedPanel: View {
     @ViewBuilder private var page: some View {
         if model.showingSettings {
             ScrollView(.vertical, showsIndicators: false) { SettingsPage(context: context) }
-                .transition(.blurReplace)
+                .transition(.blurFade)
         } else if let id = model.selectedTab, let tab = context.tabs.first(where: { $0.module == id }) {
             tab.content()
                 .id(id)
-                .transition(.blurReplace)
+                .transition(.blurFade)
         } else {
             HomePage(context: context)
-                .transition(.blurReplace)
+                .transition(.blurFade)
         }
     }
 }
@@ -231,4 +231,19 @@ public struct GlancyGlyph: Shape {
         p.closeSubpath()
         return p
     }
+}
+
+/// Fade through a blur, like `.blurReplace` but without its scale. A scaled transition redraws
+/// every text it moves at each in-between size, and CoreGraphics keeps a glyph bitmap for every
+/// size it has drawn: ~18 MB of glyphs after a walk through the tabs, held for good.
+struct BlurFade: Transition {
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content
+            .blur(radius: phase.isIdentity ? 0 : 8)
+            .opacity(phase.isIdentity ? 1 : 0)
+    }
+}
+
+extension Transition where Self == BlurFade {
+    static var blurFade: BlurFade { BlurFade() }
 }

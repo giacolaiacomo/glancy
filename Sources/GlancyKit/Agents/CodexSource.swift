@@ -88,7 +88,10 @@ final class CodexSessionsReader: @unchecked Sendable {
     /// Followed rollouts (tests: the cap holds).
     var trackedCount: Int { queue.sync { tracks.count } }
     /// Tests: whether a rollout is being followed.
-    func isTracking(_ url: URL) -> Bool { queue.sync { tracks[url.path] != nil } }
+    func isTracking(_ url: URL) -> Bool {
+        let want = url.resolvingSymlinksInPath().path   // /var vs /private/var
+        return queue.sync { tracks.keys.contains { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path == want } }
+    }
 
     // MARK: Rebuild
 

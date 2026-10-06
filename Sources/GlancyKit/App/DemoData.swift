@@ -27,6 +27,8 @@ public enum DemoData {
                                           battery: BluetoothBattery(left: 82, right: 90, case: 40))])
         // Tiling shown as available (the synthetic desk needs no Accessibility; nothing is moved).
         set.modules.compactMap { $0 as? AgentsModule }.first?.prepareForRender(.tilingReady)
+        // Plan limits: Burny's demo readings (no CLI is run, nothing of the user's is read).
+        set.modules.compactMap { $0 as? AgentsModule }.first?.seedLimitsSample(now: now)
         return set
     }
 

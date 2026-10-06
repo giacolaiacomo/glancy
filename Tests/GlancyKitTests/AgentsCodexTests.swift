@@ -98,7 +98,8 @@ private func ts(_ s: String) -> Date { CodexRollout.parseTimestamp(s)! }
     #expect(d(CodexFixtures.userItem("hi", "2026-09-22T10:26:43.300Z")) == .full(limit: 1 << 20))
     #expect(d(CodexFixtures.commandItem("2026-09-22T10:26:43.300Z")) == .skip)
     #expect(d(CodexFixtures.output("c", "2026-09-22T10:26:43.300Z")) == .prefixOnly)
-    #expect(d(CodexFixtures.tokenCount("2026-09-22T10:26:43.300Z")) == .skip)
+    // token_count carries the plan's rate_limits (Codex limits): small, decoded.
+    #expect(d(CodexFixtures.tokenCount("2026-09-22T10:26:43.300Z")) == .full(limit: 64 << 10))
     #expect(d(CodexFixtures.reasoning("2026-09-22T10:26:43.300Z", size: 10)) == .skip)
     #expect(d(#"{"timestamp":"x","type":"world_state","payload":{"full":true}}"#) == .skip)
     #expect(d(#"{"timestamp":"x","type":"some_future_type","payload":{"type":"new"}}"#) == .skip)
@@ -274,7 +275,9 @@ private final class Updates: @unchecked Sendable {
     private let lock = NSLock()
     private var _rebuilt: AgentSessionStore?
     private var _events: [(AgentEvent, Bool)] = []
+    private var _limits: [UsageReading] = []
     var rebuilt: AgentSessionStore? { lock.withLock { _rebuilt } }
+    var limits: [UsageReading] { lock.withLock { _limits } }
     var events: [(event: AgentEvent, quiet: Bool)] { lock.withLock { _events.map { ($0.0, $0.1) } } }
     var deliver: CodexSessionsReader.Deliver {
         { [self] u in
@@ -282,6 +285,7 @@ private final class Updates: @unchecked Sendable {
                 switch u {
                 case .rebuilt(let s): _rebuilt = s
                 case let .events(e, quiet): _events += e.map { ($0, quiet) }
+                case .limits(let r): _limits.append(r)
                 }
             }
         }
@@ -407,5 +411,65 @@ private func nowStamp(_ offset: TimeInterval = 0) -> String {
     write([CodexFixtures.meta("late", at: nowStamp()), CodexFixtures.taskStarted(nowStamp())],
           to: root.appendingPathComponent("2026/10/06/rollout-late.jsonl"))
     #expect(await eventually { u.rebuilt?.sessions["codex:late"] != nil || u.events.contains { $0.event.sessionID == "codex:late" } })
+    reader.stop()
+}
+
+// MARK: Plan limits from the rollout stream (rate_limits in token_count events)
+
+extension CodexFixtures {
+    /// A real `token_count` line's shape (Codex 0.153), with made-up numbers.
+    static func rateLimits(_ t: String, primary: Double = 97, secondary: Double = 31) -> String {
+        #"{"timestamp":"\#(t)","ordinal":7,"type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"codex","limit_name":null,"primary":{"used_percent":\#(primary),"window_minutes":300,"resets_at":1790131440},"secondary":{"used_percent":\#(secondary),"window_minutes":10080,"resets_at":1790679309},"credits":null,"individual_limit":null,"spend_control_reached":null,"plan_type":"plus","rate_limit_reached_type":null}}}"#
+    }
+
+    /// The other limit id Codex logs, with no windows: not the plan's limits.
+    static func premiumLimits(_ t: String) -> String {
+        #"{"timestamp":"\#(t)","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"premium","limit_name":null,"primary":null,"secondary":null,"credits":{"has_credits":false,"unlimited":false,"balance":"0"},"individual_limit":null,"spend_control_reached":null,"plan_type":"plus","rate_limit_reached_type":null}}}"#
+    }
+}
+
+@Test func codexRateLimitsBecomeTheRolloutsReading() {
+    let (events, state) = parse([CodexFixtures.meta(), CodexFixtures.rateLimits("2026-09-22T22:16:05.696Z"),
+                                 CodexFixtures.premiumLimits("2026-09-22T22:16:06.000Z")])
+    #expect(events.map(\.kind) == [.sessionStart])   // limits are no session event
+    let r = state.rateLimits
+    #expect(r?.service == .codex)
+    #expect(r?.plan == "Plus")
+    #expect(r?.limits.map(\.kind) == [.session(hours: 5), .week(model: nil)])
+    #expect(r?.limits.map(\.percent) == [97, 31])
+    #expect(r?.limits.first?.resetsAt == Date(timeIntervalSince1970: 1790131440))
+    #expect(r?.limits.first?.window == TimeInterval(5 * 3600))
+    #expect(r?.updated == ts("2026-09-22T22:16:05.696Z"))   // the premium line (no windows) did not replace it
+}
+
+@Test func codexReaderDeliversLimitsOnRebuildAndLive() async {
+    let root = tempRoot(); defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+    let a = root.appendingPathComponent("2026/10/06/rollout-a.jsonl")
+    write([CodexFixtures.meta("a", at: nowStamp(-20)), CodexFixtures.taskStarted(nowStamp(-19)),
+           CodexFixtures.rateLimits(nowStamp(-18), primary: 40)], to: a)
+    let reader = CodexSessionsReader(root: root)
+    let u = Updates()
+    reader.start(u.deliver)
+    #expect(await eventually { u.limits.first?.limits.first?.percent == 40 })
+    // A newer reading streams in with the rollout's new bytes.
+    write([CodexFixtures.rateLimits(nowStamp(), primary: 55)], to: a, append: true)
+    #expect(await eventually { u.limits.last?.limits.first?.percent == 55 })
+    #expect(u.limits.count == 2)
+    reader.stop()
+}
+
+@Test func codexReaderFindsLimitsInAnOldRolloutAtLaunch() async {
+    // Codex last ran two weeks ago: its rollout is past the followed window, read backwards once.
+    let root = tempRoot(); defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+    let old = root.appendingPathComponent("2026/09/22/rollout-old.jsonl")
+    write([CodexFixtures.meta("old"), CodexFixtures.rateLimits("2026-09-22T22:16:05.696Z"),
+           CodexFixtures.reasoning("2026-09-22T22:16:06.000Z", size: 300_000)], to: old)
+    try? FileManager.default.setAttributes([.modificationDate: Date.now.addingTimeInterval(-14 * 86400)], ofItemAtPath: old.path)
+    let reader = CodexSessionsReader(root: root)
+    let u = Updates()
+    reader.start(u.deliver)
+    #expect(await eventually { !u.limits.isEmpty })
+    #expect(u.limits.first?.limits.map(\.percent) == [97, 31])
+    #expect(!reader.isTracking(old))
     reader.stop()
 }

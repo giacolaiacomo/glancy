@@ -190,6 +190,8 @@ public enum AgentSourceUpdate: Sendable {
     case rebuilt(AgentSessionStore)
     /// `quiet`: catching up on history (a newly followed file): applied without peeks.
     case events([AgentEvent], quiet: Bool)
+    /// The plan's limits (Codex `rate_limits`), newer than the last delivered.
+    case limits(UsageReading)
 }
 
 /// One provider of sessions. Implementations watch their data with file-system events (never a

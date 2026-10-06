@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import Sparkle
 
 /// Sparkle 2 behind `UpdateDriver`. Built on the first check (never at launch), lives for the rest
@@ -107,7 +108,16 @@ extension SparkleDriver: @preconcurrency SPUStandardUserDriverDelegate {
 /// so scripts/update-e2e.sh exercises download, EdDSA check, install and relaunch with no window.
 @MainActor
 final class UnattendedUserDriver: NSObject, SPUUserDriver {
-    private func log(_ s: String) { print("updates: \(s)"); fflush(stdout) }
+    override init() {
+        super.init()
+        let info = Bundle.main.infoDictionary ?? [:]
+        log("unattended updater in \(Bundle.main.bundleIdentifier ?? "?") \(info["CFBundleShortVersionString"] ?? "?") (\(info["CFBundleVersion"] ?? "?")), pid \(getpid())")
+    }
+
+    /// Unified log (an app opened by Launch Services has no stdout):
+    /// `log show --predicate 'subsystem == "ai.glancy.updates"'`.
+    private static let logger = Logger(subsystem: "ai.glancy.updates", category: "unattended")
+    private func log(_ s: String) { Self.logger.notice("\(s, privacy: .public)") }
 
     func show(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) {
         reply(SUUpdatePermissionResponse(automaticUpdateChecks: false, sendSystemProfile: false))

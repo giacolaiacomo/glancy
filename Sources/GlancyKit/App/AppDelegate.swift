@@ -112,10 +112,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let context else { return }
         let updates = AppUpdates.live(defaults: defaults)
         context.updates = updates
-        updatesTask = Task {
+        updatesTask = Task { [weak self] in
             try? await Delay.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             updates.appLaunched()
+            self?.updatesTask = nil   // a finished task kept by its handle still counts (ram-lab)
         }
     }
 

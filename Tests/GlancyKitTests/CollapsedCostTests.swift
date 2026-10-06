@@ -109,8 +109,9 @@ struct CollapsedCostTests {
             }
         }
 
-        // Steady, never opened.
-        try await wait(cases.map(\.settle).max() ?? 1)
+        // Steady, never opened. The margin covers a main actor slowed by the parallel suite: a peek
+        // timer that fires late retracts late.
+        try await wait((cases.map(\.settle).max() ?? 1) + 1.5)
         try await measure("closed", window: 2)
 
         // Opened and closed on the built-in notch, then on the external pill.

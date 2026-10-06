@@ -23,7 +23,8 @@ static int isTestPrefs(const char *name) {
     return 0;
 }
 
-// This run's files, and any left over by runs more than an hour ago (a crashed or killed run).
+// This run's files, and any left over by runs more than an hour ago (a crashed or killed run, or
+// a file cfprefsd flushed after the exit sweep).
 // Files of another run still going (a second worktree) are younger than that and stay.
 static void sweep(void) {
     const char *home = getenv("HOME");
@@ -46,6 +47,10 @@ static void sweep(void) {
 }
 
 __attribute__((constructor)) static void install(void) {
+    // At start too: what cfprefsd wrote back after the last run's exit sweep is over an hour old
+    // by the next run (or goes at its exit), so leftovers stay bounded.
+    started = time(NULL) + 2;   // nothing of this run exists yet
+    sweep();
     started = time(NULL);
     installed = 1;
     atexit(sweep);

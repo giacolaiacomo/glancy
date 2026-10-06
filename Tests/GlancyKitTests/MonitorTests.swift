@@ -281,6 +281,24 @@ struct MonitorModuleTests {
         #expect(!m.sampler.isRunning)
     }
 
+    /// Lot CPU: the worker ranks; the main thread receives five rows per gauge and grouping, not
+    /// every process on every update.
+    @Test func theTabReceivesRankedRowsOnly() async {
+        let src = FakeMonitorSource()
+        src.procs = (1...12).map { ProcessUsage(pid: pid_t(100 + $0), start: 1, cpuTime: 0, footprint: UInt64($0) << 20) }
+        src.cpuStep = Dictionary(uniqueKeysWithValues: (1...12).map { (pid_t(100 + $0), UInt64($0) * 1_000_000) })
+        let sampler = MonitorSampler(source: src, engine: ProcessEngine(numer: 1, denom: 1))
+        sampler.start(interval: .milliseconds(20))
+        defer { sampler.stop() }
+        #expect(await settle { sampler.samples >= 3 })
+        let snap = sampler.snapshot
+        #expect(snap.apps.isEmpty && snap.processes.isEmpty)
+        let cpu = snap.top(.processes, by: .cpu, limit: 5)
+        #expect(cpu.map(\.pids) == [[112], [111], [110], [109], [108]])
+        #expect(snap.top(.apps, by: .memory, limit: 5).first?.memory == 12 << 20)
+        #expect(snap.top[.apps]?[.network] == nil, "network ranks nothing")
+    }
+
     @Test func controlAndMonitorNeverSampleTogether() {
         let (m, _, _, _) = makeMonitor()
         let defaults = UserDefaults(suiteName: "glancy.test.control.\(UUID().uuidString)")!
@@ -423,9 +441,10 @@ struct MonitorModuleTests {
         let defaults = UserDefaults(suiteName: "glancy.test.monitor.settings.\(UUID().uuidString)")!
         let s = MonitorSettings(defaults: defaults)
         #expect(s.isDefault)
-        s.indicator = .energy; s.grouping = .processes; s.sparklines = false; s.rate = .s2
+        #expect(s.rate == .s2, "2 s by default (lot CPU)")
+        s.indicator = .energy; s.grouping = .processes; s.sparklines = false; s.rate = .s1
         let t = MonitorSettings(defaults: defaults)
-        #expect(t.indicator == .energy && t.grouping == .processes && !t.sparklines && t.rate == .s2)
+        #expect(t.indicator == .energy && t.grouping == .processes && !t.sparklines && t.rate == .s1)
         t.reset()
         #expect(MonitorSettings(defaults: defaults).isDefault)
     }

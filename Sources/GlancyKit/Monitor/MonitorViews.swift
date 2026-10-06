@@ -183,7 +183,7 @@ private struct GaugeTile: View {
     }
 }
 
-/// The last minute as a line with a faint fill. Fractions against 1, rates against their peak.
+/// The recent history as a line with a faint fill. Fractions against 1, rates against their peak.
 struct Sparkline: View {
     let values: [Double]
     let isFraction: Bool
@@ -213,7 +213,7 @@ struct Sparkline: View {
         }
     }
 
-    /// Right-aligned: the newest value at the right edge, one step per sample of the last minute.
+    /// Right-aligned: the newest value at the right edge, one step per sample.
     private func points(in size: CGSize) -> [CGPoint] {
         guard !values.isEmpty else { return [] }
         let peak = isFraction ? 1 : max(values.max() ?? 0, 1)
@@ -283,7 +283,7 @@ private struct TopList: View {
 
     @ViewBuilder private var rows: some View {
         let i = model.selected
-        let top = MonitorRanking.top(snap.rows(model.grouping), by: i, limit: Metrics.rows)
+        let top = snap.top(model.grouping, by: i, limit: Metrics.rows)
         let peak = top.first?.value(i) ?? 0
         VStack(spacing: 0) {
             ForEach(0..<Metrics.rows, id: \.self) { n in

@@ -60,15 +60,39 @@ public struct MonitorSnapshot: Equatable, Sendable {
     public var power: PowerReading?
     public var thermal = 0
     public var uptime: TimeInterval?
-    /// The right column's sources, each already holding the "System processes" remainder.
+    /// The right column's sources, each already holding the "System processes" remainder. The
+    /// live sampler leaves them empty on the main thread and hands over `top` instead.
     public var apps: [MonitorRow] = []
     public var processes: [MonitorRow] = []
+    /// The top rows of each grouping for each gauge, ranked by the worker (off the main thread):
+    /// the tab draws these, a few rows, instead of sorting ~600 processes on every update.
+    public var top: [MonitorGrouping: [MonitorIndicator: [MonitorRow]]] = [:]
     /// Processes seen / readable, and what the last scan cost.
     public var processCount = 0
     public var scanMillis: Double = 0
     public init() {}
 
     func rows(_ g: MonitorGrouping) -> [MonitorRow] { g == .apps ? apps : processes }
+
+    /// The `limit` biggest rows for a gauge: the worker's ranking, else ranked here (renders).
+    func top(_ g: MonitorGrouping, by i: MonitorIndicator, limit: Int) -> [MonitorRow] {
+        if let ranked = top[g]?[i] { return Array(ranked.prefix(limit)) }
+        return MonitorRanking.top(rows(g), by: i, limit: limit)
+    }
+
+    /// Ranks every gauge that ranks processes, both groupings, and drops the full lists.
+    mutating func rankAndTrim(limit: Int) {
+        var t: [MonitorGrouping: [MonitorIndicator: [MonitorRow]]] = [:]
+        for g in MonitorGrouping.allCases {
+            let list = rows(g)
+            var byIndicator: [MonitorIndicator: [MonitorRow]] = [:]
+            for i in MonitorIndicator.allCases where i.ranksProcesses { byIndicator[i] = MonitorRanking.top(list, by: i, limit: limit) }
+            t[g] = byIndicator
+        }
+        top = t
+        apps = []
+        processes = []
+    }
 
     /// Busy cores, for the remainder row.
     var busyCores: Double? { cpu.map { $0 * Double(max(cores.count, 1)) } }

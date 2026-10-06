@@ -317,6 +317,36 @@ enum Render {
             shot("13-agents-sources-peek", ctx)
             agents.stop()
         }
+        // Plan limits (Agents tab): the strip under the sessions, the Limits page, "Where it went",
+        // the 90% drop-down and the used-up wing. Made-up readings (no CLI run, nothing read).
+        // `--limits-real <dir>`: the same with the owner's real readings (AgentsModule.realLimitsSnapshot:
+        // read-only, one /usage at most, cached in <dir>); files named 15-limits-real-*.
+        do {
+            var real: (claude: UsageReading?, codex: UsageReading?, breakdown: UsageBreakdown?, log: String)?
+            if let i = CommandLine.arguments.firstIndex(of: "--limits-real"), i + 1 < CommandLine.arguments.count {
+                real = AgentsModule.realLimitsSnapshot(scratch: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+                print(real!.log, terminator: "")
+            }
+            let prefix = real == nil ? "15-limits" : "15-limits-real"
+            for state in AgentsModule.LimitsRenderState.allCases {
+                if real != nil, state == .alertPeek || state == .usedUpWing { continue }
+                let agents = state == .alertPeek || state == .usedUpWing ? AgentsModule.renderEmpty() : AgentsModule.renderSample()
+                if let real { agents.seedLimits(claude: real.claude, codex: real.codex, breakdown: real.breakdown) } else { agents.seedLimitsSample() }
+                let hub = ActivityHub()
+                agents.start(hub: hub)
+                let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [agents])
+                agents.prepareLimitsForRender(state)
+                switch state {
+                case .strip, .limitsPage, .whereItWent:
+                    agents.visibilityChanged(.expanded(.agents))
+                    shot("\(prefix)-\(state.rawValue)", ctx) { $0.expand(tab: .agents) }
+                case .alertPeek, .usedUpWing:
+                    agents.visibilityChanged(.collapsed)
+                    shot("\(prefix)-\(state.rawValue)", ctx)
+                }
+                agents.stop()
+            }
+        }
         // Settings: the index, every section, and the first-run welcome. Permission statuses are
         // fixed (a mix of every state) so nothing is asked of macOS.
         let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,

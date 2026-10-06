@@ -71,6 +71,16 @@ enum CollapsedStates {
         agentsCase("agents.claude.waiting", .claudeCode, waiting: true),
         agentsCase("agents.codex.working", .codex, waiting: false),
         agentsCase("agents.opencode.waiting", .opencode, waiting: true),
+        // A plan limit used up: a quiet wing ("100%" / "until 01:29"), static until the reset.
+        Case(name: "agents.limits.usedUp", modules: [.agents], apply: { r in
+            r.module(AgentsModule.self)?.prepareLimitsForRender(.usedUpWing)
+        }),
+        // A plan limit crosses 90%: the drop-down shows, then goes.
+        Case(name: "agents.limits.peek", modules: [.agents], settle: 6, apply: { r in
+            guard let agents = r.module(AgentsModule.self) else { return }
+            agents.seedLimitsSample()
+            agents.prepareLimitsForRender(.alertPeek)
+        }),
         // A session asks for permission: the drop-down shows, then goes.
         Case(name: "agents.peek", modules: [.agents], settle: 6, apply: { r in
             guard let agents = r.module(AgentsModule.self) else { return }

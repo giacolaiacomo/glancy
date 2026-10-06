@@ -525,7 +525,7 @@ private struct WindowsSection: View {
         Action(id: "windows.rightHalf", title: "Right half", key: \.rightHalf),
         Action(id: "windows.maximize", title: "Maximize", key: \.maximize),
         Action(id: "windows.restore", title: "Restore", key: \.restore),
-        Action(id: "windows.fit", title: "Largest free space", key: \.fit),
+        Action(id: "windows.fit", title: "Fill empty space", key: \.fit),
     ]
 
     /// "More shortcuts": arrange the display under the pointer with a fixed strategy, committed at

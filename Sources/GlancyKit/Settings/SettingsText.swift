@@ -172,7 +172,7 @@ let settingsItalian: [String: String] = [
     "Right half": "Metà destra",
     "Maximize": "Massimizza",
     "Restore": "Ripristina",
-    "Largest free space": "Spazio libero più ampio",
+    "Fill empty space": "Riempi il vuoto",
     "Undo": "Annulla",
 
     // Shortcut recorder

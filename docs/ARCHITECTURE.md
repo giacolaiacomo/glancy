@@ -47,5 +47,8 @@ memory, CPU and wake-ups of an idle run.
 The tiling engine keeps one thread per app for Accessibility calls, so the main thread never waits
 on a slow app. Every action is planned first (`ArrangePlanner`), drawn as a preview, then committed;
 each placement reports whether the window landed exactly, sized itself, or refused. `TilingHistory`
-makes every commit undoable. Tests run against `SampleWindowsBackend`, a synthetic two-display desk,
+makes every commit undoable. A commit that places chosen windows (a layout, a strategy, a
+workspace you restore) then raises the ones that landed above every other window, in plan order
+with the first one frontmost and its app activated (`TilingEngine.raise`); undo, the frontmost-window
+hotkeys and the automatic display-connect workspace never raise. Tests run against `SampleWindowsBackend`, a synthetic two-display desk,
 so no real window is ever moved by a test.

@@ -344,7 +344,7 @@ public final class WindowsModule: GlancyModule {
     func displaySetupChanged(_ displays: [Display]) {
         guard tilingReady, let w = model.workspaceForSetup(displays) else { return }
         Task { [weak self] in
-            guard let self, let outcome = await self.model.restoreWorkspace(w.id, launchMissing: false) else { return }
+            guard let self, let outcome = await self.model.restoreWorkspace(w.id, launchMissing: false, raise: false) else { return }
             let undo = self.hotkeys.undo.modifiers != 0 ? " · " + WindowsText.f("%@ undoes", self.hotkeys.undo.description) : ""
             self.peek(WindowsText.f("Display setup: %@", outcome.name) + " · " + outcome.line + undo)
         }
@@ -447,6 +447,7 @@ public final class WindowsModule: GlancyModule {
         guard tilingReady,
               let plan = model.planLayOut(windowIDs: windowIDs, readingOrder: true) else { return [] }
         let r = await model.backend.commit(plan, label: WindowsText.t("Arrange"))
+        await model.raisePlaced([plan], r)
         model.backendChanged()
         return r
     }

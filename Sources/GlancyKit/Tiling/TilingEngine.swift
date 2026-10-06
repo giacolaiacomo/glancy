@@ -264,6 +264,51 @@ public final class TilingEngine {
         return results
     }
 
+    // MARK: Raising
+
+    /// Brings these windows above every other window: `ids[0]` ends frontmost with its app
+    /// active (focus), the rest stacked beneath it in order. Unknown IDs are skipped. Nothing
+    /// moves or resizes and no other window is raised, minimised or hidden.
+    ///
+    /// Order of work: `ids[0]` becomes its app's main window, then the app is activated and the
+    /// activation awaited (it is asynchronous and brings the app's main window forward, so it
+    /// must land before the raises, never after them), then kAXRaiseAction back to front, one
+    /// at a time on each app's thread so the stacking holds across apps. Main never blocks.
+    public func raise(_ ids: [CGWindowID]) async {
+        var seen = Set<CGWindowID>()
+        let windows = ids.filter { seen.insert($0).inserted }.compactMap { registry.window($0) }
+        guard let front = windows.first, let frontHandle = registry.handle(for: front.pid) else { return }
+        let frontID = front.id
+        _ = await frontHandle.perform { $0.raise(frontID, main: true) }
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != front.pid {
+            if let app = NSRunningApplication(processIdentifier: front.pid) {
+                NSApplication.shared.yieldActivation(to: app)
+                app.activate()
+            }
+            if await !Self.waitFrontmost(front.pid) {
+                // Cooperative activation declined (Glancy's panel never takes activation): AX does it.
+                _ = await frontHandle.perform { $0.makeFrontmost() }
+                _ = await Self.waitFrontmost(front.pid)
+            }
+        }
+        for w in windows.reversed() {
+            guard let h = registry.handle(for: w.pid) else { continue }
+            let id = w.id, main = w.id == frontID
+            _ = await h.perform { $0.raise(id, main: main) }
+        }
+    }
+
+    /// Polls (main stays free) until `pid` is the frontmost app, or `timeout` passes.
+    private static func waitFrontmost(_ pid: pid_t, timeout: Duration = .milliseconds(200)) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
+            guard clock.now < deadline else { return false }
+            do { try await Delay.sleep(for: .milliseconds(10)) } catch { return false }
+        }
+        return true
+    }
+
     static func defaultLabel(_ kind: ArrangePlan.Kind) -> String {
         switch kind {
         case .place: String(localized: "Place")

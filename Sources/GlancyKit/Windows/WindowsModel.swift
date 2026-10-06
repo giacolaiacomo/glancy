@@ -926,8 +926,29 @@ final class WindowsModel {
             guard let self else { return }
             var results: [PlacementResult] = []
             for p in plans { results += await self.backend.commit(p, label: label) }
+            await self.raisePlaced(plans, results)
             self.finish(results, closeAfter: closeAfter, closeAfterIfExact: closeAfterIfExact)
         }
+    }
+
+    /// The windows a commit placed, in the order they stack after it, front first: plan order —
+    /// the user's first pick when windows were picked, else the frontmost of them (the planners
+    /// keep front-to-back order), the dragged window for a drop. Failed placements (refused,
+    /// unreachable, cancelled) are left out: they keep their place in the stack.
+    nonisolated static func raiseOrder(_ plans: [ArrangePlan], _ results: [PlacementResult]) -> [CGWindowID] {
+        let placed = Set(results.filter { $0.outcome == .exact || $0.outcome == .appSized }.map(\.windowID))
+        var seen = Set<CGWindowID>()
+        return plans.flatMap(\.moves).map(\.windowID).filter { placed.contains($0) && seen.insert($0).inserted }
+    }
+
+    /// After a commit that placed chosen windows: they go above every other window (see
+    /// `raiseOrder`), the front one's app activated. Undo and the frontmost-window hotkeys never
+    /// raise; neither does `place(windowID:inFocusedCell:)`, whose caller (Agents ⌥-click) brings
+    /// its terminal forward itself.
+    func raisePlaced(_ plans: [ArrangePlan], _ results: [PlacementResult]) async {
+        let ids = Self.raiseOrder(plans, results)
+        guard !ids.isEmpty else { return }
+        await backend.raise(ids)
     }
 
     private func finish(_ results: [PlacementResult], closeAfter: Bool, closeAfterIfExact: Bool) {
@@ -1047,6 +1068,7 @@ final class WindowsModel {
         guard !plan.moves.isEmpty else { return WindowsText.t("Nothing to arrange here") }
         busy = true
         let results = await backend.commit(plan, label: WindowsText.strategy(strategy))
+        await raisePlaced([plan], results)
         busy = false
         canUndo = backend.canUndo
         if visible { reloadMap(); recomputePreview() }
@@ -1065,6 +1087,7 @@ final class WindowsModel {
         guard let (plan, shape) = planAutoArrange(appOnly: appOnly) else { return autoArrangeRefusal(appOnly: appOnly) }
         busy = true
         let results = await backend.commit(plan, label: WindowsText.t("Auto-arrange"))
+        await raisePlaced([plan], results)
         busy = false
         canUndo = backend.canUndo
         if visible { reloadMap(); recomputePreview() }
@@ -1107,6 +1130,7 @@ final class WindowsModel {
     func layOut(windowIDs: [CGWindowID]) async -> [PlacementResult] {
         guard let plan = planLayOut(windowIDs: windowIDs) else { return [] }
         let r = await backend.commit(plan, label: WindowsText.t("Arrange"))
+        await raisePlaced([plan], r)
         canUndo = backend.canUndo
         return r
     }

@@ -103,10 +103,11 @@ extension WindowsModel {
         }
     }
 
-    /// Restores a workspace as one undoable operation. `launchMissing` off for the automatic
-    /// display-connect apply. `onLaunching` hears the apps being opened (for a peek).
+    /// Restores a workspace as one undoable operation. `launchMissing` and `raise` off for the
+    /// automatic display-connect apply (`raise`: the restored windows on top in their saved
+    /// stacking order). `onLaunching` hears the apps being opened (for a peek).
     @discardableResult
-    func restoreWorkspace(_ id: UUID, launchMissing: Bool = true,
+    func restoreWorkspace(_ id: UUID, launchMissing: Bool = true, raise: Bool = true,
                           onLaunching: (([String]) -> Void)? = nil) async -> RestoreOutcome? {
         guard let w = workspaces.workspace(id) else { return nil }
         guard backend.isTrusted, backend.isRunning else {
@@ -118,7 +119,7 @@ extension WindowsModel {
         busy = true
         restoringWorkspace = id
         hoverWorkspace(nil)
-        let outcome = await restorer.restore(w, on: backend, launchMissing: launchMissing) { [weak self] apps in
+        let outcome = await restorer.restore(w, on: backend, launchMissing: launchMissing, raise: raise) { [weak self] apps in
             self?.setWorkspaceStatus(.launching(name: w.name, apps: apps), sticky: true)
             onLaunching?(apps)
         }
@@ -194,6 +195,7 @@ extension WindowsModel {
         }
         busy = true
         let results = await backend.commit(plan, label: title)
+        await raisePlaced([plan], results)
         busy = false
         backendChanged()
         if visible { reloadMap(); recomputePreview() }

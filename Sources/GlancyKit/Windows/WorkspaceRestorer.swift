@@ -76,8 +76,10 @@ final class WorkspaceRestorer {
     init(launcher: AppLauncher) { self.launcher = launcher }
 
     /// `launchMissing`: start apps that are not running (off for the automatic display-connect apply).
-    /// `onLaunching`: told the app names being started, before waiting.
-    func restore(_ w: Workspace, on backend: WindowsBackend, launchMissing: Bool = true,
+    /// `raise`: the restored windows go above every other window in the stacking order they were
+    /// saved in, the frontmost one's app activated (off for the automatic display-connect apply,
+    /// which must not take focus by itself). `onLaunching`: told the app names being started.
+    func restore(_ w: Workspace, on backend: WindowsBackend, launchMissing: Bool = true, raise: Bool = true,
                  onLaunching: (([String]) -> Void)? = nil) async -> RestoreOutcome {
         var out = RestoreOutcome(name: w.name)
         guard backend.isTrusted, backend.isRunning else { out.needsAccess = true; return out }
@@ -114,12 +116,27 @@ final class WorkspaceRestorer {
         out.results = results
         let bad = Set(results.filter { $0.outcome != .exact && $0.outcome != .appSized }.map(\.windowID))
         out.failed = bad.count
+        if raise {
+            let ids = Self.raiseOrder(w, plan: plan, results: results)
+            if !ids.isEmpty { await backend.raise(ids) }
+        }
         out.placed = plan.matched.values.filter { !bad.contains($0) }.count
         let still = Set(backend.allWindows().compactMap(\.bundleID))
         for i in plan.unmatched {
             if still.contains(w.windows[i].bundleID) { out.leftAlone += 1 } else { out.notFound += 1 }
         }
         return out
+    }
+
+    /// The restored windows, front first in the order the workspace saved them; windows whose
+    /// placement failed keep their place in the stack.
+    static func raiseOrder(_ w: Workspace, plan: WorkspacePlan, results: [PlacementResult]) -> [CGWindowID] {
+        let placed = Set(results.filter { $0.outcome == .exact || $0.outcome == .appSized }.map(\.windowID))
+        return plan.matched.sorted { a, b in
+            let oa = w.windows.indices.contains(a.key) ? w.windows[a.key].order : Int.max
+            let ob = w.windows.indices.contains(b.key) ? w.windows[b.key].order : Int.max
+            return oa != ob ? oa < ob : a.key < b.key
+        }.map(\.value).filter { placed.contains($0) }
     }
 
     static func plan(_ w: Workspace, _ backend: WindowsBackend) -> WorkspacePlan {

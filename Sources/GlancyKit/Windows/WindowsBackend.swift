@@ -39,6 +39,9 @@ protocol WindowsBackend: AnyObject {
     func allWindows() -> [TrackedWindow]
     var canUndo: Bool { get }
     func undo() async -> [PlacementResult]
+    /// Above every other window, `windowIDs[0]` frontmost with its app activated, the rest beneath
+    /// it in order. Nothing moves; no other window is raised, minimised or hidden.
+    func raise(_ windowIDs: [CGWindowID]) async
 }
 
 extension TilingEngine: WindowsBackend {
@@ -220,4 +223,8 @@ final class SampleWindowsBackend: WindowsBackend {
 
     var canUndo: Bool { !commits.isEmpty && undoCount < commits.count }
     func undo() async -> [PlacementResult] { undoCount += 1; return [] }
+
+    /// Every `raise` call, in order (front first within each); nothing is raised for real.
+    private(set) var raises: [[CGWindowID]] = []
+    func raise(_ windowIDs: [CGWindowID]) async { raises.append(windowIDs) }
 }

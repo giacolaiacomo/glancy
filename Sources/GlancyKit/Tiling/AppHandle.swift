@@ -387,6 +387,26 @@ final class AppHandle: @unchecked Sendable {
         }
     }
 
+    // MARK: Raising (app thread)
+
+    /// kAXRaiseAction on the window: it goes above every other window without the app being
+    /// activated. `main`: it also becomes the app's main window, so an activation of the app
+    /// brings this window forward rather than another one. Never moves, resizes or unminimises.
+    @discardableResult
+    func raise(_ id: CGWindowID, main: Bool) -> Bool {
+        guard let w = element(for: id) else { return false }
+        if main { w.setBool(AXAttr.main, true) }
+        return AXUIElementPerformAction(w, kAXRaiseAction as CFString) == .success
+    }
+
+    /// AXFrontmost on the app: activation by Accessibility, for when the app declined a
+    /// cooperative `NSRunningApplication.activate()`.
+    @discardableResult
+    func makeFrontmost() -> Bool {
+        guard let app else { return false }
+        return app.setBool(kAXFrontmostAttribute as String, true) == .success
+    }
+
     // MARK: Placing (app thread)
 
     /// RESEARCH §3.2, per window: EUI off → size, position, size → read back → wait for the app

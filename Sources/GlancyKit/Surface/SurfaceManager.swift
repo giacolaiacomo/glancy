@@ -17,6 +17,11 @@ public final class SurfaceManager {
     private var lastVisibility: SurfaceVisibility?
     private var started = false
     private var settleTask: Task<Void, Never>?
+    /// The one scheduled memory relief after a collapse (cancelled if the panel reopens first).
+    private var reliefTask: Task<Void, Never>?
+    /// How long after a collapse the memory is handed back: the close spring and the removal
+    /// transitions have finished, so the panel's views are gone.
+    var reliefDelay: Duration = .seconds(3)
 
     /// Where screens and fullscreen spaces come from; tests feed synthetic ones.
     private let screens: () -> [ScreenInfo]
@@ -83,6 +88,7 @@ public final class SurfaceManager {
         escape.tearDown()
         escape.onPress = nil
         settleTask?.cancel(); settleTask = nil
+        reliefTask?.cancel(); reliefTask = nil
         context.hub.onOpenRequest = nil
         context.hub.onCloseRequest = nil
         SurfaceRoute.openSettings = nil
@@ -294,8 +300,27 @@ public final class SurfaceManager {
             v = .hidden
         }
         guard v != lastVisibility else { return }
+        let wasExpanded = if case .expanded = lastVisibility { true } else { false }
         lastVisibility = v
         for m in context.enabledModules { m.visibilityChanged(v) }
+        if case .expanded = v {
+            reliefTask?.cancel(); reliefTask = nil
+        } else if wasExpanded {
+            scheduleRelief()
+        }
+    }
+
+    /// One task, a few seconds after the panel closed: modules drop their per-open caches and the
+    /// freed pages go back to the system. Reopening first cancels it.
+    private func scheduleRelief() {
+        reliefTask?.cancel()
+        let delay = reliefDelay
+        reliefTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self else { return }
+            self.reliefTask = nil
+            MemoryRelief.run()
+        }
     }
 
     /// Re-sends the current visibility (a module was just enabled).
@@ -312,6 +337,7 @@ public final class SurfaceManager {
     var systemObserverCount: Int { events.observerCount }
     var isPaused: Bool { events.paused }
     var pendingSettle: Bool { settleTask != nil }
+    var pendingRelief: Bool { reliefTask != nil }
 
     // MARK: Settings
 

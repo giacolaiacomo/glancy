@@ -14,7 +14,9 @@ public enum L10n {
     /// Readable from any thread (module string tables that are not main-actor bound); written only
     /// on main.
     public nonisolated(unsafe) private(set) static var current = "en"
-    private static var italian: [String: String] = surfaceItalian.merging(settingsItalian) { _, new in new }
+    /// The Italian strings, built on the first Italian lookup: an English Glancy never builds the
+    /// tables (about 20 dictionaries, ~0.4 MB of heap).
+    private static var italian = LazyStrings { surfaceItalian.merging(settingsItalian) { _, new in new } }
 
     public static func apply(_ pref: AppLanguage) {
         current = resolve(pref, preferred: Locale.preferredLanguages)
@@ -39,21 +41,47 @@ public enum L10n {
         }
     }
 
-    /// Adds (or overrides) Italian strings. Call once from a module's `start`.
-    public static func addItalian(_ table: [String: String]) {
-        italian.merge(table) { _, new in new }
+    /// Adds (or overrides) Italian strings. Call once from a module's `start`. The table is only
+    /// read when the app speaks Italian.
+    public static func addItalian(_ table: @autoclosure @escaping () -> [String: String]) {
+        italian.add(table)
     }
 
+    private static func italianStrings() -> [String: String] { italian.table() }
+
     /// Every Italian string registered so far (tests check placeholders against the English key).
-    static var italianTable: [String: String] { italian }
+    static var italianTable: [String: String] { italianStrings() }
 
     public static func tr(_ s: String) -> String {
-        current == "it" ? italian[s] ?? s : s
+        current == "it" ? italianStrings()[s] ?? s : s
     }
 
     /// `tr` plus `String(format:)`, for strings with placeholders.
     public static func tr(_ s: String, _ args: CVarArg...) -> String {
         String(format: tr(s), arguments: args)
+    }
+}
+
+/// A string table assembled from parts only when first read; parts added later merge in at once.
+struct LazyStrings {
+    private var built: [String: String]?
+    private var parts: [() -> [String: String]]
+
+    init(_ base: @escaping () -> [String: String]) { parts = [base] }
+
+    var isBuilt: Bool { built != nil }
+
+    mutating func add(_ part: @escaping () -> [String: String]) {
+        if built != nil { built!.merge(part()) { _, new in new } } else { parts.append(part) }
+    }
+
+    mutating func table() -> [String: String] {
+        if let built { return built }
+        var t: [String: String] = [:]
+        for part in parts { t.merge(part()) { _, new in new } }
+        parts.removeAll()
+        built = t
+        return t
     }
 }
 

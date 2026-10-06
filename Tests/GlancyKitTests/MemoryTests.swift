@@ -3,6 +3,12 @@ import Foundation
 import Testing
 @testable import GlancyKit
 
+private let offscreenScreen = ScreenInfo(
+    uuid: "BUILTIN", frame: CGRect(x: -20_000, y: 0, width: 1512, height: 982),
+    visibleFrame: CGRect(x: -20_000, y: 57, width: 1512, height: 892), safeTop: 32,
+    auxLeft: CGRect(x: -20_000, y: 950, width: 665, height: 32), auxRight: CGRect(x: -19_150, y: 950, width: 662, height: 32),
+    isBuiltin: true, scale: 2)
+
 // Lot RAM: an idle notch costs nothing — no frame redrawn while collapsed, no work left behind by
 // the panel, memory handed back after it closes.
 
@@ -25,6 +31,46 @@ struct MemoryTests {
         #expect(expandedWhenTold == [true])
         #expect(h.module.seen.suffix(2) == [.expanded(.agents), .collapsed])
         h.manager.stop()
+    }
+
+    /// One relief, a few seconds after the panel closed; reopening first cancels it.
+    @Test func memoryIsHandedBackOnceAfterTheCollapse() async throws {
+        let h = SurfaceHarness([offscreenScreen])
+        defer { h.manager.stop() }
+        h.manager.reliefDelay = .milliseconds(150)
+        final class Owner {}
+        let owner = Owner()
+        var purged = 0
+        MemoryRelief.register(owner) { purged += 1 }
+        defer { MemoryRelief.unregister(owner) }
+        #expect(!h.manager.pendingRelief)
+
+        h.manager.open(tab: nil)
+        h.manager.closeAll()
+        #expect(h.manager.pendingRelief)
+        h.manager.open(tab: nil)                 // reopened before it ran: cancelled
+        #expect(!h.manager.pendingRelief)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(purged == 0)
+
+        let runs = MemoryRelief.runs
+        h.manager.closeAll()
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(MemoryRelief.runs == runs + 1)
+        #expect(purged == 1)
+        #expect(!h.manager.pendingRelief)
+    }
+
+    /// An English Glancy never builds the Italian tables.
+    @Test func italianTablesAreBuiltOnlyWhenNeeded() {
+        var reads = 0
+        var strings = LazyStrings { reads += 1; return ["Home": "Home"] }
+        strings.add { reads += 1; return ["Memory test": "Prova memoria"] }
+        #expect(reads == 0 && !strings.isBuilt)
+        #expect(strings.table()["Memory test"] == "Prova memoria")
+        #expect(reads == 2)
+        strings.add { reads += 1; return ["Later": "Dopo"] }   // once built, a part merges at once
+        #expect(reads == 3 && strings.table()["Later"] == "Dopo" && strings.table()["Home"] == "Home")
     }
 
     /// Every module on its sample data, the panel opened on a tab with pulsing sessions, then

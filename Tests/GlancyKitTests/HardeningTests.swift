@@ -293,7 +293,8 @@ struct WatchdogTests {
         let box = Box()
         MainThreadWatchdog.arm("test", timeout: 0.2, force: true) { box.add($0) }
         blockCurrentThread(0.8)    // the "stuck launch": main never returns to its run loop
-        for _ in 0..<40 where box.all.isEmpty { try? await Task.sleep(for: .milliseconds(50)) }
+        // Sampling the stack takes seconds on a busy CI runner: wait up to 15 s.
+        for _ in 0..<300 where box.all.isEmpty { try? await Task.sleep(for: .milliseconds(50)) }
         let report = box.all.first ?? ""
         #expect(report.contains("did not reach the run loop"))
         // The sampled stack is the main thread's, caught inside the sleep.

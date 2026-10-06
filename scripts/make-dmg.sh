@@ -36,12 +36,15 @@ xcrun notarytool submit "$WORK/Glancy.zip" --keychain-profile "$PROFILE" --wait
 xcrun stapler staple "$WORK/Glancy.app"
 
 echo "==> dmg"
-mkdir "$WORK/dmg"
-ditto "$WORK/Glancy.app" "$WORK/dmg/Glancy.app"
-ln -s /Applications "$WORK/dmg/Applications"
 DMG="$DIST/Glancy-$VERSION.dmg"
 rm -f "$DMG"
-hdiutil create -volname "Glancy" -srcfolder "$WORK/dmg" -fs HFS+ -format UDZO -imagekey zlib-level=9 "$DMG" >/dev/null
+# The window: background with the arrow, the app on the left, Applications on the right (dmgbuild
+# writes the Finder layout directly, no Finder scripting). It lives in a venv under .build.
+VENV="$ROOT/.build/dmgvenv"
+[[ -x "$VENV/bin/dmgbuild" ]] || { python3 -m venv "$VENV" && "$VENV/bin/pip" -q install dmgbuild; }
+swift "$ROOT/scripts/make-dmg-background.swift" "$WORK"
+"$VENV/bin/dmgbuild" -s "$ROOT/scripts/dmg-settings.py" -D app="$WORK/Glancy.app" \
+  -D background="$WORK/background.png" "Glancy" "$DMG" >/dev/null
 codesign --force --timestamp -s "$IDENTITY" "$DMG"
 
 echo "==> notarize dmg"

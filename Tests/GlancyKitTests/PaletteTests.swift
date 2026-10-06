@@ -695,7 +695,8 @@ struct CommandModelTests {
         #expect(module.model.isEnabled(.calendar) == true)
     }
 
-    @Test func perKeystrokeBudget() {
+    @Test(.disabled(if: CI.isCI, "25 ms main-thread budget: shared runners are several times slower"))
+    func perKeystrokeBudget() {
         let names = (0..<600).map { "App Number \($0) \(["Studio", "Pro", "Lite", "Café", "Builder"][$0 % 5])" }
         let index = AppIndex(folders: [], extras: [])
         index.setApps(names.map { AppEntry(path: "/Applications/\($0).app", name: $0, displayName: $0) })

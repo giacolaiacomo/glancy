@@ -27,6 +27,10 @@ final class CodexSessionsReader: @unchecked Sendable {
     private var watcher: FSEventsWatcher?
     private var appearance: FolderAppearanceWatcher?
     private var running = false
+    /// The newest plan limits delivered (Codex's `rate_limits`).
+    private var latestLimits: UsageReading?
+    /// How many of the newest rollouts the launch fallback searches backwards for a reading.
+    var limitsFallbackFiles = 10
     var now: @Sendable () -> Date = { .now }
 
     /// One followed rollout: offset, the line splitter's state and the session's parsing state.
@@ -76,6 +80,7 @@ final class CodexSessionsReader: @unchecked Sendable {
         queue.sync { [self] in
             running = false
             deliver = nil
+            latestLimits = nil
             watcher?.cancel(); watcher = nil
             appearance?.cancel(); appearance = nil
             tracks = [:]
@@ -111,6 +116,21 @@ final class CodexSessionsReader: @unchecked Sendable {
         }
         store.expire(now: now())
         deliver?(.rebuilt(store))
+        var newest = tracks.values.compactMap(\.state.rateLimits).max { $0.updated < $1.updated }
+        if newest == nil {
+            // Codex last ran before the followed window: the newest rollouts, read backwards once.
+            for (url, _) in recentRolloutsAll().prefix(limitsFallbackFiles) {
+                if let r = autoreleasepool(invoking: { UsageParser.lastCodexReading(in: url) }) { newest = r; break }
+            }
+        }
+        offerLimits(newest)
+    }
+
+    /// Delivers a reading newer than the last one delivered.
+    private func offerLimits(_ r: UsageReading?) {
+        guard let r, r.updated > (latestLimits?.updated ?? .distantPast) else { return }
+        latestLimits = r
+        deliver?(.limits(r))
     }
 
     /// Rollouts modified within `forgetAfter`, newest first (subagent ones are skipped by the caller).
@@ -183,6 +203,7 @@ final class CodexSessionsReader: @unchecked Sendable {
             }
         }
         if !quiet.isEmpty { deliver?(.events(quiet, quiet: true)) }
+        offerLimits(tracks.values.compactMap(\.state.rateLimits).max { $0.updated < $1.updated })
         // Rows of files let go of stay in the store until they go stale; nothing else is held.
         if !live.isEmpty { deliver?(.events(live, quiet: false)) }
     }

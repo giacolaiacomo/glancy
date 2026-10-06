@@ -40,6 +40,8 @@ struct CodexRolloutState: Sendable, Equatable {
     var approvalsReviewer: String?
     /// Calls waiting for the user (call_id → tool), cleared by their output or the turn's end.
     var pending: [String: String] = [:]
+    /// The newest plan `rate_limits` seen in this rollout (a `token_count` event): Codex's limits.
+    var rateLimits: UsageReading?
 
     static let maxPending = 16
 
@@ -65,6 +67,8 @@ enum CodexRollout {
             switch p {
             case "task_started", "task_complete", "turn_aborted", "user_message", "error":
                 return .full(limit: 1 << 20)
+            case "token_count":   // ~1 KB, carries the plan's rate_limits
+                return .full(limit: 64 << 10)
             case "item_completed":
                 return stringValue(of: "type", in: prefix, after: #""item":{"#) == "UserMessage" ? .full(limit: 1 << 20) : .skip
             default: return .skip
@@ -123,6 +127,14 @@ enum CodexRollout {
 
         if type == "session_meta" {
             return meta(payload, ts: ts, state: &state)
+        }
+        // Account-wide numbers: taken from any rollout, subagents' included.
+        if type == "event_msg", payload["type"] as? String == "token_count" {
+            if let rl = payload["rate_limits"] as? [String: Any], let r = UsageParser.codexRateLimits(rl, at: ts),
+               r.updated >= (state.rateLimits?.updated ?? .distantPast) {
+                state.rateLimits = r
+            }
+            return []
         }
         guard !state.isSubagent, let sid = state.sessionID else { return [] }
 

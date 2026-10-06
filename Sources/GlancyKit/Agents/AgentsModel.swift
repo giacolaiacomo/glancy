@@ -129,6 +129,7 @@ public final class AgentsModel {
         switch update {
         case .rebuilt(let s): adopt(s, for: kind)
         case let .events(events, quiet): ingest(events, rebuild: quiet)
+        case .limits: break   // the module routes these to its UsageLimitsStore
         }
     }
 

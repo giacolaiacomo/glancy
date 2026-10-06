@@ -85,6 +85,28 @@ struct MemoryTests {
         #expect(await early.value)
     }
 
+    /// The command bar's app list goes with the relief once the bar is closed, and comes back on
+    /// the next open; a stopped bar leaves no hook behind.
+    @Test func theBarDropsItsAppListAfterClosing() {
+        let suite = "glancy.test.bar.\(UUID().uuidString)"
+        defer { UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite) }
+        let apps = AppIndex(folders: [], extras: [])
+        let bar = CommandModule(settings: CommandSettings(defaults: UserDefaults(suiteName: suite)!), history: PaletteHistory(url: nil),
+                                apps: apps, rates: CurrencyRates(cacheURL: nil), sample: true)
+        let hooks = MemoryRelief.hookCount
+        bar.start(hub: ActivityHub())
+        #expect(MemoryRelief.hookCount == hooks + 1)
+        apps.setApps([AppEntry(path: "/Applications/Safari.app", name: "Safari", displayName: "Safari")])
+        bar.visibilityChanged(.expanded(.command))
+        MemoryRelief.run()
+        #expect(apps.apps.count == 1)            // open: kept
+        bar.visibilityChanged(.collapsed)
+        MemoryRelief.run()
+        #expect(apps.apps.isEmpty && apps.stale)  // closed: dropped, re-indexed on the next open
+        bar.stop()
+        #expect(MemoryRelief.hookCount == hooks)
+    }
+
     /// An English Glancy never builds the Italian tables.
     @Test func italianTablesAreBuiltOnlyWhenNeeded() {
         var reads = 0

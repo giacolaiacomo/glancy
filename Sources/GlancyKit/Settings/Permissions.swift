@@ -133,6 +133,7 @@ public final class PermissionCenter {
         refreshTask = Task { [weak self] in
             let fresh = await Task.detached(priority: .userInitiated) { await probe.read() }.value
             guard !Task.isCancelled, let self else { return }
+            self.refreshTask = nil
             self.apply(fresh)
         }
     }

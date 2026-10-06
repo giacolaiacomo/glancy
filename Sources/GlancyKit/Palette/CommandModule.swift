@@ -66,11 +66,18 @@ public final class CommandModule: GlancyModule, SurfaceContextAware {
         model.close = { [weak hub] in hub?.requestClose() }
         model.openTab = { [weak hub] tab in hub?.requestOpen(tab) }
         if !sample { registerHotkey() }
+        // A few seconds after the panel closes: the app list and its icons go, rebuilt on the next open.
+        MemoryRelief.register(self) { [weak self] in
+            guard let self, !self.open else { return }
+            self.model.apps.release()
+            PaletteIcons.clear()
+        }
     }
 
     public func stop() {
         guard started else { return }
         started = false
+        MemoryRelief.unregister(self)
         if let hotkey { HotkeyManager.shared.unregister(hotkey) }
         hotkey = nil
         model.setVisible(false)

@@ -86,6 +86,7 @@ public final class AppIndex {
         task = Task { [weak self] in
             let list = await Task.detached(priority: .userInitiated) { AppScanner.scan(folders, extras: extras) }.value
             guard !Task.isCancelled, let self else { return }
+            self.task = nil
             self.apps = list
             self.stale = false
             self.indexing = false
@@ -101,6 +102,15 @@ public final class AppIndex {
     }
 
     public func invalidate() { stale = true }
+
+    /// The bar has been closed a while: drop the list and stop watching; the next open re-indexes
+    /// (off main, as at the first open).
+    public func release() {
+        guard !indexing else { return }
+        apps = []
+        stale = true
+        stopWatching()
+    }
 
     /// Tests: a list without touching the disk.
     func setApps(_ list: [AppEntry]) {

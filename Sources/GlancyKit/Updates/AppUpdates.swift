@@ -56,6 +56,19 @@ public final class AppUpdates {
         return updates
     }
 
+    /// For the renderer: a copy that can update, checked `checked` ago, optionally with a found
+    /// update. Never builds Sparkle (its checks do nothing).
+    public static func sample(available: String?, checked: TimeInterval = 2 * 3600) -> AppUpdates {
+        let suite = "ai.glancy.render.updates"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(Date.now.addingTimeInterval(-checked), forKey: UpdateSchedule.Key.lastCheck)
+        let updates = AppUpdates(defaults: defaults) { _ in nil }
+        defaults.removePersistentDomain(forName: suite)
+        if let available { updates.found(available) }
+        return updates
+    }
+
     /// The app is up (the surface is on screen): one quiet check if the switch is on.
     public func appLaunched() {
         guard schedule.dueAtLaunch() else { return }

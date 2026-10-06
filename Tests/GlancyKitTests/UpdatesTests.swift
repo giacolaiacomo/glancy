@@ -195,8 +195,8 @@ struct UpdateCommandTests {
             let text = try String(contentsOf: folder.appendingPathComponent(name), encoding: .utf8)
             for m in text.matches(of: literal) { used.insert(String(m.1)) }
         }
-        // Strings shown from other folders (the gear's tooltip, the command bar).
-        for s in ["Update available", "Check for Updates", "Install Update %@"] { used.insert(s) }
+        // Strings shown from other folders (the command bar).
+        for s in ["Check for Updates", "Install Update %@"] { used.insert(s) }
         #expect(used.count >= 10)
         for s in used {
             let it = try #require(UpdatesText.italian[s], "no Italian for \(s)")

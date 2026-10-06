@@ -55,19 +55,16 @@ private struct TabBand: View {
         let symbol: String
         let title: String
         let selected: Bool
-        var badge = false
+        var tint: Color?
         let action: () -> Void
     }
 
     var body: some View {
-        let items = allItems
+        let items = allItems + updateItem
         // Home + tabs split in two; the gear always closes the right side.
         let leftCount = TabBandLayout.leftCount(items: items.count)
         let left = Array(items.prefix(leftCount)), right = Array(items.dropFirst(leftCount))
-        // A found update: a dot on the gear (Settings shows "Update to X.Y.Z").
-        let update = context.updates?.available != nil
-        let gear = Item(id: "gear", symbol: "gearshape", title: update ? tr("Update available") : tr("Settings"),
-                        selected: model.showingSettings, badge: update) {
+        let gear = Item(id: "gear", symbol: "gearshape", title: tr("Settings"), selected: model.showingSettings) {
             model.toggleSettings()
         }
         GeometryReader { geo in
@@ -86,8 +83,16 @@ private struct TabBand: View {
     }
 
     private func icon(_ i: Item, _ slot: CGFloat) -> some View {
-        TabIcon(symbol: i.symbol, title: i.title, selected: i.selected, badge: i.badge, action: i.action)
+        TabIcon(symbol: i.symbol, title: i.title, selected: i.selected, tint: i.tint, action: i.action)
             .frame(width: slot)
+    }
+
+    /// A quiet check found an update: one green icon before the gear; a click opens Sparkle's
+    /// window for it (install, later, skip). Gone once the update is dealt with.
+    private var updateItem: [Item] {
+        guard let updates = context.updates, let version = updates.available else { return [] }
+        return [Item(id: "update", symbol: "arrow.down.circle.fill", title: L10n.tr("Update to %@", version),
+                     selected: false, tint: Theme.done) { updates.install() }]
     }
 
     private var allItems: [Item] {
@@ -136,7 +141,7 @@ private struct TabIcon: View {
     let symbol: String
     let title: String
     let selected: Bool
-    var badge = false
+    var tint: Color?
     let action: () -> Void
     @State private var hover = false
 
@@ -148,14 +153,9 @@ private struct TabIcon: View {
                 // The icon swaps outline ↔ fill (and its ink) at once; the capsule still animates.
                 // Animated, the symbol morph went through ~50 MB of GPU textures on every switch.
                 .transaction { $0.animation = nil }
-                .foregroundStyle(selected ? Theme.primary : hover ? Theme.secondary : Theme.tertiary)
+                .foregroundStyle(tint.map { hover ? $0 : $0.opacity(0.85) } ?? (selected ? Theme.primary : hover ? Theme.secondary : Theme.tertiary))
                 .frame(width: Self.iconWidth, height: 22)
                 .background(Capsule().fill(selected ? Theme.card : .clear))
-                .overlay(alignment: .topTrailing) {
-                    if badge {
-                        Circle().fill(Theme.done).frame(width: 5, height: 5).offset(x: -6, y: 4)
-                    }
-                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

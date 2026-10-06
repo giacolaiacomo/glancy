@@ -323,10 +323,19 @@ enum Render {
         let routes: [(String, SettingsRoute)] = [("index", .index), ("general", .general), ("modules", .modules),
                                                  ("permissions", .permissions)]
             + live.modules.map(\.id).filter { $0 != .notifications }.map { ("module-\($0.rawValue)", .module($0)) }
+        live.updates = AppUpdates.sample(available: nil)
         for (name, route) in routes {
             settings.navigation.go(route, animated: false)
             shot(name == "index" ? "07-settings" : "07-settings-\(name)", live) { $0.expand(tab: nil); $0.toggleSettings() }
         }
+        // A quiet check found an update: the dot on the gear, "Update to" in the index and General.
+        live.updates = AppUpdates.sample(available: "0.3.0")
+        for (name, route) in [("index", SettingsRoute.index), ("general", .general)] {
+            settings.navigation.go(route, animated: false)
+            shot("07-settings-\(name)-update", live) { $0.expand(tab: nil); $0.toggleSettings() }
+        }
+        shot("07-home-update", live) { $0.expand(tab: nil) }
+        live.updates = nil
         settings.navigation.showWelcome()
         shot("07-settings-welcome", live) { $0.expand(tab: nil); $0.toggleSettings() }
         settings.navigation.go(.index, animated: false)

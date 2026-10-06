@@ -11,7 +11,6 @@ enum UpdatesText {
         "Last checked %@": "Ultimo controllo %@",
         "Not checked yet": "Non ancora controllato",
         "Updates come with the installed app": "Gli aggiornamenti arrivano con l'app installata",
-        "Update available": "Aggiornamento disponibile",
         "Check for Updates": "Cerca aggiornamenti",
         "Install Update %@": "Installa l'aggiornamento %@",
     ]

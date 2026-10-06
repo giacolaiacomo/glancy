@@ -7,6 +7,8 @@ public enum GlancyApp {
 
     @MainActor public static func run() {
         let args = CommandLine.arguments
+        // Agents → "Where it went": the log scan runs in this short-lived child, then exits.
+        if args.contains("--usage-scan") { UsageLedger.runScanAndExit() }
         if args.contains("--self-test") { runSelfCheck() }
         if args.contains("--crashes") {
             // Summaries of Glancy's crash reports (App/CrashReports.swift), then exit.

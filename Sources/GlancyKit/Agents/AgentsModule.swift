@@ -9,6 +9,10 @@ public final class AgentsModule: GlancyModule {
 
     public let id = ModuleID.agents
     public let model = AgentsModel()
+    /// Claude Code and Codex plan limits (the strip and pages in the tab, alerts).
+    public let limits: UsageLimitsStore
+    /// The page the tab opens on (the renderer; otherwise the sessions).
+    var tabPage: AgentsTabPage = .sessions
     /// Every source this module can read, in display order.
     let sources: [any AgentSource]
     private let defaults: UserDefaults
@@ -20,7 +24,13 @@ public final class AgentsModule: GlancyModule {
 
     /// The real sources: the Claude hook log, ~/.codex/sessions, OpenCode's data folder.
     public convenience init() {
-        self.init(sources: [ClaudeHookSource(logURL: Self.defaultLogURL), CodexSource(), OpenCodeSource()])
+        let limits = UsageLimitsStore(fetcher: ClaudeUsageCLI(),
+                                      cacheURL: UsageLimitsStore.defaultCacheDir.appendingPathComponent("limits.json"))
+        // "Where it went" reads the logs in a short-lived `Glancy --usage-scan` child (only from the app's own binary).
+        if let exe = Bundle.main.executableURL, exe.lastPathComponent == "Glancy" {
+            limits.breakdownLoader = UsageLedger.childLoader(executable: exe.path)
+        }
+        self.init(sources: [ClaudeHookSource(logURL: Self.defaultLogURL), CodexSource(), OpenCodeSource()], limits: limits)
     }
 
     /// Claude Code only, from `logURL` (isolated runs, tests, the demo): nothing else of the user's is read.
@@ -28,9 +38,11 @@ public final class AgentsModule: GlancyModule {
         self.init(sources: [ClaudeHookSource(logURL: logURL)])
     }
 
-    init(sources: [any AgentSource], defaults: UserDefaults = .standard) {
+    /// - Parameter limits: nil = an isolated store: nothing fetched or read, settings in memory.
+    init(sources: [any AgentSource], defaults: UserDefaults = .standard, limits: UsageLimitsStore? = nil) {
         self.sources = sources
         self.defaults = defaults
+        self.limits = limits ?? UsageLimitsStore(fetcher: nil, cacheURL: nil, defaults: nil, codexPresent: { false })
     }
 
     /// The tiler for ⌥-click and "Lay out sessions" (the Windows module), wired in Modules.make().
@@ -80,6 +92,7 @@ public final class AgentsModule: GlancyModule {
         running = true
         model.hub = hub
         model.onWantsKeys = { [weak self] on in self?.wantsKeys(on) }
+        limits.start(hub: hub)
         for source in sources where isSourceEnabled(source.kind) { startSource(source) }
         model.refresh()   // sessions already held (the renderer's sample) reach the wings
     }
@@ -88,7 +101,19 @@ public final class AgentsModule: GlancyModule {
         started.insert(source.kind)
         source.start { [weak self] kind, update in
             guard let self, self.started.contains(kind) else { return }   // turned off meanwhile
-            self.deliver { $0.apply(update, from: kind) }
+            switch update {
+            case .limits(let reading):
+                if self.running { self.limits.adoptCodex(reading) }
+            case let .events(events, quiet):
+                self.deliver { $0.apply(update, from: kind) }
+                // A Claude Code turn or session ended: the moment its limits moved.
+                if self.running, !quiet, kind == .claudeCode,
+                   events.contains(where: { $0.kind == .stop || $0.kind == .sessionEnd || $0.kind == .stopFailure }) {
+                    self.limits.claudeTurnEnded()
+                }
+            case .rebuilt:
+                self.deliver { $0.apply(update, from: kind) }
+            }
         }
     }
 
@@ -105,6 +130,7 @@ public final class AgentsModule: GlancyModule {
         model.endTiling()
         model.onWantsKeys = nil
         wantsKeys(false)
+        limits.stop()
         model.hub?.clearAll(from: .agents)
         model.reset()
         model.hub = nil
@@ -112,6 +138,7 @@ public final class AgentsModule: GlancyModule {
 
     public func visibilityChanged(_ visibility: SurfaceVisibility) {
         model.visibilityChanged(visibility)
+        limits.visibilityChanged(visibility)
         // A layout preview or an Undo offer lives only while Agents or Home is on screen.
         let showing = visibility == .expanded(.agents) || visibility == .expanded(nil)
         if onAgentsOrHome, !showing { model.endTiling() }
@@ -151,8 +178,8 @@ public final class AgentsModule: GlancyModule {
     }
 
     public var tab: PanelTab? {
-        PanelTab(module: .agents, symbol: Self.symbol, title: LocalizedStringKey(AgentsText.t("Agents"))) { [model] in
-            AnyView(AgentsBoard(model: model))
+        PanelTab(module: .agents, symbol: Self.symbol, title: LocalizedStringKey(AgentsText.t("Agents"))) { [model, limits, tabPage] in
+            AnyView(AgentsTab(model: model, limits: limits, page: tabPage))
         }
     }
 
@@ -201,6 +228,9 @@ extension AgentsModule {
         return m
     }
 
+    /// A module with no source and no session (renderer: the limits' own wing and drop-down).
+    public static func renderEmpty() -> AgentsModule { AgentsModule(sources: []) }
+
     func seedSample(now: Date) {
         func e(_ ago: Double, _ k: AgentEvent.Kind, _ sid: String, _ folder: String, _ agent: AgentKind, _ host: AgentHost,
                tool: String? = nil, prompt: String? = nil, message: String? = nil, title: String? = nil) -> AgentEvent {
@@ -234,6 +264,104 @@ extension AgentsModule {
         ]
         model.ingest(events, rebuild: true)
         model.prepareTilingForRender(trusted: true, preview: nil, undo: false, note: nil)
+    }
+}
+
+// MARK: Plan limits (renderer, demo, real-reading render)
+
+extension AgentsModule {
+    /// What the renderer can show of the plan limits.
+    public enum LimitsRenderState: String, CaseIterable, Sendable {
+        case strip, limitsPage, whereItWent, alertPeek, usedUpWing
+    }
+
+    /// Made-up readings (Burny's demo data) and breakdown. Alerts off unless asked: a demo shot
+    /// must not get an unasked drop-down.
+    public func seedLimitsSample(now: Date = .now, alerts: Bool = false) {
+        limits.alertsEnabled = alerts
+        let s = UsageLimitsStore.sampleReadings(now: now)
+        limits.seed(claude: s.claude, codex: s.codex, breakdown: UsageBreakdown.sample)
+    }
+
+    /// Real readings handed in from outside (the renderer's read-only "real" shot): nothing is fetched here.
+    public func seedLimits(claude: UsageReading?, codex: UsageReading?, breakdown: UsageBreakdown?) {
+        limits.alertsEnabled = false
+        limits.seed(claude: claude, codex: codex, breakdown: breakdown)
+    }
+
+    /// Prepares a limits state; call after `start`.
+    public func prepareLimitsForRender(_ state: LimitsRenderState, now: Date = .now) {
+        switch state {
+        case .strip: tabPage = .sessions
+        case .limitsPage: tabPage = .limits
+        case .whereItWent: tabPage = .whereItWent
+        case .alertPeek:
+            limits.showAlertForRender(now: now)
+        case .usedUpWing:
+            var s = UsageLimitsStore.sampleReadings(now: now)
+            s.claude.limits[0].percent = 100
+            s.claude.limits[0].recentRate = nil
+            // Seeded quietly, then alerts on: the wing alone, without the drop-down.
+            limits.alertsEnabled = false
+            limits.seed(claude: s.claude, codex: s.codex, status: .ok)
+            limits.alertsEnabled = true
+        }
+    }
+}
+
+extension AgentsModule {
+    /// The owner's real readings for the renderer, read-only: Claude's `/usage` exactly as the app
+    /// runs it (signature check, sandbox, no tools/MCP/hooks), but in `scratch` (its work folder and
+    /// the breakdown's cache live there, never in ~/Library/Caches/Glancy); Codex's last
+    /// `rate_limits` read backwards from the newest rollouts; the 15-day breakdown. When
+    /// `scratch/limits-real.json` exists it is reused and nothing is run again.
+    public nonisolated static func realLimitsSnapshot(scratch: URL) -> (claude: UsageReading?, codex: UsageReading?,
+                                                                         breakdown: UsageBreakdown?, log: String) {
+        struct Saved: Codable { var claude: UsageReading?; var codex: UsageReading? }
+        let fm = FileManager.default
+        try? fm.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let saved = scratch.appendingPathComponent("limits-real.json")
+        var log = ""
+        var claude: UsageReading?, codex: UsageReading?
+        if let d = try? Data(contentsOf: saved), let s = try? JSONDecoder.iso.decode(Saved.self, from: d) {
+            claude = s.claude; codex = s.codex
+            log += "reused \(saved.path)\n"
+        } else {
+            let cli = ClaudeUsageCLI(workDir: scratch.appendingPathComponent("usage-cwd", isDirectory: true))
+            let started = Date()
+            var before = rusage(); getrusage(RUSAGE_CHILDREN, &before)
+            let outcome = cli.fetch()
+            var after = rusage(); getrusage(RUSAGE_CHILDREN, &after)
+            func secs(_ t: timeval) -> Double { Double(t.tv_sec) + Double(t.tv_usec) / 1e6 }
+            let cpu = secs(after.ru_utime) - secs(before.ru_utime) + secs(after.ru_stime) - secs(before.ru_stime)
+            log += String(format: "claude /usage: %@ in %.1f s wall, %.2f s child CPU, child max RSS %.0f MB\n",
+                          String(describing: outcome), Date().timeIntervalSince(started), cpu, Double(after.ru_maxrss) / 1_048_576)
+            if case let .ok(limits, plan) = outcome {
+                claude = UsageReading(service: .claude, plan: plan, limits: limits, updated: .now)
+            }
+            for (url, _) in CodexSessionsReader(root: CodexSource.defaultRoot).recentRolloutsAll().prefix(10) {
+                if let r = UsageParser.lastCodexReading(in: url) { codex = r; log += "codex from \(url.lastPathComponent)\n"; break }
+            }
+            if let d = try? JSONEncoder.iso.encode(Saved(claude: claude, codex: codex)) { try? d.write(to: saved) }
+        }
+        let start = Date()
+        let ledger = UsageLedger(cacheURL: scratch.appendingPathComponent("usage.json"))
+        ledger.update()
+        log += String(format: "breakdown scan: %.1f s\n", Date().timeIntervalSince(start))
+        var spans: [UsageWindowSpan] = []
+        let now = Date()
+        for s in UsageService.allCases {
+            let r = s == .claude ? claude : codex
+            func window(_ match: (UsageLimitKind) -> Bool, _ length: TimeInterval) -> (Date, Double?) {
+                if let l = r?.limits.first(where: { match($0.kind) }), let reset = l.resetsAt, reset > now {
+                    return (reset.addingTimeInterval(-l.window), l.effective(at: now))
+                }
+                return (now.addingTimeInterval(-length), nil)
+            }
+            let a = window({ $0.isSession }, 5 * 3600), b = window({ $0.isAllModelsWeek }, 7 * 86400)
+            spans.append(UsageWindowSpan(service: s, sessionStart: a.0, sessionPercent: a.1, weekStart: b.0, weekPercent: b.1))
+        }
+        return (claude, codex, UsageBreakdown(buckets: ledger.saved.buckets, windows: spans, now: now), log)
     }
 }
 

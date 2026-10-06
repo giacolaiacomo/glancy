@@ -35,6 +35,8 @@ struct AgentsSettingsSection: View {
                 SettingsNote(installNote)
             }
             SettingsNote(AgentsText.t("Read-only: Glancy never writes to Claude Code or Codex files. A session goes idle after 30 min without events; sessions silent for 12 h are dropped."))
+            LimitsSettings(module: module, limits: module.limits)
+                .padding(.top, 6.ui)
         }
     }
 
@@ -89,4 +91,51 @@ extension AgentsModule {
 
     /// Settings → Agents, for `ModuleSections`.
     public func settingsSection() -> AnyView { AnyView(AgentsSettingsSection(module: self)) }
+}
+
+/// Settings → Agents → Plan limits: one switch per service (on by default only when its CLI or
+/// folder is there), alerts, how old a reading may get before the tab refreshes it.
+struct LimitsSettings: View {
+    let module: AgentsModule
+    @Bindable var limits: UsageLimitsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4.ui) {
+            SettingsGroupTitle(LimitsText.t("Plan limits"))
+            SettingsRow(LimitsText.t("Claude Code limits"), note: claudeNote.text, noteColor: claudeNote.warn ? Theme.waiting : Theme.tertiary) {
+                NotchSwitch(isOn: $limits.claudeEnabled)
+            }
+            SettingsRow(LimitsText.t("Codex limits"), note: codexNote.text, noteColor: codexNote.warn ? Theme.waiting : Theme.tertiary) {
+                NotchSwitch(isOn: $limits.codexEnabled)
+            }
+            SettingsRow(LimitsText.t("Limit alerts"),
+                        note: LimitsText.t("A drop-down at 90% and 100%, when a session is on pace to run out, and when a used-up limit resets")) {
+                NotchSwitch(isOn: $limits.alertsEnabled)
+            }
+            if limits.claudeEnabled {
+                SettingsRow(LimitsText.t("Refresh after")) {
+                    NotchSegments(selection: $limits.refreshMinutes,
+                                  options: UsageLimitsStore.minuteChoices.map { ($0, "\($0) min") })
+                }
+            }
+            SettingsNote(LimitsText.t("Safe by design: Glancy never reads tokens, cookies or passwords, never calls private endpoints and never sends a message. Claude's /usage runs only if the binary is signed by Anthropic, with no tools, MCP servers or hooks, sandboxed from your personal folders."))
+        }
+    }
+
+    private var claudeNote: (text: String, warn: Bool) {
+        switch limits.claudeStatus {
+        case .notGenuine: return (LimitsText.t("Not signed by Anthropic: never run"), true)
+        case .unexpectedOutput: return (LimitsText.t("Answered unexpectedly: stopped until turned off and on"), true)
+        case .notInstalled: return (LimitsText.t("CLI not found"), true)
+        default:
+            if limits.fetcher != nil, limits.fetcher?.isInstalled == false { return (LimitsText.t("CLI not found"), true) }
+            return (LimitsText.t("Runs the official /usage (0 tokens) when the tab opens, at most every 60 s"), false)
+        }
+    }
+
+    private var codexNote: (text: String, warn: Bool) {
+        if !limits.codexPresent() && limits.codex == nil { return (LimitsText.t("Not found: Codex has not run on this Mac yet"), true) }
+        if module.availableSources.contains(.codex), !module.isSourceEnabled(.codex) { return (LimitsText.t("Needs Codex on in Sources above"), true) }
+        return (LimitsText.t("From the rate_limits Codex writes in ~/.codex/sessions"), false)
+    }
 }

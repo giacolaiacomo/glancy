@@ -39,6 +39,9 @@ BIN_DIR="$(swift build -c release --show-bin-path)"
 mkdir -p "$BIN_DIR/lab/$LABEL"
 LAB="$BIN_DIR/lab/$LABEL/GlancyLab"
 cp "$BIN_DIR/Glancy" "$LAB"
+# Sparkle (linked, @loader_path rpath): the framework sits beside the copy, as in the build folder.
+rm -rf "$BIN_DIR/lab/$LABEL/Sparkle.framework"
+ditto "$BIN_DIR/Sparkle.framework" "$BIN_DIR/lab/$LABEL/Sparkle.framework"
 ENT="$(mktemp -t glancy-lab-ent)"
 cat > "$ENT" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>

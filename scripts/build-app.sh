@@ -15,12 +15,32 @@
 #      permissions you granted (Accessibility, Calendar…) across rebuilds;
 #   3. ad-hoc ("-"). It runs fine, but macOS sees every rebuild as a new app, so permissions
 #      have to be granted again after each update.
+#
+# Versions: GLANCY_VERSION (MAJOR.MINOR.PATCH) is CFBundleShortVersionString; CFBundleVersion is
+# derived from it by scripts/build-number.sh (0.3.0 → 3000), the number Sparkle compares.
+#
+# Updates (Sparkle 2, Sources/GlancyKit/Updates): Sparkle.framework is embedded in
+# Contents/Frameworks (without its XPC services: Glancy is not sandboxed) and signed inside-out.
+# The feed is the appcast attached to the latest GitHub release; updates must be EdDSA-signed with
+# the private key in the maintainer's login keychain (account "glancy", see make-dmg.sh).
+#
+# Test-only (scripts/update-e2e.sh, never for a release):
+#   GLANCY_BUNDLE_ID   another bundle id (e.g. ai.glancy.updtest), so a test copy never shares
+#                      preferences, permissions or Sparkle state with the installed Glancy;
+#   GLANCY_TEST_ENV    "K=V K=V…" written to LSEnvironment, so the copy Sparkle relaunches gets the
+#                      same environment (GLANCY_LAB=1, GLANCY_UPDATE_FEED=…). Needs GLANCY_BUNDLE_ID.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUNDLE_ID="ai.glancy.app"
-VERSION="${GLANCY_VERSION:-0.1.0}"
-BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 1)"
+BUNDLE_ID="${GLANCY_BUNDLE_ID:-ai.glancy.app}"
+VERSION="${GLANCY_VERSION:-0.2.2}"
+BUILD_NUMBER="$("$ROOT/scripts/build-number.sh" "$VERSION")"
+FEED_URL="https://github.com/giacolaiacomo/glancy/releases/latest/download/appcast.xml"
+# Public half of the EdDSA key (Sparkle's generate_keys --account glancy -p).
+SPARKLE_PUBLIC_KEY="RwuBUIgta3vMGV++4UqgS8EYFNm9os/j1qeCkgZNYag="
+if [[ -n "${GLANCY_TEST_ENV:-}" && -z "${GLANCY_BUNDLE_ID:-}" ]]; then
+  echo "GLANCY_TEST_ENV is for test copies only: set GLANCY_BUNDLE_ID too" >&2; exit 2
+fi
 OUT=""
 LAUNCH=1
 APP_ARGS=()
@@ -33,6 +53,10 @@ while [[ $# -gt 0 ]]; do
   esac
   shift
 done
+# A test copy never replaces the installed app.
+if [[ -n "${GLANCY_BUNDLE_ID:-}" && -z "$OUT" ]]; then
+  echo "GLANCY_BUNDLE_ID needs an output path" >&2; exit 2
+fi
 
 if [[ -n "${GLANCY_SIGN_IDENTITY:-}" ]]; then
   IDENTITY="$GLANCY_SIGN_IDENTITY"
@@ -86,6 +110,14 @@ cp "$ADAPTER_SRC/bin/mediaremote-adapter.pl" "$STAGE/Contents/Resources/mediarem
 ditto "$ADAPTER_BUILD/MediaRemoteAdapter.framework" "$STAGE/Contents/Frameworks/MediaRemoteAdapter.framework"
 cp "$ADAPTER_BUILD/MediaRemoteAdapterTestClient" "$STAGE/Contents/MacOS/MediaRemoteAdapterTestClient"
 
+echo "==> Sparkle.framework (updates): universal, without XPC services (not sandboxed)"
+SPARKLE_SRC="$ROOT/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+[[ -d "$SPARKLE_SRC" ]] || { echo "Sparkle.framework not found at $SPARKLE_SRC (swift package resolve)" >&2; exit 1; }
+SPARKLE="$STAGE/Contents/Frameworks/Sparkle.framework"
+ditto "$SPARKLE_SRC" "$SPARKLE"
+# Sparkle's guidance for apps that are not sandboxed: the XPC services may be removed.
+rm -rf "$SPARKLE/Versions/B/XPCServices" "$SPARKLE/XPCServices"
+
 echo "==> icon"
 ICONTMP="$(mktemp -d)"
 swift "$ROOT/scripts/make-icon.swift" "$ICONTMP/AppIcon.iconset"
@@ -123,10 +155,19 @@ cat > "$STAGE/Contents/Info.plist" <<PLIST
 	<key>NSDesktopFolderUsageDescription</key><string>Glancy shows a new screenshot in the notch the moment it lands on your Desktop.</string>
 	<key>NSDownloadsFolderUsageDescription</key><string>Glancy shows a finished download in the notch.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key><string>Glancy shows when your headphones connect and how much battery they have.</string>
+	<key>SUFeedURL</key><string>$FEED_URL</string>
+	<key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
+	<key>SUEnableAutomaticChecks</key><false/>
 	<key>NSHumanReadableCopyright</key><string>© 2026 Glancy contributors. MIT License.</string>
 </dict>
 </plist>
 PLIST
+if [[ -n "${GLANCY_TEST_ENV:-}" ]]; then
+  /usr/libexec/PlistBuddy -c "Add :LSEnvironment dict" "$STAGE/Contents/Info.plist"
+  for kv in $GLANCY_TEST_ENV; do
+    /usr/libexec/PlistBuddy -c "Add :LSEnvironment:${kv%%=*} string ${kv#*=}" "$STAGE/Contents/Info.plist"
+  done
+fi
 plutil -lint "$STAGE/Contents/Info.plist" >/dev/null
 
 if [[ "$IDENTITY" == "-" ]]; then echo "==> codesign (ad-hoc)"; else echo "==> codesign ($IDENTITY)"; fi
@@ -135,9 +176,15 @@ if [[ "$IDENTITY" == "Developer ID Application:"* ]]; then TS=(--timestamp); els
 # Nested adapter code first, same identity (boring.notch #998: a mismatch stops perl loading it).
 codesign --force "${TS[@]}" -s "$IDENTITY" "$STAGE/Contents/Frameworks/MediaRemoteAdapter.framework"
 codesign --force --options runtime "${TS[@]}" -s "$IDENTITY" "$STAGE/Contents/MacOS/MediaRemoteAdapterTestClient"
-codesign --force --deep --options runtime "${TS[@]}" \
+# Sparkle, inside-out as its documentation says (helpers, then the framework), hardened runtime.
+codesign --force --options runtime "${TS[@]}" -s "$IDENTITY" "$SPARKLE/Versions/B/Autoupdate"
+codesign --force --options runtime "${TS[@]}" -s "$IDENTITY" "$SPARKLE/Versions/B/Updater.app"
+codesign --force --options runtime "${TS[@]}" -s "$IDENTITY" "$SPARKLE"
+# The app last, without --deep: every nested piece is signed above and keeps its own (empty)
+# entitlements; --deep would give Sparkle's helpers Glancy's.
+codesign --force --options runtime "${TS[@]}" \
   --entitlements "$ROOT/scripts/Glancy.entitlements" -s "$IDENTITY" "$STAGE"
-codesign --verify --strict "$STAGE"
+codesign --verify --strict --deep "$STAGE"
 echo "built $STAGE ($(lipo -archs "$STAGE/Contents/MacOS/Glancy"))"
 
 # A path was given: that's all.

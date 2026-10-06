@@ -257,7 +257,13 @@ struct OutcomeReport: Equatable {
         switch r.outcome {
         case .exact: return WindowsText.f("%@ exact", name)
         case .appSized:
-            if let s = r.landed?.size { return WindowsText.f("%@ kept %d×%d", name, Int(s.width), Int(s.height)) }
+            if let s = r.landed?.size {
+                // Larger than asked: the app's minimum, not a choice Glancy made.
+                if PlacementRun.keptLarger(s, than: r.requested.size) {
+                    return WindowsText.f("%@ can't be smaller than %d×%d", name, Int(s.width), Int(s.height))
+                }
+                return WindowsText.f("%@ kept %d×%d", name, Int(s.width), Int(s.height))
+            }
             return WindowsText.f("%@ chose its size", name)
         case .refused: return WindowsText.f("%@ refused", name)
         case .unreachable: return WindowsText.f("%@ unreachable", name)

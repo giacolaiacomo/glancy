@@ -154,6 +154,7 @@ enum WindowsText {
         "Nothing moved": "Nulla è stato spostato",
         "%@ exact": "%@ esatta",
         "%@ kept %d×%d": "%@ ha tenuto %d×%d",
+        "%@ can't be smaller than %d×%d": "%@ non scende sotto %d×%d",
         "%@ chose its size": "%@ ha scelto la sua misura",
         "%@ refused": "%@ ha rifiutato",
         "%@ unreachable": "%@ non raggiungibile",

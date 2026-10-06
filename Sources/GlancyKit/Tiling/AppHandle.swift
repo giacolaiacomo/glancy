@@ -409,83 +409,46 @@ final class AppHandle: @unchecked Sendable {
 
     // MARK: Placing (app thread)
 
-    /// RESEARCH §3.2, per window: EUI off → size, position, size → read back → wait for the app
-    /// (event or 50 ms) → one retry → re-anchor the size the app chose to the edges the target
-    /// touches, inside the usable rect → name the outcome.
+    /// One placement on the app thread: EUI off around the writes, then `PlacementRun` (size →
+    /// position → size, read back, wait, one retry, re-anchor what the app kept).
     func place(_ p: AXPlacement, token: CancelToken) -> AXPlacementReport {
         let start = Date()
-        var attempts = 0
         var euiWasOn = false
-        func report(_ outcome: PlacementOutcome, original: CGRect?, landed: CGRect?, _ note: String? = nil) -> AXPlacementReport {
-            AXPlacementReport(windowID: p.windowID, outcome: outcome, original: original, landed: landed,
-                              attempts: attempts, euiWasOn: euiWasOn, note: note,
+        func report(_ r: PlacementRun.Result) -> AXPlacementReport {
+            AXPlacementReport(windowID: p.windowID, outcome: r.outcome, original: r.original, landed: r.landed,
+                              attempts: r.attempts, euiWasOn: euiWasOn, note: r.note,
                               elapsed: Date().timeIntervalSince(start))
         }
-        if token.isCancelled { return report(.cancelled, original: nil, landed: nil) }
-        guard let app, let window = element(for: p.windowID) else {
-            return report(.unreachable, original: nil, landed: nil, "window gone")
+        if token.isCancelled {
+            return report(PlacementRun.Result(outcome: .cancelled, original: nil, landed: nil, attempts: 0, note: nil))
         }
-        guard let original = window.axFrame else {
-            return report(.unreachable, original: nil, landed: nil, "no answer from the app")
+        guard let app, let element = element(for: p.windowID) else {
+            return report(PlacementRun.Result(outcome: .unreachable, original: nil, landed: nil, attempts: 0, note: "window gone"))
         }
-        if window.bool(AXAttr.minimized) == true { return report(.unreachable, original: original, landed: original, "minimized") }
-        if window.bool(AXAttr.fullscreen) == true { return report(.unreachable, original: original, landed: original, "fullscreen") }
-        let canMove = window.isSettable(AXAttr.position)
-        let canResize = window.isSettable(AXAttr.size)
-        guard canMove else { return report(.refused, original: original, landed: original, "position not settable") }
-
-        let edges = PlacementMath.touchedEdges(of: p.target, in: p.usable, tolerance: p.edgeTolerance)
-        let target = canResize
-            ? PlacementMath.respectingMinimum(p.target, minSize: window.minimumSize, edges: edges, bounds: p.usable)
-            : PlacementMath.anchoredFrame(size: original.size, within: p.target, edges: edges, bounds: p.usable)
-
-        euiWasOn = app.bool(AXAttr.enhancedUserInterface) == true
-        if euiWasOn { app.setBool(AXAttr.enhancedUserInterface, false) }
         defer { if euiWasOn && p.restoreEUI { app.setBool(AXAttr.enhancedUserInterface, true) } }
+        let window = AXPlaceableWindow(element: element, id: p.windowID, handle: self)
+        let r = PlacementRun.run(p, on: window, isCancelled: { token.isCancelled }, prepare: {
+            euiWasOn = app.bool(AXAttr.enhancedUserInterface) == true
+            if euiWasOn { app.setBool(AXAttr.enhancedUserInterface, false) }
+        })
+        return report(r)
+    }
+}
 
-        // Size → position → size: a size that does not fit at the new origin would otherwise
-        // clamp the position (RESEARCH A2). Each step checks for cancellation.
-        func write() -> Bool {
-            attempts += 1
-            if canResize { window.setSize(target.size) }
-            if token.isCancelled { return false }
-            window.setPosition(target.origin)
-            if token.isCancelled { return false }
-            if canResize { window.setSize(target.size) }
-            return !token.isCancelled
-        }
-        func read() -> CGRect { window.axFrame ?? original }
+/// An AX window element as `PlacementRun` drives it, on its app's thread.
+private struct AXPlaceableWindow: PlaceableWindow {
+    let element: AXUIElement
+    let id: CGWindowID
+    let handle: AppHandle
 
-        if !PlacementMath.approx(original, target, 1) {
-            guard write() else { return report(.cancelled, original: original, landed: read()) }
-        }
-        var landed = read()
-        if !PlacementMath.approx(landed, target) {
-            waitForFrameEvent(p.windowID, after: frameSerial(p.windowID), timeout: 0.05)
-            if token.isCancelled { return report(.cancelled, original: original, landed: read()) }
-            let settled = read()
-            if !PlacementMath.approx(settled, target), p.allowRetry {
-                guard write() else { return report(.cancelled, original: original, landed: read()) }
-                landed = read()
-                if !PlacementMath.approx(landed, target) {
-                    waitForFrameEvent(p.windowID, after: frameSerial(p.windowID), timeout: 0.05)
-                    landed = read()
-                }
-            } else {
-                landed = settled
-            }
-        }
-        if token.isCancelled { return report(.cancelled, original: original, landed: landed) }
-
-        // The app kept its own size: hug the edges the cell touches, stay inside the screen.
-        if !PlacementMath.approx(landed, target) {
-            let anchored = PlacementMath.anchoredFrame(size: landed.size, within: p.target, edges: edges, bounds: p.usable)
-            if !PlacementMath.approx(anchored, landed, 1) {
-                window.setPosition(anchored.origin)
-                landed = read()
-            }
-        }
-        return report(PlacementMath.outcome(requested: p.target, original: original, landed: landed),
-                      original: original, landed: landed)
+    var frame: CGRect? { element.axFrame }
+    var isMinimized: Bool { element.bool(AXAttr.minimized) == true }
+    var isFullscreen: Bool { element.bool(AXAttr.fullscreen) == true }
+    var positionSettable: Bool? { element.settable(AXAttr.position) }
+    var sizeSettable: Bool? { element.settable(AXAttr.size) }
+    func setSize(_ size: CGSize) { element.setSize(size) }
+    func setPosition(_ origin: CGPoint) { element.setPosition(origin) }
+    func settle(timeout: TimeInterval) {
+        handle.waitForFrameEvent(id, after: handle.frameSerial(id), timeout: timeout)
     }
 }

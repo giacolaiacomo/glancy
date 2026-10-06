@@ -432,7 +432,8 @@ struct WindowsPreviewTests {
 
     @Test func outcomeWording() {
         func r(_ id: CGWindowID, _ o: PlacementOutcome, landed: CGRect? = CGRect(x: 0, y: 0, width: 700, height: 412)) -> PlacementResult {
-            PlacementResult(windowID: id, outcome: o, requested: .zero, original: nil, landed: landed, attempts: 1,
+            PlacementResult(windowID: id, outcome: o, requested: CGRect(x: 0, y: 0, width: 744, height: 420), original: nil,
+                            landed: landed, attempts: 1,
                             euiWasOn: false, note: nil, elapsed: 0)
         }
         let names: (CGWindowID) -> String = { ["", "Terminal", "Mail", "Chrome"][Int($0)] }

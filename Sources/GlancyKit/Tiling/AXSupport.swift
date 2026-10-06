@@ -100,9 +100,12 @@ extension AXUIElement {
         AXUIElementSetAttributeValue(self, attribute as CFString, (value ? kCFBooleanTrue : kCFBooleanFalse))
     }
 
-    func isSettable(_ attribute: String) -> Bool {
+    func isSettable(_ attribute: String) -> Bool { settable(attribute) ?? false }
+
+    /// Whether the attribute is settable; nil when the app did not answer (busy, timed out).
+    func settable(_ attribute: String) -> Bool? {
         var settable: DarwinBoolean = false
-        guard AXUIElementIsAttributeSettable(self, attribute as CFString, &settable) == .success else { return false }
+        guard AXUIElementIsAttributeSettable(self, attribute as CFString, &settable) == .success else { return nil }
         return settable.boolValue
     }
 

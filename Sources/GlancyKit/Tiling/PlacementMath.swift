@@ -87,15 +87,6 @@ public enum PlacementMath {
         return r
     }
 
-    /// The target after honouring a known minimum size: grown to it, re-anchored to the same
-    /// edges, kept inside. Nil minimum = unchanged target.
-    public static func respectingMinimum(_ target: CGRect, minSize: CGSize?, edges: TouchedEdges,
-                                         bounds: CGRect) -> CGRect {
-        guard let minSize, minSize.width > target.width || minSize.height > target.height else { return target }
-        let size = CGSize(width: max(target.width, minSize.width), height: max(target.height, minSize.height))
-        return anchoredFrame(size: size, within: target, edges: edges, bounds: bounds)
-    }
-
     /// Names what happened: on target → exact; nothing changed although something was asked →
     /// refused; anything else → the app sized it (and the frame was re-anchored).
     public static func outcome(requested: CGRect, original: CGRect, landed: CGRect) -> PlacementOutcome {

@@ -36,22 +36,16 @@ struct TilingPlacementMathTests {
     }
 
     @Test func tooBigWindowIsPushedInside() {
-        // Minimum width 900 in a 744 right-half cell: grows leftwards, stays on screen.
+        // An app kept 900 wide in a 744 right-half cell: grows leftwards, stays on screen.
         let target = CGRect(x: 760, y: 8, width: 744, height: 884)
         let edges = PlacementMath.touchedEdges(of: target, in: usable, tolerance: 10)
-        let f = PlacementMath.respectingMinimum(target, minSize: CGSize(width: 900, height: 400), edges: edges, bounds: usable)
+        let f = PlacementMath.anchoredFrame(size: CGSize(width: 900, height: 884), within: target, edges: edges, bounds: usable)
         #expect(f.width == 900 && f.height == 884)
         #expect(f.maxX == target.maxX)
         #expect(usable.contains(f))
         // Larger than the bounds: the low edge wins.
         let huge = PlacementMath.pushInside(CGRect(x: 100, y: 100, width: 2000, height: 1000), usable)
         #expect(huge.minX == 0 && huge.minY == 0)
-    }
-
-    @Test func noMinimumLeavesTargetAlone() {
-        let target = CGRect(x: 8, y: 8, width: 500, height: 400)
-        #expect(PlacementMath.respectingMinimum(target, minSize: nil, edges: [], bounds: usable) == target)
-        #expect(PlacementMath.respectingMinimum(target, minSize: CGSize(width: 200, height: 200), edges: [], bounds: usable) == target)
     }
 
     @Test func outcomes() {

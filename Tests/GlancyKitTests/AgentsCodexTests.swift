@@ -342,7 +342,10 @@ private func nowStamp(_ offset: TimeInterval = 0) -> String {
     #expect(Array(store.sessions.keys) == ["codex:main-1"])
     #expect(store.sessions["codex:main-1"]?.state == .done)
     #expect(store.sessions["codex:main-1"]?.title == "Write the docs")
-    #expect(reader.trackedCount == 1)
+    // The rebuild follows only the recent main session. (Not a count: on a slow machine FSEvents may
+    // still report the fixture writes after the stream starts, and the old file then reads as resumed.)
+    #expect(reader.isTracking(day.appendingPathComponent("rollout-a-main-1.jsonl")))
+    #expect(!reader.isTracking(day.appendingPathComponent("rollout-b-child.jsonl")))
     reader.stop()
 }
 

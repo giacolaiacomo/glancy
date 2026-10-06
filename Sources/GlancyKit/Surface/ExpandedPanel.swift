@@ -140,6 +140,9 @@ private struct TabIcon: View {
             Image(systemName: symbol)
                 .font(.system(size: 12, weight: .medium))
                 .symbolVariant(selected ? .fill : .none)
+                // The icon swaps outline ↔ fill (and its ink) at once; the capsule still animates.
+                // Animated, the symbol morph went through ~50 MB of GPU textures on every switch.
+                .transaction { $0.animation = nil }
                 .foregroundStyle(selected ? Theme.primary : hover ? Theme.secondary : Theme.tertiary)
                 .frame(width: Self.iconWidth, height: 22)
                 .background(Capsule().fill(selected ? Theme.card : .clear))

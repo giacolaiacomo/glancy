@@ -19,14 +19,17 @@ extension AgentDot {
     var color: Color { state == .done && !fresh ? Theme.idle : state.color }
 }
 
-/// A state dot. A working dot breathes (0.8 s to 40 % and 0.8 s back), only while `pulsing`.
+/// A state dot. A working dot breathes three times (0.8 s to 40 % and 0.8 s back, ~5 s in all)
+/// when it starts pulsing (the panel opens on it, a session starts working), then rests at full.
 ///
-/// No repeating animation: each half-breath is one finite animation whose completion starts the
-/// next one while the dot still pulses. A repeating animation cannot be stopped in place: an unanimated
-/// write is combined with the running repeat (SwiftUI's DefaultCombiningAnimation) and the dot kept
-/// breathing, invisible or not, after `pulsing` went false: the closed notch on the other display
-/// was laid out on every frame (2.8% CPU on a two-display Mac). Now the breath ends by itself at
-/// most 1.6 s after `pulsing` goes false or the dot disappears.
+/// Every animation here ends by itself. A repeating animation cannot be stopped in place: an
+/// unanimated write is combined with the running repeat (SwiftUI's DefaultCombiningAnimation), so
+/// the wing dots kept breathing on a closed notch beside a panel open on another display (2.8% CPU
+/// on a two-display Mac). And a view removed while something in it still animates is never let go:
+/// the Home page, shown for an instant before the panel switched to another tab, stayed in the
+/// window breathing, unseen, for as long as the panel was open (~4% CPU). So the breath is a short
+/// chain of finite half-breaths, never more than three breaths, and stops early when `pulsing`
+/// goes false or the dot disappears.
 struct AgentStateDot: View {
     let color: Color
     let pulsing: Bool
@@ -34,7 +37,9 @@ struct AgentStateDot: View {
     @State private var dim = false
     /// `pulsing` as of the last change, read by the completion of the running half-breath.
     @State private var live = false
+    @State private var halfBreathsLeft = 0
     @State private var breathing = false
+    static let breaths = 3
 
     var body: some View {
         Circle()
@@ -43,15 +48,19 @@ struct AgentStateDot: View {
             .opacity(dim ? 0.4 : 1)
             .onChange(of: pulsing, initial: true) { _, on in
                 live = on
-                if on, !breathing { breathe() }
+                guard on else { return }
+                halfBreathsLeft = 2 * Self.breaths
+                if !breathing { breathe() }
             }
             .onDisappear { live = false }
     }
 
-    /// One half-breath, then the next while live; a dimmed dot always comes back to full first.
+    /// One half-breath, then the next while live and some are left; a dimmed dot always comes back
+    /// to full first.
     private func breathe() {
-        guard live || dim else { breathing = false; return }
+        guard (live && halfBreathsLeft > 0) || dim else { breathing = false; return }
         breathing = true
+        halfBreathsLeft -= 1
         withAnimation(.easeInOut(duration: 0.8), completionCriteria: .logicallyComplete) {
             dim.toggle()
         } completion: {

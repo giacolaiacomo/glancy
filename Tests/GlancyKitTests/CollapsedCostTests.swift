@@ -126,4 +126,69 @@ struct CollapsedCostTests {
 
         #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")
     }
+
+    /// The menu bar is read on events only (app switch, launch, quit, display change, an activity
+    /// appearing), never in a loop: a read moves the wings, and moving them must not ask for another.
+    @Test func theMenuBarIsReadOnEventsOnly() async throws {
+        guard !NSScreen.screens.isEmpty else { return }
+        final class Count: @unchecked Sendable { var n = 0 }
+        let count = Count()
+        let x: CGFloat = -90_000
+        let menus = [CGRect(x: x + 62, y: 949, width: 560, height: 33)]    // titles up to 8 pt before the notch
+        let status = [CGRect(x: x + 942, y: 949, width: 44, height: 33)]
+        let watcher = MenuBarWatcher(reader: .init(menus: { _ in count.n += 1; return menus }, status: { status },
+                                                   trusted: { true }, owner: { 42 }), observes: false)
+        let state = try #require(CollapsedStates.named("agents.claude.working"))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("glancy-menubar-\(UUID().uuidString)")
+        let set = DemoData.make(root: root)
+        let suite = "glancy.test.menubar.\(UUID().uuidString)"
+        let settings = AppSettings(defaults: UserDefaults(suiteName: suite)!)
+        settings.permissions.probe = .fixed([:])
+        let hub = ActivityHub()
+        let modules = set.modules.filter { $0.id == .agents }
+        let context = SurfaceContext(hub: hub, settings: settings, launchAtLogin: LaunchAtLogin(), modules: modules)
+        for m in modules { m.start(hub: hub) }
+        let screen = ScreenInfo(
+            uuid: "MENUBAR", frame: CGRect(x: x, y: 0, width: 1512, height: 982),
+            visibleFrame: CGRect(x: x, y: 57, width: 1512, height: 892), safeTop: 32,
+            auxLeft: CGRect(x: x, y: 950, width: 665, height: 32), auxRight: CGRect(x: x + 850, y: 950, width: 662, height: 32),
+            isBuiltin: true, scale: 2)
+        let manager = SurfaceManager(context: context, screens: { [screen] }, fullscreenSpaces: { [] },
+                                     events: SystemEvents(workspace: NotificationCenter(), distributed: NotificationCenter(),
+                                                          app: NotificationCenter(), observesDock: false),
+                                     menuBar: watcher, presents: true, systemInput: false)
+        manager.start()
+        defer {
+            manager.stop(); for m in modules { m.stop() }; set.removeDefaults()
+            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: root)
+        }
+        state.apply?(CollapsedStates.Rig(set: set, hub: hub, context: context))
+        try await Delay.sleep(for: .seconds(1.5))
+        let surface = try #require(manager.surface("MENUBAR"))
+        #expect(surface.model.hasActivity && surface.model.clearance != nil)
+        let reads = watcher.reads
+        #expect(reads <= 2)                       // the start, the activity appearing
+        try await Delay.sleep(for: .seconds(2))
+        #expect(watcher.reads == reads && count.n == reads)
+    }
+
+    /// The panel opened (Home for an instant) and switched straight to another tab, every module
+    /// running: once the breaths are over, the open Monitor tab lays out on its updates only. The
+    /// Home page's working dots, removed while breathing, kept the page in the window animating
+    /// for as long as the panel stayed open (~4% CPU in the lab).
+    @Test func anOpenPanelOnAnotherTabIsQuiet() async throws {
+        guard !NSScreen.screens.isEmpty else { return }
+        let rig = CostRig(try #require(CollapsedStates.named("all")), slot: 300)
+        defer { rig.tearDown() }
+        try await Delay.sleep(for: .seconds(4))
+        rig.manager.open(rig.notch)
+        rig.notch.model.select(tab: .monitor)
+        try await Delay.sleep(for: .seconds(Double(AgentStateDot.breaths) * 1.6 + 2))
+        let before = rig.notch.layoutPasses
+        try await Delay.sleep(for: .seconds(2))
+        let passes = rig.notch.layoutPasses - before
+        #expect(passes <= 6, "the open panel laid out \(passes) times in 2 s on a tab updated every 2 s")
+        rig.manager.closeAll()
+    }
 }

@@ -1,6 +1,7 @@
 // Composes the README images from glancy-render --demo output (made-up data only).
 // Usage: swift scripts/compose.swift <renders dir> <icon.png> <out dir>
-// Reads 02-activity.png, 05-expanded-home.png and the 06-tab-* renders (900×290 pt at 2×).
+// Reads 02-activity.png, 05-expanded-home.png, the 06-tab-* renders and a few state renders
+// (13-agents-sources-tab, 11-command-currency, 11-control-awake, 12-monitor-cpu), all 900×290 pt at 2×.
 // Writes hero.png (1280×640 pt) and screens.png (1280 pt wide), both at 2×.
 
 import AppKit
@@ -93,10 +94,10 @@ canvas(1280, 640, "hero.png") { r in
     icon.draw(in: NSRect(x: left - 14, y: 96, width: 150, height: 150), from: .zero, operation: .sourceOver, fraction: 1,
               respectFlipped: true, hints: nil)
     text("Glancy", at: NSPoint(x: left, y: 246), size: 72, weight: .heavy)
-    text("Your MacBook's notch, put to work:\nClaude Code agents, meetings, music,\nclipboard and windows at a glance.",
+    text("Your MacBook's notch, put to work:\ncoding agents, meetings, music, notes,\nclipboard and windows at a glance.",
          at: NSPoint(x: left, y: 338), size: 21, weight: .medium, color: NSColor.white.withAlphaComponent(0.78), width: 470)
     var cx = left
-    for chip in ["~19 MB RAM", "0% CPU idle", "Local only", "Native Swift"] {
+    for chip in ["~18 MB RAM", "0% CPU idle", "Local only", "Native Swift"] {
         let w = textWidth(chip, size: 14, weight: .semibold) + 24
         let c = NSRect(x: cx, y: 470, width: w, height: 30)
         rgb(0x8A7BFF, 0.18).setFill()
@@ -121,23 +122,42 @@ canvas(1280, 640, "hero.png") { r in
     screen(home, crop: NSRect(x: 0, y: 0, width: W, height: homeH), in: NSRect(x: colX, y: y, width: colW, height: homeH * k))
 }
 
-// MARK: screens.png — six tabs, two columns
+// MARK: screens.png — ten tabs, two columns
 
-let tabs: [(String, String)] = [
-    ("05-expanded-home.png", "Home"), ("06-tab-1-agents.png", "Agents"),
-    ("06-tab-2-calendar.png", "Calendar"), ("06-tab-3-media.png", "Media"),
-    ("06-tab-6-clipboard.png", "Clipboard"), ("06-tab-7-windows.png", "Windows"),
+/// The board with every agent source; its render runs the Agents module alone, so the full tab
+/// strip (same geometry, same selected tab) comes from the regular Agents tab render.
+let agentsBoard: NSImage = {
+    let board = load("13-agents-sources-tab.png"), strip = load("06-tab-1-agents.png")
+    // Drawn lazily at the destination's resolution (lockFocus would rasterise at 1×).
+    let stripH: CGFloat = 36
+    let img = NSImage(size: board.size, flipped: true) { all in
+        board.draw(in: all, from: .zero, operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
+        strip.draw(in: NSRect(x: 0, y: 0, width: all.width, height: stripH),
+                   from: NSRect(x: 0, y: strip.size.height - stripH, width: strip.size.width, height: stripH),
+                   operation: .copy, fraction: 1, respectFlipped: true, hints: nil)
+        return true
+    }
+    return img
+}()
+
+let tabs: [(NSImage, String)] = [
+    (load("05-expanded-home.png"), "Home"), (agentsBoard, "Agents: Claude Code, Codex, OpenCode"),
+    (load("06-tab-2-calendar.png"), "Calendar"), (load("06-tab-3-media.png"), "Media"),
+    (load("06-tab-5-notes.png"), "Notes and voice notes"), (load("11-command-currency.png"), "Command bar"),
+    (load("11-control-awake.png"), "Control"), (load("12-monitor-cpu.png"), "Monitor"),
+    (load("06-tab-7-clipboard.png"), "Clipboard"), (load("06-tab-8-windows.png"), "Windows"),
 ]
-let cellW: CGFloat = 576, cropH: CGFloat = 228, k = cellW / W, cellH = cropH * k
-let gapX: CGFloat = 40, top: CGFloat = 44, rowGap: CGFloat = 64
-let screensH = top + 3 * cellH + 2 * rowGap + 70
+let cellW: CGFloat = 576, cropH: CGFloat = 214, k = cellW / W, cellH = cropH * k
+let gapX: CGFloat = 40, top: CGFloat = 44, rowGap: CGFloat = 60
+let rows = CGFloat((tabs.count + 1) / 2)
+let screensH = top + rows * cellH + (rows - 1) * rowGap + 66
 canvas(1280, screensH, "screens.png") { r in
     duskBackground(r)
     let x0 = (r.width - 2 * cellW - gapX) / 2
-    for (i, (file, caption)) in tabs.enumerated() {
+    for (i, (img, caption)) in tabs.enumerated() {
         let col = CGFloat(i % 2), row = CGFloat(i / 2)
         let x = x0 + col * (cellW + gapX), y = top + row * (cellH + rowGap)
-        screen(load(file), crop: NSRect(x: 0, y: 0, width: W, height: cropH), in: NSRect(x: x, y: y, width: cellW, height: cellH))
+        screen(img, crop: NSRect(x: 0, y: 0, width: W, height: cropH), in: NSRect(x: x, y: y, width: cellW, height: cellH))
         let w = textWidth(caption, size: 16, weight: .semibold)
         text(caption, at: NSPoint(x: x + (cellW - w) / 2, y: y + cellH + 14), size: 16, weight: .semibold,
              color: NSColor.white.withAlphaComponent(0.8))

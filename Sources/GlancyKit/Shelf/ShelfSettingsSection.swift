@@ -9,7 +9,7 @@ struct ShelfSettingsSection: View {
         @Bindable var settings = module.settings
         let model = module.model
         let count = model.items.count
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsRow(L10n.tr("Drop targets"), note: L10n.tr("AirDrop, Share and Zip beside the shelf while you drag files")) {
                 NotchSwitch(isOn: $settings.dropTargets)
             }
@@ -46,16 +46,16 @@ private struct FolderLine: View {
     var body: some View {
         if let folder, status != .off {
             let name = FileManager.default.displayName(atPath: folder.path)
-            HStack(spacing: 6) {
-                Circle().fill(status == .watching ? Theme.done : Theme.waiting).frame(width: 6, height: 6)
-                VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 6.ui) {
+                Circle().fill(status == .watching ? Theme.done : Theme.waiting).frame(width: 6.ui, height: 6.ui)
+                VStack(alignment: .leading, spacing: 1.ui) {
                     Text(verbatim: text(name)).font(Theme.font(.xs)).foregroundStyle(Theme.secondary).lineLimit(1)
                     if status == .denied {
                         Text(verbatim: L10n.tr("Allow it in Privacy & Security › Files and Folders."))
                             .font(Theme.font(.xs)).foregroundStyle(Theme.tertiary).lineLimit(1)
                     }
                 }
-                Spacer(minLength: 6)
+                Spacer(minLength: 6.ui)
                 if status == .denied {
                     NotchTextButton(L10n.tr("Open Settings")) {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
@@ -64,8 +64,8 @@ private struct FolderLine: View {
                     }
                 }
             }
-            .frame(minHeight: 20)
-            .padding(.leading, 2)
+            .frame(minHeight: 20.ui)
+            .padding(.leading, 2.ui)
         }
     }
 

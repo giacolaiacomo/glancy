@@ -17,6 +17,8 @@ public final class AppSettings {
     }
     public var hideFromCapture: Bool { didSet { save(hideFromCapture, Key.hideFromCapture) } }
     public var externalPill: Bool { didSet { save(externalPill, Key.externalPill) } }
+    /// Settings → General → Size: text, symbols and the panel together. Normal by default.
+    public var size: UISize { didSet { save(size.rawValue, Key.size) } }
     public var disabledModules: Set<ModuleID> {
         didSet { save(disabledModules.map(\.rawValue).sorted(), Key.disabledModules) }
     }
@@ -33,6 +35,7 @@ public final class AppSettings {
         static let language = "language"
         static let hideFromCapture = "hideFromCapture"
         static let externalPill = "externalPill"
+        static let size = "uiSize"
         static let disabledModules = "disabledModules"
         static let optedIn = "optedInModules"
         static let onboarded = "onboardingShown"
@@ -48,6 +51,7 @@ public final class AppSettings {
         language = defaults.string(forKey: Key.language).flatMap(AppLanguage.init) ?? .system
         hideFromCapture = defaults.object(forKey: Key.hideFromCapture) as? Bool ?? true
         externalPill = defaults.object(forKey: Key.externalPill) as? Bool ?? false
+        size = defaults.string(forKey: Key.size).flatMap(UISize.init) ?? .normal
         let off = defaults.stringArray(forKey: Key.disabledModules) ?? []
         let optedIn = Set((defaults.stringArray(forKey: Key.optedIn) ?? []).compactMap(ModuleID.init))
         disabledModules = Set(off.compactMap(ModuleID.init)).union(Self.defaultDisabled.subtracting(optedIn))

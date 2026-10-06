@@ -16,7 +16,7 @@ func untilText(_ start: Date, now: Date = .now) -> String {
 
 struct CalendarDot: View {
     let color: CalendarRGB
-    var size: CGFloat = 7
+    var size: CGFloat = 7.ui
     var body: some View { Circle().fill(color.color).frame(width: size, height: size) }
 }
 
@@ -29,7 +29,7 @@ struct JoinPill: View {
         let label = Text(verbatim: CalL10n.join)
             .font(Theme.font(compact ? .xs : .s, .semibold))
             .foregroundStyle(.black)
-            .padding(.horizontal, compact ? 7 : 10).padding(.vertical, compact ? 2 : 4)
+            .padding(.horizontal, compact ? 7.ui : 10.ui).padding(.vertical, compact ? 2.ui : 4.ui)
             .background(Capsule().fill(Theme.primary))
             .fixedSize()
         if interactive {
@@ -45,7 +45,7 @@ struct CalendarWingLeft: View {
     let event: CalendarEvent
     let phase: CalendarPhase
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 5.ui) {
             CalendarDot(color: event.color)
             switch phase {
             case .soon:
@@ -59,7 +59,7 @@ struct CalendarWingLeft: View {
                 Text(verbatim: CalL10n.now).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
             }
         }
-        .padding(.leading, 6).frame(maxWidth: Theme.wingMaxWidth, alignment: .leading)
+        .padding(.leading, 6.ui).frame(maxWidth: Theme.wingMaxWidth, alignment: .leading)
     }
 }
 
@@ -75,21 +75,21 @@ struct CalendarWingRight: View {
                     .lineLimit(1).truncationMode(.tail)
             }
         }
-        .padding(.trailing, 6).frame(maxWidth: Theme.wingMaxWidth, alignment: .trailing)
+        .padding(.trailing, 6.ui).frame(maxWidth: Theme.wingMaxWidth, alignment: .trailing)
     }
 }
 
 struct CalendarPeek: View {
     let event: CalendarEvent
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             CalendarDot(color: event.color)
             Text(verbatim: event.title).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
             Text(verbatim: "· " + CalL10n.inTwo).font(Theme.font(.m)).foregroundStyle(Theme.secondary).fixedSize()
-            Spacer(minLength: 4)
+            Spacer(minLength: 4.ui)
             if let link = event.link { JoinPill(link: link, eventID: event.id) }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 14.ui)
     }
 }
 
@@ -100,11 +100,11 @@ struct CalendarHomeCard: View {
     var body: some View {
         if let e = model.next {
             let live = e.start <= model.now
-            HStack(spacing: 10) {
-                RoundedRectangle(cornerRadius: 1.5).fill(e.color.color).frame(width: 3)
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10.ui) {
+                RoundedRectangle(cornerRadius: 1.5.ui).fill(e.color.color).frame(width: 3.ui)
+                VStack(alignment: .leading, spacing: 2.ui) {
                     Text(verbatim: e.title).font(Theme.font(.l, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4.ui) {
                         Text(verbatim: shortTime(e.start) + " – " + shortTime(e.end)).monospacedDigit()
                         Text(verbatim: "·")
                         if live { Text(verbatim: CalL10n.now) }
@@ -112,7 +112,7 @@ struct CalendarHomeCard: View {
                     }
                     .font(Theme.font(.s)).foregroundStyle(Theme.secondary).lineLimit(1)
                 }
-                Spacer(minLength: 6)
+                Spacer(minLength: 6.ui)
                 if let link = e.link { JoinPill(link: link, eventID: e.id) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,15 +136,15 @@ struct CalendarTabView: View {
 
 struct PermissionCard: View {
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "calendar.badge.exclamationmark").font(.system(size: 22, weight: .light))
+        VStack(spacing: 10.ui) {
+            Image(systemName: "calendar.badge.exclamationmark").font(.system(size: 22.ui, weight: .light))
                 .foregroundStyle(Theme.secondary)
             Text(verbatim: CalL10n.allowTitle).font(Theme.font(.xl, .semibold)).foregroundStyle(Theme.primary)
             Text(verbatim: CalL10n.allowBody).font(Theme.font(.m)).foregroundStyle(Theme.secondary)
-                .multilineTextAlignment(.center).frame(maxWidth: 340)
+                .multilineTextAlignment(.center).frame(maxWidth: 340.ui)
             Button { NSWorkspace.shared.open(CalendarJoin.privacyURL) } label: {
                 Text(verbatim: CalL10n.openSettings).font(Theme.font(.s, .semibold)).foregroundStyle(.black)
-                    .padding(.horizontal, 12).padding(.vertical, 5).background(Capsule().fill(Theme.primary))
+                    .padding(.horizontal, 12.ui).padding(.vertical, 5.ui).background(Capsule().fill(Theme.primary))
             }.buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -177,16 +177,16 @@ struct Agenda: View {
         let today = CalendarLogic.agenda(model.events, now: model.now, days: 1).first
         let next = CalendarLogic.upcoming(model.events, now: model.now)
         let nextID = model.next?.id
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 14.ui) {
             // Today
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 4.ui) {
+                HStack(spacing: 6.ui) {
                     ColumnHeader(title: CalL10n.today, date: model.now)
-                    Spacer(minLength: 4)
+                    Spacer(minLength: 4.ui)
                     if let focus, focus.isOn { FocusOnChip(focus: focus) }
                 }
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4.ui) {
                         if let today, !today.allDay.isEmpty { AllDayStrip(events: today.allDay) }
                         if let today, today.timed.isEmpty, today.allDay.isEmpty {
                             Text(verbatim: CalL10n.nothing).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
@@ -200,15 +200,15 @@ struct Agenda: View {
                             }
                         }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 2.ui)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
 
-            Rectangle().fill(Theme.card).frame(width: 1)
+            Rectangle().fill(Theme.card).frame(width: 1.ui)
 
             // The coming days
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4.ui) {
                 Text(verbatim: CalL10n.comingDays).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
                 if next.isEmpty {
                     Text(verbatim: CalL10n.nothingAhead).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
@@ -218,7 +218,7 @@ struct Agenda: View {
                     UpcomingRow(event: e, showDay: newDay, now: model.now)
                 }
             }
-            .frame(width: 212, alignment: .topLeading)
+            .frame(width: 212.ui, alignment: .topLeading)
         }
     }
 }
@@ -227,7 +227,7 @@ private struct ColumnHeader: View {
     let title: String
     let date: Date
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6.ui) {
             Text(verbatim: title).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
             Text(date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
                 .font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
@@ -241,16 +241,16 @@ struct UpcomingRow: View {
     let showDay: Bool
     let now: Date
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 1.ui) {
             if showDay {
                 Text(verbatim: dayLabel).font(Theme.font(.xs, .semibold)).foregroundStyle(Theme.tertiary)
-                    .padding(.top, 2)
+                    .padding(.top, 2.ui)
             }
-            HStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 1.5).fill(event.color.color).frame(width: 3, height: 14)
+            HStack(spacing: 6.ui) {
+                RoundedRectangle(cornerRadius: 1.5.ui).fill(event.color.color).frame(width: 3.ui, height: 14.ui)
                 Text(verbatim: event.isAllDay ? CalL10n.allDay : shortTime(event.start))
                     .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.secondary)
-                    .frame(width: 40, alignment: .leading)
+                    .frame(width: 40.ui, alignment: .leading)
                 Text(verbatim: event.title).font(Theme.font(.s)).foregroundStyle(Theme.primary).lineLimit(1)
             }
         }
@@ -267,13 +267,13 @@ struct AllDayStrip: View {
     let events: [CalendarEvent]
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
+            HStack(spacing: 6.ui) {
                 ForEach(events) { e in
-                    HStack(spacing: 5) {
-                        CalendarDot(color: e.color, size: 6)
+                    HStack(spacing: 5.ui) {
+                        CalendarDot(color: e.color, size: 6.ui)
                         Text(verbatim: e.title).font(Theme.font(.s)).foregroundStyle(Theme.primary).lineLimit(1)
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .padding(.horizontal, 8.ui).padding(.vertical, 3.ui)
                     .background(Capsule().fill(Theme.card))
                 }
             }
@@ -284,10 +284,10 @@ struct AllDayStrip: View {
 struct NowLine: View {
     var body: some View {
         HStack(spacing: 0) {
-            Circle().fill(Theme.failed).frame(width: 5, height: 5)
-            Rectangle().fill(Theme.failed.opacity(0.55)).frame(height: 1)
+            Circle().fill(Theme.failed).frame(width: 5.ui, height: 5.ui)
+            Rectangle().fill(Theme.failed.opacity(0.55)).frame(height: 1.ui)
         }
-        .frame(height: 5)
+        .frame(height: 5.ui)
     }
 }
 
@@ -297,10 +297,10 @@ struct EventRow: View {
     let isNext: Bool
     var body: some View {
         let past = event.end <= now
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 1.5).fill(event.color.color.opacity(past ? 0.4 : 1)).frame(width: 3, height: 24)
+        HStack(spacing: 8.ui) {
+            RoundedRectangle(cornerRadius: 1.5.ui).fill(event.color.color.opacity(past ? 0.4 : 1)).frame(width: 3.ui, height: 24.ui)
             Text(verbatim: shortTime(event.start)).font(Theme.font(.s)).monospacedDigit()
-                .foregroundStyle(past ? Theme.tertiary : Theme.secondary).frame(width: 52, alignment: .leading)
+                .foregroundStyle(past ? Theme.tertiary : Theme.secondary).frame(width: 52.ui, alignment: .leading)
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: event.title).font(Theme.font(.m, .medium))
                     .foregroundStyle(past ? Theme.tertiary : Theme.primary).lineLimit(1)
@@ -308,14 +308,14 @@ struct EventRow: View {
                     Text(verbatim: loc).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary).lineLimit(1)
                 }
             }
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             if isNext, event.start > now {
                 Text(verbatim: untilText(event.start))
                     .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.secondary)
             }
             if !past, let link = event.link { JoinPill(link: link, eventID: event.id) }
         }
-        .frame(minHeight: 26)
+        .frame(minHeight: 26.ui)
     }
 }
 
@@ -328,11 +328,11 @@ private let overrunTint = Theme.failed.opacity(0.9)
 struct CalendarOverrunWingLeft: View {
     let previous: CalendarEvent
     var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(overrunTint).frame(width: 7, height: 7)
+        HStack(spacing: 5.ui) {
+            Circle().fill(overrunTint).frame(width: 7.ui, height: 7.ui)
             Text(verbatim: CalL10n.late).font(Theme.font(.s, .semibold)).foregroundStyle(overrunTint).lineLimit(1)
         }
-        .padding(.leading, 6).frame(maxWidth: Theme.wingMaxWidth, alignment: .leading)
+        .padding(.leading, 6.ui).frame(maxWidth: Theme.wingMaxWidth, alignment: .leading)
         .help(CalL10n.overrunHelp)
     }
 }
@@ -341,7 +341,7 @@ struct CalendarOverrunWingLeft: View {
 private struct PeekTitle: View {
     let text: String
     var weight: Font.Weight = .semibold
-    var maxWidth: CGFloat = 150
+    var maxWidth: CGFloat = 150.ui
     var body: some View {
         Text(verbatim: text).font(Theme.font(.m, weight)).foregroundStyle(Theme.primary)
             .lineLimit(1).truncationMode(.tail).frame(maxWidth: maxWidth, alignment: .leading).fixedSize(horizontal: false, vertical: true)
@@ -353,10 +353,10 @@ struct MeetingEndPeekView: View {
     let peek: MeetingEndPeek
     let now: Date
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 4.ui) {
             switch peek {
             case .ending(let e, let minutes, let next):
-                CalendarDot(color: e.color).padding(.trailing, 3)
+                CalendarDot(color: e.color).padding(.trailing, 3.ui)
                 PeekTitle(text: e.title, maxWidth: next == nil ? 200 : 120)
                 Text(verbatim: "· " + CalL10n.endsIn(minutes)).font(Theme.font(.m)).foregroundStyle(Theme.secondary).fixedSize()
                 if let next {
@@ -364,15 +364,15 @@ struct MeetingEndPeekView: View {
                     nextLine(next)
                 }
             case .backToBack(_, let next):
-                CalendarDot(color: next.color).padding(.trailing, 3)
+                CalendarDot(color: next.color).padding(.trailing, 3.ui)
                 Text(verbatim: CalL10n.next).font(Theme.font(.m)).foregroundStyle(Theme.secondary).fixedSize()
-                PeekTitle(text: next.title, maxWidth: 170)
+                PeekTitle(text: next.title, maxWidth: 170.ui)
                 Text(verbatim: "· " + (next.start <= now ? CalL10n.now : untilText(next.start, now: now)))
                     .font(Theme.font(.m)).monospacedDigit().foregroundStyle(Theme.secondary).fixedSize()
-                if let link = next.link { JoinPill(link: link, eventID: next.id).padding(.leading, 4) }
+                if let link = next.link { JoinPill(link: link, eventID: next.id).padding(.leading, 4.ui) }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 12.ui)
     }
 
     /// "next: Standup at 15:30", the title truncated in the middle of the sentence.
@@ -380,7 +380,7 @@ struct MeetingEndPeekView: View {
         let parts = CalL10n.nextAt("\u{1}", shortTime(next.start)).components(separatedBy: "\u{1}")
         Text(verbatim: (parts.first ?? "").trimmingCharacters(in: .whitespaces)).font(Theme.font(.m)).foregroundStyle(Theme.tertiary).fixedSize()
         Text(verbatim: next.title).font(Theme.font(.m, .medium)).foregroundStyle(Theme.secondary)
-            .lineLimit(1).truncationMode(.tail).frame(maxWidth: 100, alignment: .leading)
+            .lineLimit(1).truncationMode(.tail).frame(maxWidth: 100.ui, alignment: .leading)
         Text(verbatim: (parts.count > 1 ? parts[1] : "").trimmingCharacters(in: .whitespaces))
             .font(Theme.font(.m)).monospacedDigit().foregroundStyle(Theme.tertiary).fixedSize()
     }
@@ -391,17 +391,17 @@ struct CalendarNothingToJoinPeek: View {
     let later: CalendarEvent?
     let now: Date
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "video.slash").font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
+        HStack(spacing: 7.ui) {
+            Image(systemName: "video.slash").font(.system(size: 11.ui, weight: .semibold)).foregroundStyle(Theme.secondary)
             Text(verbatim: CalL10n.nothingToJoin).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).fixedSize()
             if let later {
                 Text(verbatim: "·").font(Theme.font(.m)).foregroundStyle(Theme.tertiary)
-                PeekTitle(text: later.title, weight: .regular, maxWidth: 120)
+                PeekTitle(text: later.title, weight: .regular, maxWidth: 120.ui)
                 Text(verbatim: when(later)).font(Theme.font(.m)).monospacedDigit().foregroundStyle(Theme.secondary).fixedSize()
                 if let link = later.link { JoinPill(link: link, eventID: later.id) }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 12.ui)
     }
 
     private func when(_ e: CalendarEvent) -> String {
@@ -416,15 +416,15 @@ struct CalendarNoticePeek: View {
     var detail: String? = nil
     var symbol = "calendar"
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.secondary)
+        HStack(spacing: 7.ui) {
+            Image(systemName: symbol).font(.system(size: 11.ui, weight: .semibold)).foregroundStyle(Theme.secondary)
             Text(verbatim: text).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).fixedSize()
             if let detail {
                 Text(verbatim: "·").font(Theme.font(.m)).foregroundStyle(Theme.tertiary)
-                PeekTitle(text: detail, weight: .regular, maxWidth: 200)
+                PeekTitle(text: detail, weight: .regular, maxWidth: 200.ui)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 12.ui)
     }
 }
 
@@ -434,13 +434,13 @@ struct FocusOnChip: View {
     @State private var hover = false
     var body: some View {
         Button { focus.turnOffNow() } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "moon.fill").font(.system(size: 9, weight: .semibold))
+            HStack(spacing: 4.ui) {
+                Image(systemName: "moon.fill").font(.system(size: 9.ui, weight: .semibold))
                 Text(verbatim: CalL10n.focusOn).font(Theme.font(.xs, .semibold))
-                Image(systemName: "xmark").font(.system(size: 7, weight: .bold)).opacity(hover ? 1 : 0.6)
+                Image(systemName: "xmark").font(.system(size: 7.ui, weight: .bold)).opacity(hover ? 1 : 0.6)
             }
             .foregroundStyle(Color(red: 0.62, green: 0.58, blue: 1.0))
-            .padding(.horizontal, 7).frame(height: 18)
+            .padding(.horizontal, 7.ui).frame(height: 18.ui)
             .background(Capsule().fill(Color(red: 0.62, green: 0.58, blue: 1.0).opacity(hover ? 0.24 : 0.14)))
             .contentShape(Capsule())
         }

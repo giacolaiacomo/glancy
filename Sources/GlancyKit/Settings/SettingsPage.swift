@@ -41,8 +41,8 @@ private struct SettingsIndex: View {
             .filter { SettingsCatalog.hasSection($0) }
             .sorted { SurfaceContext.order($0) < SurfaceContext.order($1) }
         let missing = PermissionRows.missing(context)
-        VStack(alignment: .leading, spacing: 6) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6.ui), count: 4), spacing: 6.ui) {
                 IndexTile(symbol: "slider.horizontal.3", title: tr("General"), detail: SettingsCatalog.generalSummary(settings)) {
                     nav.go(.general)
                 }
@@ -62,7 +62,7 @@ private struct SettingsIndex: View {
                     }
                 }
             }
-            HStack(spacing: 8) {
+            HStack(spacing: 8.ui) {
                 Text(verbatim: "Glancy \(SettingsPage.version)")
                     .font(Theme.font(.xs))
                     .foregroundStyle(Theme.tertiary)
@@ -87,12 +87,12 @@ private struct IndexTile: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: 7.ui) {
                 Image(systemName: symbol)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11.ui, weight: .medium))
                     .foregroundStyle(Theme.secondary)
-                    .frame(width: 16)
-                VStack(alignment: .leading, spacing: 1) {
+                    .frame(width: 16.ui)
+                VStack(alignment: .leading, spacing: 1.ui) {
                     Text(verbatim: title)
                         .font(Theme.font(.m, .medium))
                         .foregroundStyle(Theme.primary)
@@ -103,12 +103,12 @@ private struct IndexTile: View {
                 .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 36)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .padding(.horizontal, 8.ui)
+            .frame(height: 36.ui)
+            .background(RoundedRectangle(cornerRadius: 10.ui, style: .continuous)
                 .fill(hover ? Color.white.opacity(0.11) : Theme.card))
             .opacity(dimmed ? 0.55 : 1)
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 10.ui, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
@@ -117,16 +117,16 @@ private struct IndexTile: View {
 
 // MARK: Level 2 — General and Modules
 
-private struct GeneralSection: View {
+struct GeneralSection: View {
     let context: SurfaceContext
 
     var body: some View {
         @Bindable var settings = context.settings
         let launch = context.launchAtLogin
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
             SettingsHeader(context: context, title: tr("General"))
-            HStack(alignment: .top, spacing: 22) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 22.ui) {
+                VStack(alignment: .leading, spacing: 4.ui) {
                     SettingsRow(tr("Open with"),
                                 note: settings.openModel == .hover ? tr("Resting on the notch opens it") : tr("Hover peeks, click opens")) {
                         NotchSegments(selection: $settings.openModel,
@@ -136,13 +136,22 @@ private struct GeneralSection: View {
                         NotchSegments(selection: $settings.language,
                                       options: [(.system, tr("System")), (.en, "English"), (.it, "Italiano")])
                     }
+                    SettingsRow(tr("Size")) {
+                        NotchSegments(selection: $settings.size,
+                                      options: UISize.allCases.map { ($0, tr(Self.sizeName($0))) })
+                            .fixedSize()
+                    }
+                    // The whole column's width: the segments leave the title little room.
+                    if let note = sizeNote(settings.size) {
+                        Text(verbatim: note).font(Theme.font(.xs)).foregroundStyle(Theme.waiting).lineLimit(2)
+                    }
                     SettingsRow(tr("Launch at login"), note: launchNote(launch.state)) {
                         NotchSwitch(isOn: Binding(get: { launch.state == .on }, set: { launch.set($0) }),
                                     enabled: launch.state != .unavailable)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 4.ui) {
                     SettingsRow(tr("Hidden from screen recordings"), note: tr("Screenshots and shared screens skip it")) {
                         NotchSwitch(isOn: $settings.hideFromCapture)
                     }
@@ -154,6 +163,21 @@ private struct GeneralSection: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+    }
+
+    static func sizeName(_ s: UISize) -> String {
+        switch s {
+        case .normal: "Normal"
+        case .large: "Large"
+        case .extraLarge: "Extra large"
+        }
+    }
+
+    /// Only when the chosen size would not fit a display: the one in use.
+    private func sizeNote(_ chosen: UISize) -> String? {
+        let scale = UIScale.shared
+        guard scale.isLimited, scale.requested == chosen else { return nil }
+        return L10n.tr("Doesn't fit the screen: %@ in use", tr(Self.sizeName(scale.size)))
     }
 
     private func launchNote(_ s: LaunchAtLogin.State) -> String? {
@@ -170,19 +194,19 @@ private struct ModulesSection: View {
 
     var body: some View {
         let modules = context.modules.map(\.id).sorted { SurfaceContext.order($0) < SurfaceContext.order($1) }
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsHeader(context: context, title: tr("Modules"))
             if modules.isEmpty {
                 SettingsNote(tr("No modules yet."))
             }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 22), GridItem(.flexible())], alignment: .leading, spacing: 2) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 22.ui), GridItem(.flexible())], alignment: .leading, spacing: 2.ui) {
                 ForEach(modules, id: \.self) { id in
                     let on = context.settings.isEnabled(id)
-                    HStack(spacing: 8) {
+                    HStack(spacing: 8.ui) {
                         Image(systemName: SurfaceContext.symbol(id))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: 11.ui, weight: .medium))
                             .foregroundStyle(on ? Theme.primary : Theme.tertiary)
-                            .frame(width: 18)
+                            .frame(width: 18.ui)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(verbatim: tr(SurfaceContext.name(id)))
                                 .font(Theme.font(.m))
@@ -192,10 +216,10 @@ private struct ModulesSection: View {
                                 .foregroundStyle(Theme.tertiary)
                         }
                         .lineLimit(1)
-                        Spacer(minLength: 6)
+                        Spacer(minLength: 6.ui)
                         NotchSwitch(isOn: Binding(get: { on }, set: { context.setModuleEnabled(id, $0) }))
                     }
-                    .frame(height: 28)
+                    .frame(height: 28.ui)
                 }
             }
         }
@@ -216,12 +240,12 @@ struct SettingsHeader<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Button { context.settings.navigation.go(.index) } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10.ui, weight: .semibold))
                     .foregroundStyle(hover ? Theme.primary : Theme.secondary)
-                    .frame(width: 22, height: 20)
+                    .frame(width: 22.ui, height: 20.ui)
                     .background(Capsule().fill(hover ? Color.white.opacity(0.12) : Theme.card))
                     .contentShape(Capsule())
             }
@@ -233,10 +257,10 @@ struct SettingsHeader<Trailing: View>: View {
                 .font(Theme.font(.l, .semibold))
                 .foregroundStyle(Theme.primary)
                 .lineLimit(1)
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             trailing
         }
-        .frame(height: 24)
+        .frame(height: 24.ui)
     }
 }
 
@@ -248,14 +272,14 @@ struct SettingsRow<Control: View>: View {
     let minHeight: CGFloat
     let control: Control
 
-    init(_ title: String, note: String? = nil, noteColor: Color = Theme.tertiary, minHeight: CGFloat = 26,
+    init(_ title: String, note: String? = nil, noteColor: Color = Theme.tertiary, minHeight: CGFloat = 26.ui,
          @ViewBuilder control: () -> Control) {
         self.title = title; self.note = note; self.noteColor = noteColor; self.minHeight = minHeight; self.control = control()
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: 8.ui) {
+            VStack(alignment: .leading, spacing: 1.ui) {
                 Text(verbatim: title)
                     .font(Theme.font(.m))
                     .foregroundStyle(Theme.primary)
@@ -264,7 +288,7 @@ struct SettingsRow<Control: View>: View {
                     Text(verbatim: note).font(Theme.font(.xs)).foregroundStyle(noteColor).lineLimit(1)
                 }
             }
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             control
         }
         .frame(minHeight: minHeight)
@@ -290,8 +314,8 @@ struct SettingsGroupTitle: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(verbatim: text.uppercased())
-            .font(.system(size: 9.5, weight: .semibold))
-            .tracking(0.6)
+            .font(.system(size: 9.5.ui, weight: .semibold))
+            .tracking(0.6.ui)
             .foregroundStyle(Theme.tertiary)
             .lineLimit(1)
     }
@@ -304,15 +328,15 @@ struct MinutesStepper: View {
     let onChange: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 2.ui) {
             step("minus", -1)
             Text(verbatim: L10n.tr("%d min", value))
                 .font(Theme.font(.s, .medium).monospacedDigit())
                 .foregroundStyle(Theme.primary)
-                .frame(minWidth: 44)
+                .frame(minWidth: 44.ui)
             step("plus", 1)
         }
-        .padding(2)
+        .padding(2.ui)
         .background(Capsule().fill(Theme.card))
     }
 
@@ -320,9 +344,9 @@ struct MinutesStepper: View {
         let next = value + d
         return Button { onChange(next) } label: {
             Image(systemName: symbol)
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 9.ui, weight: .bold))
                 .foregroundStyle(range.contains(next) ? Theme.secondary : Theme.tertiary.opacity(0.5))
-                .frame(width: 20, height: 18)
+                .frame(width: 20.ui, height: 18.ui)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -341,15 +365,15 @@ struct ConfirmButton: View {
 
     var body: some View {
         if asking {
-            HStack(spacing: 4) {
+            HStack(spacing: 4.ui) {
                 Text(verbatim: question).font(Theme.font(.xs)).foregroundStyle(Theme.secondary).lineLimit(1)
                 NotchTextButton(tr("Cancel")) { asking = false }
                 Button { asking = false; action() } label: {
                     Text(verbatim: confirm)
                         .font(Theme.font(.s, .semibold))
                         .foregroundStyle(Color.black)
-                        .padding(.horizontal, 9)
-                        .frame(height: 22)
+                        .padding(.horizontal, 9.ui)
+                        .frame(height: 22.ui)
                         .background(Capsule().fill(Theme.failed))
                         .contentShape(Capsule())
                 }

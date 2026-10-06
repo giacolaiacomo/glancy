@@ -127,10 +127,10 @@ private struct OverlayView: View {
             ForEach(state.boxes) { box in
                 let tint = box.secondary ? WindowsStyle.swap : WindowsStyle.accent
                 ZStack {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14.ui, style: .continuous)
                         .fill(tint.opacity(box.secondary ? 0.10 : 0.16))
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(tint.opacity(0.75), lineWidth: 2)
+                    RoundedRectangle(cornerRadius: 14.ui, style: .continuous)
+                        .strokeBorder(tint.opacity(0.75), lineWidth: 2.ui)
                     OverlayLabel(title: box.title, bundleID: box.bundleID, number: box.number)
                 }
                 .frame(width: box.rect.width, height: box.rect.height)
@@ -138,8 +138,8 @@ private struct OverlayView: View {
             }
             // The list row under the pointer: where that window is now, outline only.
             if let h = state.highlight {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(WindowsStyle.accent, lineWidth: 3)
+                RoundedRectangle(cornerRadius: 12.ui, style: .continuous)
+                    .strokeBorder(WindowsStyle.accent, lineWidth: 3.ui)
                     .frame(width: h.rect.width, height: h.rect.height)
                     .offset(x: h.rect.minX, y: h.rect.minY)
             }
@@ -156,17 +156,17 @@ private struct OverlayLabel: View {
     var number: Int?
 
     var body: some View {
-        HStack(spacing: 8) {
-            if let number { OrderBadge(number: number, size: 26) }
+        HStack(spacing: 8.ui) {
+            if let number { OrderBadge(number: number, size: 26.ui) }
             if let icon = AppIcons.icon(bundleID) {
-                Image(nsImage: icon).resizable().frame(width: 28, height: 28)
+                Image(nsImage: icon).resizable().frame(width: 28.ui, height: 28.ui)
             }
             Text(verbatim: title)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15.ui, weight: .semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 14).padding(.vertical, 8)
+        .padding(.horizontal, 14.ui).padding(.vertical, 8.ui)
         .background(Capsule().fill(Color.black.opacity(0.55)))
     }
 }

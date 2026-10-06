@@ -5,7 +5,7 @@ private struct Caption: View {
     let text: String
     var body: some View {
         Text(verbatim: text.uppercased())
-            .font(.system(size: 9.5, weight: .semibold)).tracking(0.6)
+            .font(.system(size: 9.5.ui, weight: .semibold)).tracking(0.6.ui)
             .foregroundStyle(Theme.tertiary)
             .lineLimit(1)
     }
@@ -15,7 +15,7 @@ private struct Caption: View {
 struct ShelfThumb: View {
     let shelf: ShelfModule
     let item: ShelfItem
-    var size: CGFloat = 32
+    var size: CGFloat = 32.ui
     @State private var image: NSImage?
 
     var body: some View {
@@ -23,7 +23,7 @@ struct ShelfThumb: View {
             if let image {
                 Image(nsImage: image).resizable().interpolation(.high).aspectRatio(contentMode: .fit)
             } else {
-                RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Theme.card)
+                RoundedRectangle(cornerRadius: 6.ui, style: .continuous).fill(Theme.card)
             }
         }
         .frame(width: size, height: size)
@@ -39,12 +39,12 @@ struct ShelfThumb: View {
 struct ShelfDragWing: View {
     let count: Int
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "tray.and.arrow.down.fill").font(.system(size: 12, weight: .medium))
+        HStack(spacing: 4.ui) {
+            Image(systemName: "tray.and.arrow.down.fill").font(.system(size: 12.ui, weight: .medium))
             Text(verbatim: "\(count)").font(Theme.font(.s, .semibold)).monospacedDigit()
         }
         .foregroundStyle(Theme.primary)
-        .padding(.leading, 6)
+        .padding(.leading, 6.ui)
     }
 }
 
@@ -55,20 +55,20 @@ struct ShelfHomeCard: View {
     let model: ShelfModel
     var body: some View {
         Button { shelf.openShelfTab() } label: {
-            HStack(spacing: 10) {
-                HStack(spacing: -8) {
+            HStack(spacing: 10.ui) {
+                HStack(spacing: -8.ui) {
                     ForEach(model.items.prefix(4)) { item in
-                        ShelfThumb(shelf: shelf, item: item, size: 28)
+                        ShelfThumb(shelf: shelf, item: item, size: 28.ui)
                             .shadow(color: .black.opacity(0.5), radius: 2)
                     }
                 }
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 2.ui) {
                     Caption(text: L10n.tr("Shelf"))
                     Text(verbatim: ShelfText.count(model.items.count))
                         .font(Theme.font(.l, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                 }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.tertiary)
+                Spacer(minLength: 4.ui)
+                Image(systemName: "chevron.right").font(.system(size: 10.ui, weight: .semibold)).foregroundStyle(Theme.tertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
@@ -90,15 +90,15 @@ struct ShelfTabView: View {
         } else if model.items.isEmpty && model.receiving == 0 && model.busy == 0 {
             EmptyShelf()
         } else {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6.ui) {
                 toolbar
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64, maximum: 72), spacing: 4)], spacing: 4) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 64.ui, maximum: 72.ui), spacing: 4.ui)], spacing: 4.ui) {
                         ForEach(model.items) { item in
                             ShelfTile(shelf: shelf, model: model, item: item, selected: model.selection.contains(item.id))
                         }
                     }
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 4.ui)
                 }
                 .background(Color.black.opacity(0.001).onTapGesture { model.selection = [] })
             }
@@ -106,11 +106,11 @@ struct ShelfTabView: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 4.ui) {
             Caption(text: model.receiving > 0 ? L10n.tr("Receiving…")
                     : model.busy > 0 ? L10n.tr("Working…")
                     : model.selection.isEmpty ? ShelfText.count(model.items.count) : ShelfText.selected(model.selection.count))
-            Spacer(minLength: 8)
+            Spacer(minLength: 8.ui)
             ToolIcon(symbol: "eye", help: L10n.tr("Quick Look")) { shelf.quickLook() }
             ToolIcon(symbol: "dot.radiowaves.left.and.right", help: L10n.tr("AirDrop")) { shelf.airDrop() }
             ShareIcon(shelf: shelf)
@@ -118,29 +118,29 @@ struct ShelfTabView: View {
             ToolIcon(symbol: "doc.zipper", help: L10n.tr("Zip")) { shelf.zip() }
             ToolIcon(symbol: "folder", help: L10n.tr("Show in Finder")) { shelf.reveal() }
             MenuIcon(shelf: shelf, item: nil)
-            Rectangle().fill(Theme.hairline).frame(width: 1, height: 12).padding(.horizontal, 2)
+            Rectangle().fill(Theme.hairline).frame(width: 1.ui, height: 12.ui).padding(.horizontal, 2.ui)
             if !model.selection.isEmpty {
                 ToolIcon(symbol: "minus.circle", help: L10n.tr("Remove")) { shelf.remove(model.selection) }
             }
             ToolIcon(symbol: "trash", help: L10n.tr("Clear shelf")) { shelf.clear() }
         }
-        .frame(height: 22)
+        .frame(height: 22.ui)
     }
 }
 
 private struct EmptyShelf: View {
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "tray.and.arrow.down").font(.system(size: 22, weight: .light)).foregroundStyle(Theme.secondary)
+        VStack(spacing: 6.ui) {
+            Image(systemName: "tray.and.arrow.down").font(.system(size: 22.ui, weight: .light)).foregroundStyle(Theme.secondary)
             Text(verbatim: L10n.tr("Drop files here")).font(Theme.font(.l, .semibold)).foregroundStyle(Theme.primary)
             Text(verbatim: L10n.tr("Drag files, text or links onto the notch. They stay here until you remove them."))
                 .font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
-                .multilineTextAlignment(.center).frame(maxWidth: 300)
+                .multilineTextAlignment(.center).frame(maxWidth: 300.ui)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+            RoundedRectangle(cornerRadius: 14.ui, style: .continuous)
+                .strokeBorder(Theme.hairline, style: StrokeStyle(lineWidth: 1.5.ui, dash: [5, 4]))
         )
     }
 }
@@ -153,15 +153,15 @@ private struct ShelfTile: View {
     @State private var hover = false
 
     var body: some View {
-        VStack(spacing: 4) {
-            ShelfThumb(shelf: shelf, item: item, size: 32)
+        VStack(spacing: 4.ui) {
+            ShelfThumb(shelf: shelf, item: item, size: 32.ui)
             Text(verbatim: item.name)
                 .font(Theme.font(.xs)).foregroundStyle(selected ? Theme.primary : Theme.secondary)
                 .lineLimit(1).truncationMode(.middle)
         }
-        .padding(.top, 6).padding(.horizontal, 3)
+        .padding(.top, 6.ui).padding(.horizontal, 3.ui)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(selected ? Color.white.opacity(0.14) : .clear))
+        .background(RoundedRectangle(cornerRadius: 9.ui, style: .continuous).fill(selected ? Color.white.opacity(0.14) : .clear))
         .overlay(ShelfMouseArea(
             onDown: { _, event in click(event) },
             onDoubleClick: { shelf.quickLook(from: item) },
@@ -170,7 +170,7 @@ private struct ShelfTile: View {
         // Hover: the item's actions, one click away (right-click opens the same menu).
         .overlay(alignment: .topTrailing) {
             if hover || model.renderHover == item.id {
-                MenuIcon(shelf: shelf, item: item, compact: true).padding(2).transition(.opacity)
+                MenuIcon(shelf: shelf, item: item, compact: true).padding(2.ui).transition(.opacity)
             }
         }
         .onHover { h in withAnimation(Theme.peek) { hover = h } }
@@ -218,9 +218,9 @@ private struct ToolGlyph: View {
     let hover: Bool
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 11, weight: .medium))
+            .font(.system(size: 11.ui, weight: .medium))
             .foregroundStyle(hover ? Theme.primary : Theme.secondary)
-            .frame(width: 26, height: 22)
+            .frame(width: 26.ui, height: 22.ui)
             .background(Capsule().fill(hover ? Theme.card : .clear))
             .contentShape(Rectangle())
     }
@@ -236,11 +236,11 @@ private struct MenuIcon: View {
         Group {
             if compact {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 9.ui, weight: .bold))
                     .foregroundStyle(Theme.primary)
-                    .frame(width: 18, height: 18)
+                    .frame(width: 18.ui, height: 18.ui)
                     .background(Circle().fill(Color.black.opacity(0.75)))
-                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1.ui))
             } else {
                 ToolGlyph(symbol: "ellipsis.circle", hover: hover)
             }

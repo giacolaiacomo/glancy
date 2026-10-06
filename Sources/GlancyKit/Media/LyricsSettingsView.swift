@@ -7,10 +7,10 @@ struct LyricsSettingsRows: View {
 
     var body: some View {
         @Bindable var settings = module.lyrics.settings
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsGroupTitle(L10n.tr("Lyrics"))
-                .padding(.top, 6)
-            HStack(alignment: .top, spacing: 22) {
+                .padding(.top, 6.ui)
+            HStack(alignment: .top, spacing: 22.ui) {
                 SettingsRow(L10n.tr("Lyrics in the Media tab"), note: L10n.tr("Track names go to lrclib.net, once per song")) {
                     NotchSwitch(isOn: Binding(get: { settings.tabEnabled },
                                               set: { settings.tabEnabled = $0; module.lyricsSettingsChanged() }))

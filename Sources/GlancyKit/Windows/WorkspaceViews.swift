@@ -20,10 +20,10 @@ struct WorkspacesButton: View {
         Button { model.setWorkspaces(!on) } label: {
             label(text: compact ? nil : WindowsText.t("Workspaces"), count: count)
             .foregroundStyle(on ? Theme.primary : hover ? Theme.primary : Theme.secondary)
-            .padding(.horizontal, 8)
-            .frame(height: 18)
+            .padding(.horizontal, 8.ui)
+            .frame(height: 18.ui)
             .background(Capsule().fill(on ? WindowsStyle.accent.opacity(0.28) : Color.white.opacity(hover ? 0.12 : 0.06)))
-            .overlay(Capsule().strokeBorder(on ? WindowsStyle.accent.opacity(0.7) : .clear, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(on ? WindowsStyle.accent.opacity(0.7) : .clear, lineWidth: 1.ui))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -34,8 +34,8 @@ struct WorkspacesButton: View {
     }
 
     private func label(text: String?, count: Int) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "square.stack.3d.up").font(.system(size: 9, weight: .semibold))
+        HStack(spacing: 4.ui) {
+            Image(systemName: "square.stack.3d.up").font(.system(size: 9.ui, weight: .semibold))
             if let text { Text(verbatim: text).font(Theme.font(.xs, .semibold)) }
             if count > 0 {
                 Text(verbatim: "\(count)").font(Theme.font(.xs, .semibold)).monospacedDigit()
@@ -55,10 +55,10 @@ struct WorkspacesPane: View {
         VStack(alignment: .leading, spacing: 0) {
             WorkspacesHeader(model: model)
             if list.isEmpty {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 8.ui, style: .continuous)
                     .fill(Theme.card)
                     .overlay {
-                        VStack(spacing: 3) {
+                        VStack(spacing: 3.ui) {
                             Text(verbatim: WindowsText.t("No workspaces yet"))
                                 .font(Theme.font(.s, .semibold)).foregroundStyle(Theme.secondary)
                             Text(verbatim: WindowsText.t("Save how your windows sit now, on every display, and bring it back in one click"))
@@ -66,31 +66,31 @@ struct WorkspacesPane: View {
                                 .multilineTextAlignment(.center)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 12.ui)
                     }
                     .frame(height: WorkspaceLayout.cardHeight)
-                    .padding(.top, 6)
+                    .padding(.top, 6.ui)
             } else {
                 ScrollView(.horizontal, showsIndicators: list.count > 3) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 6.ui) {
                         ForEach(Array(list.enumerated()), id: \.element.id) { i, w in
                             WorkspaceCard(model: model, workspace: w, number: i + 1)
                         }
                     }
                 }
                 .frame(height: WorkspaceLayout.cardHeight)
-                .padding(.top, 6)
+                .padding(.top, 6.ui)
                 .onHover { inside in if !inside { model.hoverWorkspace(nil) } }
             }
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             WorkspaceFooter(model: model)
         }
     }
 }
 
 enum WorkspaceLayout {
-    static let cardWidth: CGFloat = 124
-    static let cardHeight: CGFloat = 96
+    static var cardWidth: CGFloat { 124.ui }
+    static var cardHeight: CGFloat { 96.ui }
 }
 
 private struct WorkspacesHeader: View {
@@ -102,14 +102,14 @@ private struct WorkspacesHeader: View {
             row(label: WindowsText.t("Saved arrangements"), compact: true)
             row(label: WindowsText.t("Saved"), compact: true)
         }
-        .frame(height: 18)
+        .frame(height: 18.ui)
     }
 
     private func row(label: String, compact: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6.ui) {
             SectionLabel(text: label)
                 .lineLimit(1)
-            Spacer(minLength: 4)
+            Spacer(minLength: 4.ui)
             if model.canUndo {
                 TextLink(text: "↶ " + WindowsText.t("Undo"), help: WindowsText.t("Undo the last change") + " (⌘Z)") { model.undo() }
                     .disabled(model.busy)
@@ -131,28 +131,28 @@ private struct WorkspaceCard: View {
     var body: some View {
         let restoring = model.restoringWorkspace == workspace.id
         let lit = hover || restoring || model.workspaceHover == workspace.id
-        let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 8.ui, style: .continuous)
         Button { model.restoreFromTab(workspace.id) } label: {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3.ui) {
                 ZStack(alignment: .topLeading) {
                     MiniWorkspace(workspace: workspace, highlighted: lit)
-                        .frame(height: 48)
+                        .frame(height: 48.ui)
                     if number <= 9 {
                         Text(verbatim: "\(number)")
-                            .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                            .font(.system(size: 8.5.ui, weight: .bold, design: .rounded))
                             .foregroundStyle(lit ? Color.black : Theme.secondary)
-                            .frame(width: 13, height: 13)
+                            .frame(width: 13.ui, height: 13.ui)
                             .background(Circle().fill(lit ? WindowsStyle.accent : Color.white.opacity(0.12)))
-                            .offset(x: -3, y: -3)
+                            .offset(x: -3.ui, y: -3.ui)
                     }
                 }
-                HStack(spacing: 4) {
+                HStack(spacing: 4.ui) {
                     Text(verbatim: workspace.name)
                         .font(Theme.font(.s, .semibold))
                         .foregroundStyle(Theme.primary)
                         .lineLimit(1)
                     if workspace.applyOnConnect {
-                        Image(systemName: "display.2").font(.system(size: 8, weight: .semibold))
+                        Image(systemName: "display.2").font(.system(size: 8.ui, weight: .semibold))
                             .foregroundStyle(WindowsStyle.accent)
                             .help(WindowsText.t("Applied when this display setup connects"))
                     }
@@ -163,11 +163,11 @@ private struct WorkspaceCard: View {
                     .lineLimit(1)
                     .monospacedDigit()
             }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 7.ui)
+            .padding(.vertical, 6.ui)
             .frame(width: WorkspaceLayout.cardWidth, height: WorkspaceLayout.cardHeight, alignment: .topLeading)
             .background(shape.fill(lit ? WindowsStyle.accent.opacity(0.14) : Color.white.opacity(0.05)))
-            .overlay(shape.strokeBorder(lit ? WindowsStyle.accent.opacity(0.7) : .clear, lineWidth: 1))
+            .overlay(shape.strokeBorder(lit ? WindowsStyle.accent.opacity(0.7) : .clear, lineWidth: 1.ui))
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -206,7 +206,7 @@ struct MiniWorkspace: View {
             let used = Array(Set(workspace.windows.map(\.display))).sorted()
                 .filter { workspace.displays.indices.contains($0) }
             let screens = used.map { workspace.displays[$0] }
-            let gap: CGFloat = 4
+            let gap: CGFloat = 4.ui
             let totalW = screens.reduce(0) { $0 + CGFloat($1.width) }
             let maxH = screens.map { CGFloat($0.height) }.max() ?? 1
             let scale = screens.isEmpty ? 0 : min((geo.size.width - gap * CGFloat(screens.count - 1)) / max(1, totalW),
@@ -220,22 +220,22 @@ struct MiniWorkspace: View {
                     let w = CGFloat(s.width) * scale, h = CGFloat(s.height) * scale
                     let y0 = (geo.size.height - h) / 2
                     let frame = CGRect(x: x0, y: y0, width: w, height: h)
-                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    RoundedRectangle(cornerRadius: 3.ui, style: .continuous)
                         .fill(Color.white.opacity(0.06))
-                        .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(Color.white.opacity(0.16), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 3.ui, style: .continuous).strokeBorder(Color.white.opacity(0.16), lineWidth: 1.ui))
                         .frame(width: max(1, w), height: max(1, h))
                         .offset(x: x0, y: y0)
                     // Back to front, so the front window is drawn last.
                     ForEach(workspace.windows.filter { $0.display == index }.sorted { $0.order > $1.order }, id: \.self) { win in
-                        let r = CGRect(x: frame.minX + 1.5 + CGFloat(win.frame.x) * (w - 3), y: frame.minY + 1.5 + CGFloat(win.frame.y) * (h - 3),
-                                       width: max(2, CGFloat(win.frame.w) * (w - 3)), height: max(2, CGFloat(win.frame.h) * (h - 3)))
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        let r = CGRect(x: frame.minX + 1.5.ui + CGFloat(win.frame.x) * (w - 3.ui), y: frame.minY + 1.5.ui + CGFloat(win.frame.y) * (h - 3.ui),
+                                       width: max(2.ui, CGFloat(win.frame.w) * (w - 3.ui)), height: max(2.ui, CGFloat(win.frame.h) * (h - 3.ui)))
+                        RoundedRectangle(cornerRadius: 1.5.ui, style: .continuous)
                             .fill(highlighted ? WindowsStyle.accent.opacity(0.42) : Color(white: 0.28))
-                            .overlay(RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                                .strokeBorder(Color.black.opacity(0.45), lineWidth: 0.5))
+                            .overlay(RoundedRectangle(cornerRadius: 1.5.ui, style: .continuous)
+                                .strokeBorder(Color.black.opacity(0.45), lineWidth: 0.5.ui))
                             .overlay {
-                                let g = min(r.width, r.height) - 3
-                                if g >= 7 { AppGlyph(bundleID: win.bundleID, name: win.appName, size: min(10, g)) }
+                                let g = min(r.width, r.height) - 3.ui
+                                if g >= 7.ui { AppGlyph(bundleID: win.bundleID, name: win.appName, size: min(10.ui, g)) }
                             }
                             .frame(width: r.width, height: r.height)
                             .offset(x: r.minX, y: r.minY)
@@ -252,10 +252,10 @@ private struct WorkspaceFooter: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 6.ui) {
             if let text = model.naming {
                 Image(systemName: model.renaming == nil ? "square.and.arrow.down" : "pencil")
-                    .font(.system(size: 10, weight: .semibold)).foregroundStyle(WindowsStyle.accent)
+                    .font(.system(size: 10.ui, weight: .semibold)).foregroundStyle(WindowsStyle.accent)
                 TextField("", text: Binding(get: { text }, set: { model.naming = String($0.prefix(40)) }),
                           prompt: Text(WindowsText.t("Name")).foregroundColor(Theme.tertiary))
                     .textFieldStyle(.plain)
@@ -263,10 +263,10 @@ private struct WorkspaceFooter: View {
                     .foregroundStyle(Theme.primary)
                     .focused($focused)
                     .onSubmit { model.confirmNaming() }
-                    .padding(.horizontal, 8)
-                    .frame(height: 24)
-                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.08)))
-                    .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(WindowsStyle.accent.opacity(0.6), lineWidth: 1))
+                    .padding(.horizontal, 8.ui)
+                    .frame(height: 24.ui)
+                    .background(RoundedRectangle(cornerRadius: 7.ui, style: .continuous).fill(Color.white.opacity(0.08)))
+                    .overlay(RoundedRectangle(cornerRadius: 7.ui, style: .continuous).strokeBorder(WindowsStyle.accent.opacity(0.6), lineWidth: 1.ui))
                     .onAppear { focused = true }
                 TextLink(text: WindowsText.t("Cancel"), help: "Esc") { model.cancelNaming() }
                 WindowsPillButton(text: model.renaming == nil ? WindowsText.t("Save") : WindowsText.t("Rename"), symbol: nil,
@@ -283,7 +283,7 @@ private struct WorkspaceFooter: View {
                     .help(WindowsText.t("Save every window on every display as a workspace"))
             }
         }
-        .frame(height: 28)
+        .frame(height: 28.ui)
     }
 
     @ViewBuilder private var status: some View {
@@ -322,16 +322,16 @@ struct WorkspacesSettings: View {
     var body: some View {
         let _ = tick
         let list = module.workspaces.workspaces
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsGroupTitle(WindowsText.t("Workspaces"))
-                .padding(.top, 8)
+                .padding(.top, 8.ui)
             SettingsNote(list.isEmpty
                          ? WindowsText.t("None saved yet: use Workspaces on the Windows tab, or “Save workspace” in the command bar.")
                          : WindowsText.t("Restoring opens apps that are not running; minimised and hidden windows are left alone. Undo puts everything back."))
             ForEach(list) { w in
                 let id = "windows.workspace.\(w.id.uuidString)"
-                SettingsRow(w.name, note: WorkspaceCardText.detail(w), minHeight: 26) {
-                    HStack(spacing: 6) {
+                SettingsRow(w.name, note: WorkspaceCardText.detail(w), minHeight: 26.ui) {
+                    HStack(spacing: 6.ui) {
                         HotkeyField(id: id, hotkey: w.hotkey, conflict: conflict(id, w.hotkey)) { new in
                             module.workspaces.update(w.id) { $0.hotkey = new }
                             tick += 1
@@ -341,21 +341,21 @@ struct WorkspacesSettings: View {
                             module.model.deleteWorkspace(w.id)
                             tick += 1
                         } label: {
-                            Image(systemName: "trash").font(.system(size: 10, weight: .medium)).foregroundStyle(Theme.tertiary)
-                                .frame(width: 20, height: 20).contentShape(Rectangle())
+                            Image(systemName: "trash").font(.system(size: 10.ui, weight: .medium)).foregroundStyle(Theme.tertiary)
+                                .frame(width: 20.ui, height: 20.ui).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .help(WindowsText.t("Delete"))
                     }
                 }
                 SettingsRow(WindowsText.t("Apply when this display setup connects"),
-                            note: WorkspaceCardText.setup(w), minHeight: 22) {
+                            note: WorkspaceCardText.setup(w), minHeight: 22.ui) {
                     NotchSwitch(isOn: Binding(get: { w.applyOnConnect }, set: { on in
                         module.workspaces.update(w.id) { $0.applyOnConnect = on }
                         tick += 1
                     }))
                 }
-                .padding(.leading, 12)
+                .padding(.leading, 12.ui)
             }
         }
     }

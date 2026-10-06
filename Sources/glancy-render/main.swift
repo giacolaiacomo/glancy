@@ -11,7 +11,9 @@ import SwiftUI
 @MainActor
 enum Render {
     static let scale: CGFloat = 2
-    static let crop = CGSize(width: 900, height: 290)
+    static let standardCrop = CGSize(width: 900, height: 290)
+    /// The strip of desktop around the notch in each shot (wider for the larger sizes).
+    static var crop = standardCrop
     /// The menu bar clock: fixed, or the real time with --demo so it agrees with the demo calendar.
     nonisolated(unsafe) static var clock = "Mon 5 Oct  09:41"
 
@@ -53,7 +55,9 @@ enum Render {
         let suffix = settings.language == .it ? "-it" : ""
 
         func shot(_ name: String, _ ctx: SurfaceContext, dark: Bool = false, geometry: NotchGeometry = geometry,
-                  menus: MenuBarClearance? = nil, _ setup: (SurfaceModel) -> Void = { _ in }) {
+                  menus: MenuBarClearance? = nil, crop: CGSize = Render.standardCrop, _ setup: (SurfaceModel) -> Void = { _ in }) {
+            Render.crop = crop
+            defer { Render.crop = Render.standardCrop }
             let model = SurfaceModel(geometry: geometry)
             model.animates = false
             setup(model)
@@ -346,11 +350,71 @@ enum Render {
         let pill = NotchGeometry.pill(for: external, menuBarHeight: 24)
         shot("08-pill-idle", quiet, geometry: pill)
         shot("08-pill-activity", context(true), geometry: pill)
+
+        // Size (Settings → General → Size): Home, Agents, Calendar, Monitor, Settings → General,
+        // the wings and a drop-down, at each size, on this Mac's notch and on a pill on a 27" display
+        // (MacBook closed). The notch keeps the hardware's size; everything else grows.
+        let display27 = ScreenInfo(uuid: "external27", frame: CGRect(x: 0, y: 0, width: 2560, height: 1440),
+                                   visibleFrame: CGRect(x: 0, y: 0, width: 2560, height: 1416), safeTop: 0,
+                                   auxLeft: nil, auxRight: nil, isBuiltin: false, scale: 2)
+        let wide = CGSize(width: 1080, height: 340)
+        let monitorModule = modules.compactMap { $0 as? MonitorModule }.first
+        for size in UISize.allCases {
+            UIScale.shared.set(requested: size, effective: size)
+            settings.size = size
+            let f = size.factor
+            for (place, g) in [("notch", builtInGeometry(uiScale: f)), ("pill", NotchGeometry.pill(for: display27, menuBarHeight: 24, uiScale: f))] {
+                func name(_ page: String) -> String { "14-size-\(size.rawValue)-\(place)-\(page)" }
+                shot(name("home"), live, geometry: g, crop: wide) { $0.expand(tab: nil) }
+                shot(name("calendar"), live, geometry: g, crop: wide) { $0.expand(tab: .calendar) }
+                if let monitorModule {
+                    monitorModule.prepareForRender(.cpu)
+                    shot(name("monitor"), live, geometry: g, crop: wide) { $0.expand(tab: .monitor) }
+                }
+                settings.navigation.go(.general, animated: false)
+                shot(name("settings-general"), live, geometry: g, crop: wide) { $0.expand(tab: nil); $0.toggleSettings() }
+                settings.navigation.go(.index, animated: false)
+                // Agents: the wings, the tab, the waiting drop-down.
+                let sizeAgents = AgentsModule.renderSample()
+                let hub = ActivityHub()
+                sizeAgents.start(hub: hub)
+                let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [sizeAgents])
+                shot(name("wings"), ctx, geometry: g, crop: wide)
+                sizeAgents.visibilityChanged(.expanded(.agents))
+                shot(name("agents"), ctx, geometry: g, crop: wide) { $0.expand(tab: .agents) }
+                sizeAgents.visibilityChanged(.collapsed)
+                sizeAgents.prepareForRender(.waitingPeek)
+                shot(name("peek"), ctx, geometry: g, crop: wide)
+                sizeAgents.stop()
+            }
+            // Every other tab at the largest size, on the notch: nothing clipped or overlapping.
+            if size == .extraLarge {
+                for tab in live.stripTabs {
+                    shot("14-size-extraLarge-notch-tab-\(tab.module.rawValue)", live, geometry: builtInGeometry(uiScale: f), crop: wide) {
+                        $0.expand(tab: tab.module)
+                    }
+                }
+            }
+        }
+        // Extra large chosen on a display it does not fit (a 13" at "More Space" off, 1024 pt wide
+        // visible, a short one): Large in use, and Settings says so.
+        let small = ScreenInfo(uuid: "small", frame: CGRect(x: 0, y: 0, width: 1024, height: 640),
+                               visibleFrame: CGRect(x: 0, y: 0, width: 1024, height: 300), safeTop: 0,
+                               auxLeft: nil, auxRight: nil, isBuiltin: false, scale: 2)
+        let fitted = UISize.extraLarge.fitting([small])
+        UIScale.shared.set(requested: .extraLarge, effective: fitted)
+        settings.size = .extraLarge
+        settings.navigation.go(.general, animated: false)
+        shot("14-size-limited-settings-general", live, geometry: NotchGeometry.pill(for: small, menuBarHeight: 24, uiScale: fitted.factor),
+             crop: wide) { $0.expand(tab: nil); $0.toggleSettings() }
+        settings.navigation.go(.index, animated: false)
+        UIScale.shared.set(requested: .normal, effective: .normal)
+        settings.size = .normal
         for m in modules { m.stop() }
     }
 
     /// This Mac's notched display if there is one, otherwise a 14" MacBook Pro.
-    static func builtInGeometry() -> NotchGeometry {
+    static func builtInGeometry(uiScale: CGFloat = 1) -> NotchGeometry {
         for s in NSScreen.screens {
             if let l = s.auxiliaryTopLeftArea, let r = s.auxiliaryTopRightArea, s.safeAreaInsets.top > 0 {
                 let dx = -s.frame.minX, dy = -s.frame.minY
@@ -358,14 +422,14 @@ enum Render {
                                       visibleFrame: s.visibleFrame.offsetBy(dx: dx, dy: dy), safeTop: s.safeAreaInsets.top,
                                       auxLeft: l.offsetBy(dx: dx, dy: dy), auxRight: r.offsetBy(dx: dx, dy: dy),
                                       isBuiltin: true, scale: 2)
-                if let g = NotchGeometry.notch(for: info) { return g }
+                if let g = NotchGeometry.notch(for: info, uiScale: uiScale) { return g }
             }
         }
         let frame = CGRect(x: 0, y: 0, width: 1512, height: 982)
         let info = ScreenInfo(uuid: "builtin", frame: frame, visibleFrame: frame, safeTop: 32,
                               auxLeft: CGRect(x: 0, y: 950, width: 665, height: 32),
                               auxRight: CGRect(x: 850, y: 950, width: 662, height: 32), isBuiltin: true, scale: 2)
-        return NotchGeometry.notch(for: info)!
+        return NotchGeometry.notch(for: info, uiScale: uiScale)!
     }
 
     static func render(model: SurfaceModel, context: SurfaceContext, geometry g: NotchGeometry, dark: Bool,
@@ -469,7 +533,8 @@ private struct Scene: View {
         let notch = geometry.notchRect
         ZStack(alignment: .topLeading) {
             Wallpaper(dark: dark)
-            MenuBar(width: screen.width, height: notch.height, dark: dark, menus: menus,
+            // A pill may be taller than the menu bar (larger sizes): the bar stays 24 pt.
+            MenuBar(width: screen.width, height: geometry.kind == .pill ? min(notch.height, 24) : notch.height, dark: dark, menus: menus,
                     notch: notch.offsetBy(dx: -screen.minX, dy: 0))
                 .offset(x: -cropX)
             // The hardware notch the panel must disappear into.

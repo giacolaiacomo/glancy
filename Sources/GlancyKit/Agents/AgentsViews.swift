@@ -23,7 +23,7 @@ extension AgentDot {
 struct AgentStateDot: View {
     let color: Color
     let pulsing: Bool
-    var size: CGFloat = 6
+    var size: CGFloat = 6.ui
     @State private var dim = false
 
     var body: some View {
@@ -61,7 +61,7 @@ struct AgentsWingLeft: View {
     var body: some View {
         let dots = model.dots
         let shown = dots.prefix(dots.count > Self.maxDots ? Self.maxDots - 1 : Self.maxDots)
-        HStack(spacing: 4) {
+        HStack(spacing: 4.ui) {
             ForEach(shown) { d in
                 AgentStateDot(color: d.color, pulsing: model.pulse && d.state == .working)
             }
@@ -103,10 +103,10 @@ struct AgentsPeekView: View {
     var host: AgentHost? = nil
 
     var body: some View {
-        HStack(spacing: 7) {
-            AgentStateDot(color: state.color, pulsing: false, size: 7)
+        HStack(spacing: 7.ui) {
+            AgentStateDot(color: state.color, pulsing: false, size: 7.ui)
             if let agent {
-                AgentBadges(agent: agent, host: host, size: 13)
+                AgentBadges(agent: agent, host: host, size: 13.ui)
             }
             Text(text)
                 .font(Theme.font(.m, .semibold))
@@ -122,10 +122,10 @@ struct AgentsPeekView: View {
                 Text(AgentsText.t("Show"))
                     .font(Theme.font(.s, .semibold))
                     .foregroundStyle(Theme.primary)
-                    .padding(.horizontal, 8)
-                    .frame(height: 18)
+                    .padding(.horizontal, 8.ui)
+                    .frame(height: 18.ui)
                     .background(Capsule().fill(Theme.card))
-                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+                    .overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1.ui))
                     .overlay(PeekClickTarget(action: show))
                     .accessibilityAddTraits(.isButton)
             }
@@ -169,13 +169,13 @@ struct AgentsBoard: View {
         if rows.isEmpty {
             AgentsEmptyState(loaded: model.loaded)
         } else {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6.ui) {
                 AgentsBoardHeader(rows: rows, model: model)
                 ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 1) {
+                    LazyVStack(spacing: 1.ui) {
                         ForEach(Array(rows.enumerated()), id: \.element.rowID) { i, s in
                             if i > 0, AgentsBoard.group(rows[i - 1].state) != AgentsBoard.group(s.state) {
-                                Rectangle().fill(Theme.hairline).frame(height: 1).padding(.horizontal, 8).padding(.vertical, 2)
+                                Rectangle().fill(Theme.hairline).frame(height: 1.ui).padding(.horizontal, 8.ui).padding(.vertical, 2.ui)
                             }
                             AgentRow(session: s, pulsing: model.pulse,
                                      note: model.jumpNote?.rowID == s.rowID ? model.jumpNote?.text : nil,
@@ -217,21 +217,21 @@ private struct AgentsBoardHeader: View {
             let n = live.filter { $0.state == st }.count
             return n > 0 ? (st, n) : nil
         }
-        HStack(spacing: 10) {
+        HStack(spacing: 10.ui) {
             Text(AgentsText.live(live.count))
                 .foregroundStyle(Theme.secondary)
             ForEach(counts, id: \.0) { st, n in
-                HStack(spacing: 4) {
-                    Circle().fill(st.color).frame(width: 5, height: 5)
+                HStack(spacing: 4.ui) {
+                    Circle().fill(st.color).frame(width: 5.ui, height: 5.ui)
                     Text(AgentsText.count(n, st)).foregroundStyle(Theme.tertiary)
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: 8.ui)
             AgentsTilingControls(model: model, liveCount: live.count)
         }
         .font(Theme.font(.xs, .medium).monospacedDigit())
-        .padding(.horizontal, 8)
-        .frame(height: 22)
+        .padding(.horizontal, 8.ui)
+        .frame(height: 22.ui)
     }
 }
 
@@ -246,7 +246,7 @@ struct AgentsTilingControls: View {
 
     var body: some View {
         let availability = model.tilingAvailability
-        HStack(spacing: 6) {
+        HStack(spacing: 6.ui) {
             if availability != .unavailable {
                 if let p = model.layoutPreview {
                     Text(AgentsText.previewing(p.count))
@@ -266,7 +266,7 @@ struct AgentsTilingControls: View {
                             .font(Theme.font(.xs))
                             .foregroundStyle(Theme.tertiary)
                             .lineLimit(1).truncationMode(.tail)
-                            .frame(maxWidth: compact ? 260 : 200, alignment: .trailing)
+                            .frame(maxWidth: compact ? 260.ui : 200.ui, alignment: .trailing)
                     }
                     if model.undoOffered {
                         WindowsPillButton(text: AgentsText.t("Undo"), symbol: "arrow.uturn.backward", prominent: false,
@@ -314,37 +314,37 @@ struct AgentRow: View {
         Button(action: action) {
             HStack(spacing: 0) {
                 AgentStateDot(color: dotColor, pulsing: pulsing && session.state == .working)
-                    .frame(width: 14, alignment: .leading)
+                    .frame(width: 14.ui, alignment: .leading)
                 AgentBadges(agent: session.agent, host: session.host)
-                    .frame(width: 36, alignment: .leading)
+                    .frame(width: 36.ui, alignment: .leading)
                 Text(session.label)
                     .font(Theme.font(.m, .semibold))
                     .foregroundStyle(session.isLive && session.state != .idle ? Theme.primary : Theme.secondary)
                     .lineLimit(1).truncationMode(.middle)
-                    .frame(width: 108, alignment: .leading)
+                    .frame(width: 108.ui, alignment: .leading)
                 Text(AgentsText.state(session.state))
                     .font(Theme.font(.s, .medium))
                     .foregroundStyle(stateColor)
                     .lineLimit(1)
-                    .frame(width: 58, alignment: .leading)
+                    .frame(width: 58.ui, alignment: .leading)
                 AgentElapsed(session: session)
-                    .frame(width: 46, alignment: .trailing)
-                    .padding(.trailing, 10)
+                    .frame(width: 46.ui, alignment: .trailing)
+                    .padding(.trailing, 10.ui)
                 Text(toolText)
                     .font(Theme.font(.s).monospaced())
                     .foregroundStyle(Theme.tertiary)
                     .lineLimit(1).truncationMode(.tail)
-                    .frame(width: 78, alignment: .leading)
-                    .padding(.trailing, 8)
+                    .frame(width: 78.ui, alignment: .leading)
+                    .padding(.trailing, 8.ui)
                 Text(AgentRow.text(session))
                     .font(Theme.font(.s))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1).truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 24)
-            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(hover ? Theme.card : .clear))
+            .padding(.horizontal, 8.ui)
+            .frame(height: 24.ui)
+            .background(RoundedRectangle(cornerRadius: 7.ui, style: .continuous).fill(hover ? Theme.card : .clear))
             .contentShape(Rectangle())
             .opacity(session.state == .ended ? 0.5 : 1)
         }
@@ -425,7 +425,7 @@ private struct AgentsEmptyState: View {
     let loaded: Bool
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 6.ui) {
             Image(systemName: AgentsModule.symbol)
                 .font(Theme.font(.xl))
                 .foregroundStyle(Theme.tertiary)
@@ -458,9 +458,9 @@ private struct AgentsHomeOverflow: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 10.ui, weight: .semibold))
                     .foregroundStyle(Theme.tertiary)
-                    .frame(width: 18, height: 14)
+                    .frame(width: 18.ui, height: 14.ui)
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
@@ -476,12 +476,12 @@ struct AgentsHomeCard: View {
 
     var body: some View {
         let top = model.highlights(limit: 2)
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
+            HStack(spacing: 6.ui) {
                 Text(AgentsText.t("Agents"))
                     .font(Theme.font(.xs, .semibold))
                     .foregroundStyle(Theme.tertiary)
-                Spacer(minLength: 6)
+                Spacer(minLength: 6.ui)
                 // The tiling state takes the dots' place: the card keeps its height.
                 if model.layoutPreview != nil || model.undoOffered || model.tilingNote != nil {
                     AgentsTilingControls(model: model, liveCount: model.dots.count, compact: true)
@@ -490,11 +490,11 @@ struct AgentsHomeCard: View {
                 }
                 AgentsHomeOverflow(model: model)
             }
-            .frame(height: 16)
+            .frame(height: 16.ui)
             ForEach(top, id: \.rowID) { s in
                 Button { model.jump(to: s.rowID) } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2.ui) {
+                        HStack(spacing: 6.ui) {
                             AgentStateDot(color: s.state.color, pulsing: model.pulse && s.state == .working)
                             AgentBadges(agent: s.agent, host: s.host)
                             Text(s.label)
@@ -504,7 +504,7 @@ struct AgentsHomeCard: View {
                             Text(AgentsText.state(s.state))
                                 .font(Theme.font(.s, .medium))
                                 .foregroundStyle(s.state == .working ? Theme.secondary : s.state.color)
-                            Spacer(minLength: 4)
+                            Spacer(minLength: 4.ui)
                             AgentElapsed(session: s)
                         }
                         if s.rowID == top.first?.rowID, case let p = AgentRow.text(s), !p.isEmpty {
@@ -512,7 +512,7 @@ struct AgentsHomeCard: View {
                                 .font(Theme.font(.s))
                                 .foregroundStyle(Theme.secondary)
                                 .lineLimit(1).truncationMode(.tail)
-                                .padding(.leading, 12 + 36)
+                                .padding(.leading, (12 + 36).ui)
                         }
                     }
                     .contentShape(Rectangle())
@@ -530,10 +530,10 @@ struct AgentsHomeCard: View {
 struct AgentBadges: View {
     let agent: AgentKind
     let host: AgentHost?
-    var size: CGFloat = 14
+    var size: CGFloat = 14.ui
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 3.ui) {
             Image(systemName: agent.symbol)
                 .font(.system(size: size * 0.64, weight: .bold))
                 .foregroundStyle(agent.tint)

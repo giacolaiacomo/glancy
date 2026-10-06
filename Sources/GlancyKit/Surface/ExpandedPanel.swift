@@ -8,7 +8,7 @@ struct ExpandedPanel: View {
 
     var body: some View {
         let notch = model.geometry.notchRect.size
-        let inset = Theme.openTopRadius + 10
+        let inset = TabBandLayout.inset
         VStack(spacing: 0) {
             // The hardware notch covers the middle of the top band: icons go either side of it,
             // Home and the first half on the left, the rest and the gear on the right.
@@ -18,14 +18,15 @@ struct ExpandedPanel: View {
             // A fixed content height: a tall page scrolls or clips, it never pushes the tab strip.
             page
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                .frame(height: max(0, Theme.expandedSize.height - notch.height - 8 - Theme.panelPadding), alignment: .top)
+                .frame(height: max(0, Theme.expandedSize.height - notch.height - 8.ui - Theme.panelPadding), alignment: .top)
                 .clipped()
-                .padding(.top, 8)
-                .padding(.horizontal, Theme.openTopRadius + Theme.panelPadding - 6)
+                .padding(.top, 8.ui)
+                .padding(.horizontal, Theme.openTopRadius + Theme.panelPadding - 6.ui)
                 .padding(.bottom, Theme.panelPadding)
         }
-        // A language change rebuilds the page with the new strings.
-        .id(context.settings.language)
+        // A language or size change rebuilds the page with the new strings / metrics (the size at
+        // once, never through in-between font sizes).
+        .id(PanelIdentity(language: context.settings.language, size: UIScale.shared.size))
     }
 
     @ViewBuilder private var page: some View {
@@ -41,6 +42,11 @@ struct ExpandedPanel: View {
                 .transition(.blurFade)
         }
     }
+}
+
+private struct PanelIdentity: Hashable {
+    let language: AppLanguage
+    let size: UISize
 }
 
 /// The top band: tab icons left and right of the hardware notch, never under it.
@@ -123,9 +129,12 @@ enum TabBandLayout {
         return min(TabIcon.slot, (side / slots).rounded(.down))
     }
 
+    /// Room kept between the panel's rounded top corners and the first / last icon.
+    static var inset: CGFloat { Theme.openTopRadius + 10.ui }
+
     /// The panel's own band: `Theme.expandedSize` beside a notch, the inset `ExpandedPanel` uses.
     static func slot(notchWidth: CGFloat, items: Int) -> CGFloat {
-        slot(width: Theme.expandedSize.width, notchWidth: notchWidth, inset: Theme.openTopRadius + 10, items: items)
+        slot(width: Theme.expandedSize.width, notchWidth: notchWidth, inset: inset, items: items)
     }
 
     static var fullSlot: CGFloat { TabIcon.slot }
@@ -135,9 +144,9 @@ enum TabBandLayout {
 
 private struct TabIcon: View {
     /// Width of one icon slot, and the clearance kept from the notch's edge.
-    static let slot: CGFloat = 30
-    static let gap: CGFloat = 8
-    static let iconWidth: CGFloat = 28
+    static var slot: CGFloat { 30.ui }
+    static var gap: CGFloat { 8.ui }
+    static var iconWidth: CGFloat { 28.ui }
     let symbol: String
     let title: String
     let selected: Bool
@@ -148,13 +157,13 @@ private struct TabIcon: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 12.ui, weight: .medium))
                 .symbolVariant(selected ? .fill : .none)
                 // The icon swaps outline ↔ fill (and its ink) at once; the capsule still animates.
                 // Animated, the symbol morph went through ~50 MB of GPU textures on every switch.
                 .transaction { $0.animation = nil }
                 .foregroundStyle(tint.map { hover ? $0 : $0.opacity(0.85) } ?? (selected ? Theme.primary : hover ? Theme.secondary : Theme.tertiary))
-                .frame(width: Self.iconWidth, height: 22)
+                .frame(width: Self.iconWidth, height: 22.ui)
                 .background(Capsule().fill(selected ? Theme.card : .clear))
                 .contentShape(Rectangle())
         }
@@ -184,16 +193,16 @@ struct HomePage: View {
         if cards.isEmpty {
             EmptyHome()
         } else {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: 10.ui) {
                 if !rows.isEmpty {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 8.ui) {
                         ForEach(rows, id: \.0) { card in HomeCard { card.1 } }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 }
                 if let tile {
                     HomeCard { tile.1 }
-                        .frame(width: rows.isEmpty ? nil : 196)
+                        .frame(width: rows.isEmpty ? nil : 196.ui)
                         .frame(maxHeight: .infinity)
                 }
             }
@@ -207,17 +216,17 @@ struct HomeCard<Content: View>: View {
     var body: some View {
         content
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.card))
+            .padding(10.ui)
+            .background(RoundedRectangle(cornerRadius: 14.ui, style: .continuous).fill(Theme.card))
     }
 }
 
 private struct EmptyHome: View {
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 8.ui) {
             GlancyGlyph()
                 .fill(Theme.tertiary)
-                .frame(width: 22, height: 11)
+                .frame(width: 22.ui, height: 11.ui)
             Text(tr("All quiet"))
                 .font(Theme.font(.l, .semibold))
                 .foregroundStyle(Theme.secondary)
@@ -225,10 +234,10 @@ private struct EmptyHome: View {
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.tertiary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 280.ui)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 6)
+        .padding(.bottom, 6.ui)
     }
 }
 

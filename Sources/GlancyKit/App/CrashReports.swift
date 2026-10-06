@@ -210,17 +210,17 @@ struct CrashPeek: View {
     let count: Int
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 12, weight: .medium)).foregroundStyle(Theme.secondary)
+                .font(.system(size: 12.ui, weight: .medium)).foregroundStyle(Theme.secondary)
             Text(verbatim: count > 1 ? L10n.tr("Glancy quit unexpectedly (%d times)", count) : L10n.tr("Glancy quit unexpectedly"))
                 .font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                 .fixedSize()
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             ShelfPeekButton(title: L10n.tr("Details"), help: L10n.tr("Show the crash summary in Finder")) {
                 NSWorkspace.shared.activateFileViewerSelecting([summary])
             }
         }
-        .frame(minWidth: 280)
+        .frame(minWidth: 280.ui)
     }
 }

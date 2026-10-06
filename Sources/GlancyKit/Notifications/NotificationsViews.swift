@@ -15,7 +15,7 @@ struct NotificationsTabView: View {
         case .unavailable(let detail):
             NotifUnavailableCard(detail: detail)
         case .starting, .live:
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 6.ui) {
                 NotifHeader(model: model)
                 NotifList(model: model, onOpen: onOpen)
             }
@@ -31,31 +31,31 @@ private struct NotifHeader: View {
     let model: NotificationsModel
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             Text(NotifText.t("Notifications").uppercased())
-                .font(Theme.font(.xs, .semibold)).tracking(0.6)
+                .font(Theme.font(.xs, .semibold)).tracking(0.6.ui)
                 .foregroundStyle(Theme.tertiary)
             Text("\(model.items.count)")
                 .font(Theme.font(.xs, .medium).monospacedDigit())
                 .foregroundStyle(Theme.tertiary)
-            Spacer(minLength: 4)
+            Spacer(minLength: 4.ui)
             if model.settings.hidePreviews {
                 Button { model.settings.hidePreviews = false } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 4.ui) {
                         Image(systemName: "eye.slash")
                         Text(NotifText.t("Previews hidden"))
                     }
                     .font(Theme.font(.xs, .medium))
                     .foregroundStyle(Theme.secondary)
-                    .padding(.horizontal, 7)
-                    .frame(height: 20)
+                    .padding(.horizontal, 7.ui)
+                    .frame(height: 20.ui)
                     .background(Capsule().fill(Theme.card))
                 }
                 .buttonStyle(.plain)
             }
             NotifMenu(model: model)
         }
-        .padding(.leading, 6)
+        .padding(.leading, 6.ui)
     }
 }
 
@@ -82,7 +82,7 @@ private struct NotifMenu: View {
             Image(systemName: "ellipsis")
                 .font(Theme.font(.m, .semibold))
                 .foregroundStyle(Theme.secondary)
-                .frame(width: 26, height: 20)
+                .frame(width: 26.ui, height: 20.ui)
                 .contentShape(Rectangle())
         }
         .menuStyle(.borderlessButton)
@@ -103,10 +103,10 @@ private struct NotifList: View {
             NotifEmpty()
         } else {
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 1) {
+                LazyVStack(alignment: .leading, spacing: 1.ui) {
                     ForEach(groups, id: \.bundleID) { group in
                         NotifGroupHeader(model: model, bundleID: group.bundleID, count: group.items.count, onOpen: onOpen)
-                            .padding(.top, group.bundleID == groups.first?.bundleID ? 0 : 5)
+                            .padding(.top, group.bundleID == groups.first?.bundleID ? 0 : 5.ui)
                         ForEach(group.items) { n in
                             NotifRow(model: model, item: n, onOpen: onOpen)
                         }
@@ -125,7 +125,7 @@ private struct NotifGroupHeader: View {
 
     var body: some View {
         let name = model.apps.name(bundleID)
-        HStack(spacing: 6) {
+        HStack(spacing: 6.ui) {
             NotifAppIcon(model: model, bundleID: bundleID, side: 14)
             Text(verbatim: name)
                 .font(Theme.font(.s, .semibold))
@@ -138,8 +138,8 @@ private struct NotifGroupHeader: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 6)
-        .frame(height: 18)
+        .padding(.horizontal, 6.ui)
+        .frame(height: 18.ui)
         .contentShape(Rectangle())
         .onTapGesture { onOpen(bundleID) }
         .contextMenu { NotifActions(model: model, bundleID: bundleID, name: name, onOpen: onOpen) }
@@ -154,7 +154,7 @@ private struct NotifRow: View {
 
     var body: some View {
         let (headline, detail) = model.lines(item)
-        HStack(spacing: 6) {
+        HStack(spacing: 6.ui) {
             (Text(verbatim: headline).font(Theme.font(.m, .semibold)).foregroundColor(Theme.primary)
              + Text(verbatim: detail.map { "  " + $0 } ?? "").font(Theme.font(.m)).foregroundColor(Theme.secondary))
                 .lineLimit(1)
@@ -163,13 +163,13 @@ private struct NotifRow: View {
             Text(NotifText.relative(item.date, now: model.now))
                 .font(Theme.font(.xs).monospacedDigit())
                 .foregroundStyle(Theme.tertiary)
-                .frame(minWidth: 24, alignment: .trailing)
+                .frame(minWidth: 24.ui, alignment: .trailing)
         }
-        .padding(.leading, 26)
-        .padding(.trailing, 6)
-        .frame(height: 24)
+        .padding(.leading, 26.ui)
+        .padding(.trailing, 6.ui)
+        .frame(height: 24.ui)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 7.ui, style: .continuous)
                 .fill(hover ? Theme.hairline.opacity(0.6) : .clear))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
@@ -214,9 +214,9 @@ struct NotifAppIcon: View {
 
 private struct NotifEmpty: View {
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 6.ui) {
             Image(systemName: "bell")
-                .font(.system(size: 18, weight: .light))
+                .font(.system(size: 18.ui, weight: .light))
                 .foregroundStyle(Theme.tertiary)
             Text(NotifText.t("No notifications yet"))
                 .font(Theme.font(.l, .semibold))
@@ -235,15 +235,15 @@ private struct NotifAccessCard: View {
     let onGrant: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 14.ui) {
             ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.card)
+                RoundedRectangle(cornerRadius: 9.ui, style: .continuous).fill(Theme.card)
                 Image(systemName: "bell.badge")
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 17.ui, weight: .regular))
                     .foregroundStyle(Theme.secondary)
             }
-            .frame(width: 38, height: 38)
-            VStack(alignment: .leading, spacing: 5) {
+            .frame(width: 38.ui, height: 38.ui)
+            VStack(alignment: .leading, spacing: 5.ui) {
                 Text(NotifText.t("Allow Full Disk Access"))
                     .font(Theme.font(.l, .semibold))
                     .foregroundStyle(Theme.primary)
@@ -251,13 +251,13 @@ private struct NotifAccessCard: View {
                     .font(Theme.font(.s))
                     .foregroundStyle(Theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 10) {
+                HStack(spacing: 10.ui) {
                     Button(action: onGrant) {
                         Text(NotifText.t("Open Privacy Settings"))
                             .font(Theme.font(.s, .semibold))
                             .foregroundStyle(.black)
-                            .padding(.horizontal, 10)
-                            .frame(height: 22)
+                            .padding(.horizontal, 10.ui)
+                            .frame(height: 22.ui)
                             .background(Capsule().fill(Theme.primary))
                     }
                     .buttonStyle(.plain)
@@ -266,12 +266,12 @@ private struct NotifAccessCard: View {
                         .foregroundStyle(Theme.tertiary)
                         .lineLimit(1)
                 }
-                .padding(.top, 3)
+                .padding(.top, 3.ui)
             }
-            .frame(maxWidth: 400, alignment: .leading)
+            .frame(maxWidth: 400.ui, alignment: .leading)
         }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Theme.card))
+        .padding(14.ui)
+        .background(RoundedRectangle(cornerRadius: 12.ui, style: .continuous).fill(Theme.card))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -280,9 +280,9 @@ private struct NotifUnavailableCard: View {
     let detail: String
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 6.ui) {
             Image(systemName: "bell.slash")
-                .font(.system(size: 18, weight: .light))
+                .font(.system(size: 18.ui, weight: .light))
                 .foregroundStyle(Theme.tertiary)
             Text(NotifText.t("Not available on this macOS"))
                 .font(Theme.font(.l, .semibold))
@@ -291,13 +291,13 @@ private struct NotifUnavailableCard: View {
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.tertiary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: 320.ui)
             Text(verbatim: detail)
                 .font(Theme.font(.xs).monospaced())
                 .foregroundStyle(Theme.tertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(maxWidth: 360)
+                .frame(maxWidth: 360.ui)
                 .textSelection(.enabled)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -313,7 +313,7 @@ struct NotificationPeek: View {
     var body: some View {
         let n = state.latest
         let (headline, detail) = model.lines(n)
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             NotifAppIcon(model: model, bundleID: n.bundleID, side: 16)
             Text(verbatim: headline)
                 .font(Theme.font(.m, .semibold))
@@ -324,7 +324,7 @@ struct NotificationPeek: View {
                     .font(Theme.font(.m))
                     .foregroundStyle(Theme.secondary)
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: 4.ui)
             if state.more > 0 {
                 Text(L10n.tr("+%d more", state.more))
                     .font(Theme.font(.xs, .medium).monospacedDigit())
@@ -334,6 +334,6 @@ struct NotificationPeek: View {
         }
         .lineLimit(1)
         .truncationMode(.tail)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 14.ui)
     }
 }

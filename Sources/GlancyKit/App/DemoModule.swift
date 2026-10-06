@@ -29,7 +29,7 @@ public final class DemoModule: GlancyModule {
         started = true
         guard kind == .media else { return }
         hub.post(LiveActivity(id: "demo.media", module: id, priority: 30,
-                              left: AnyView(ArtworkTile(size: 20, radius: 5)),
+                              left: AnyView(ArtworkTile(size: 20.ui, radius: 5)),
                               right: AnyView(LevelBars())))
         restartLoop()
     }
@@ -106,19 +106,19 @@ struct ArtworkTile: View {
 /// Three static level bars (static: animating them is the Media module's job, only while visible).
 struct LevelBars: View {
     var body: some View {
-        HStack(alignment: .center, spacing: 2) {
+        HStack(alignment: .center, spacing: 2.ui) {
             ForEach([9.0, 14.0, 7.0, 11.0], id: \.self) { h in
-                Capsule().fill(accent).frame(width: 2.5, height: h)
+                Capsule().fill(accent).frame(width: 2.5.ui, height: h)
             }
         }
-        .frame(height: 20)
+        .frame(height: 20.ui)
     }
 }
 
 private struct TrackPeek: View {
     var body: some View {
-        HStack(spacing: 8) {
-            ArtworkTile(size: 20, radius: 5)
+        HStack(spacing: 8.ui) {
+            ArtworkTile(size: 20.ui, radius: 5)
             Text("Nightswimming").font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary)
             Text("R.E.M.").font(Theme.font(.m)).foregroundStyle(Theme.secondary)
         }
@@ -127,11 +127,11 @@ private struct TrackPeek: View {
 
 private struct AirPodsPeek: View {
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "airpodspro").font(.system(size: 14)).foregroundStyle(Theme.primary)
+        HStack(spacing: 8.ui) {
+            Image(systemName: "airpodspro").font(.system(size: 14.ui)).foregroundStyle(Theme.primary)
             Text(L10n.tr("AirPods Pro connected")).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary)
-            HStack(spacing: 3) {
-                Image(systemName: "battery.75percent").font(.system(size: 12))
+            HStack(spacing: 3.ui) {
+                Image(systemName: "battery.75percent").font(.system(size: 12.ui))
                 Text("82%").font(Theme.font(.m)).monospacedDigit()
             }
             .foregroundStyle(Theme.done)
@@ -143,7 +143,7 @@ private struct Caption: View {
     let text: String
     var body: some View {
         Text(L10n.tr(text).uppercased())
-            .font(.system(size: 9.5, weight: .semibold)).tracking(0.6)
+            .font(.system(size: 9.5.ui, weight: .semibold)).tracking(0.6.ui)
             .foregroundStyle(Theme.tertiary)
     }
 }
@@ -157,17 +157,17 @@ private struct Progress: View {
                 Capsule().fill(Theme.primary).frame(width: g.size.width * value)
             }
         }
-        .frame(height: 3)
+        .frame(height: 3.ui)
     }
 }
 
 private struct MediaCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8.ui) {
             Caption(text: "Now playing")
-            HStack(spacing: 10) {
-                ArtworkTile(size: 44, radius: 9)
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 10.ui) {
+                ArtworkTile(size: 44.ui, radius: 9)
+                VStack(alignment: .leading, spacing: 2.ui) {
                     Text("Nightswimming").font(Theme.font(.l, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                     Text("R.E.M. · Automatic for the People").font(Theme.font(.s)).foregroundStyle(Theme.secondary).lineLimit(1)
                 }
@@ -187,10 +187,10 @@ private struct MediaCard: View {
 private struct TimerCard: View {
     let end: Date
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
             Caption(text: "Focus")
             Text(timerInterval: Date.now...end, countsDown: true)
-                .font(.system(size: 30, weight: .light)).monospacedDigit()
+                .font(.system(size: 30.ui, weight: .light)).monospacedDigit()
                 .foregroundStyle(Theme.primary)
             Spacer(minLength: 0)
             Text(L10n.tr("Up next") + " · 5 min break").font(Theme.font(.s)).foregroundStyle(Theme.secondary)
@@ -200,9 +200,9 @@ private struct TimerCard: View {
 
 private struct MediaTab: View {
     var body: some View {
-        HStack(spacing: 16) {
-            ArtworkTile(size: 118, radius: 14)
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(spacing: 16.ui) {
+            ArtworkTile(size: 118.ui, radius: 14)
+            VStack(alignment: .leading, spacing: 4.ui) {
                 Text("Nightswimming").font(Theme.font(.xl, .semibold)).foregroundStyle(Theme.primary)
                 Text("R.E.M. · Automatic for the People").font(Theme.font(.m)).foregroundStyle(Theme.secondary)
                 Spacer(minLength: 0)
@@ -213,17 +213,17 @@ private struct MediaTab: View {
                     Text("-3:06").font(Theme.font(.xs)).monospacedDigit()
                 }
                 .foregroundStyle(Theme.tertiary)
-                HStack(spacing: 30) {
+                HStack(spacing: 30.ui) {
                     Image(systemName: "backward.fill")
-                    Image(systemName: "pause.fill").font(.system(size: 22))
+                    Image(systemName: "pause.fill").font(.system(size: 22.ui))
                     Image(systemName: "forward.fill")
                 }
-                .font(.system(size: 16))
+                .font(.system(size: 16.ui))
                 .foregroundStyle(Theme.primary)
                 .frame(maxWidth: .infinity)
-                .padding(.top, 4)
+                .padding(.top, 4.ui)
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, 2.ui)
         }
     }
 }
@@ -231,24 +231,24 @@ private struct MediaTab: View {
 private struct TimerTab: View {
     let end: Date
     var body: some View {
-        HStack(spacing: 22) {
+        HStack(spacing: 22.ui) {
             ZStack {
-                Circle().stroke(Color.white.opacity(0.12), lineWidth: 5)
+                Circle().stroke(Color.white.opacity(0.12), lineWidth: 5.ui)
                 Circle().trim(from: 0, to: 0.62)
-                    .stroke(accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .stroke(accent, style: StrokeStyle(lineWidth: 5.ui, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 Text(timerInterval: Date.now...end, countsDown: true)
-                    .font(.system(size: 22, weight: .light)).monospacedDigit()
+                    .font(.system(size: 22.ui, weight: .light)).monospacedDigit()
                     .foregroundStyle(Theme.primary)
             }
-            .frame(width: 100, height: 100)
-            .padding(.leading, 4)
-            VStack(alignment: .leading, spacing: 10) {
+            .frame(width: 100.ui, height: 100.ui)
+            .padding(.leading, 4.ui)
+            VStack(alignment: .leading, spacing: 10.ui) {
                 Caption(text: "Focus")
-                HStack(spacing: 6) {
+                HStack(spacing: 6.ui) {
                     ForEach(["5", "15", "25", "50"], id: \.self) { m in
                         Text("\(m)′").font(Theme.font(.m, .medium)).foregroundStyle(m == "25" ? Color.black : Theme.secondary)
-                            .frame(width: 40, height: 26)
+                            .frame(width: 40.ui, height: 26.ui)
                             .background(Capsule().fill(m == "25" ? Theme.primary : Theme.card))
                     }
                 }

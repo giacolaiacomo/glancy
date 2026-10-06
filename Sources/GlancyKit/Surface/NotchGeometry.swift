@@ -33,18 +33,24 @@ public struct NotchGeometry: Equatable, Sendable {
     /// Largest wing on either side, so wings never reach the menus or status items.
     public let wingCap: CGFloat
     public let scale: CGFloat
+    /// The size setting's factor in use on this display (Settings → General → Size; 1 = normal).
+    /// A notch keeps its hardware size; a pill, the drop-downs and the panel grow with it.
+    public let uiScale: CGFloat
 
-    public init(kind: Kind, screenFrame: CGRect, notchRect: CGRect, wingCap: CGFloat, scale: CGFloat) {
+    public init(kind: Kind, screenFrame: CGRect, notchRect: CGRect, wingCap: CGFloat, scale: CGFloat, uiScale: CGFloat = 1) {
         self.kind = kind; self.screenFrame = screenFrame; self.notchRect = notchRect
-        self.wingCap = wingCap; self.scale = scale
+        self.wingCap = wingCap; self.scale = scale; self.uiScale = uiScale
     }
+
+    /// `v` (a normal-size metric) at this display's size.
+    public func ui(_ v: CGFloat) -> CGFloat { UIScale.scaled(v, by: uiScale) }
 
     public static let pillWidth: CGFloat = 186
     public static let fallbackMenuBarHeight: CGFloat = 24
 
     /// The notch of a notched display. Width comes from the unobscured areas either side of it
     /// (`frame.width − auxLeft.width − auxRight.width`), height from `safeAreaInsets.top`.
-    public static func notch(for s: ScreenInfo) -> NotchGeometry? {
+    public static func notch(for s: ScreenInfo, uiScale: CGFloat = 1) -> NotchGeometry? {
         guard s.hasNotch, let left = s.auxLeft, let right = s.auxRight else { return nil }
         var x0 = left.maxX, x1 = right.minX
         if x1 - x0 <= 0 {   // malformed areas: fall back to the width formula, centred
@@ -54,17 +60,18 @@ public struct NotchGeometry: Equatable, Sendable {
         }
         let h = s.safeTop
         let rect = CGRect(x: x0, y: s.frame.maxY - h, width: x1 - x0, height: h)
-        let cap = min(Theme.wingMaxWidth, left.width, right.width)
-        return NotchGeometry(kind: .notch, screenFrame: s.frame, notchRect: rect, wingCap: max(0, cap), scale: s.scale)
+        let cap = min(UIScale.scaled(Theme.Base.wingMaxWidth, by: uiScale), left.width, right.width)
+        return NotchGeometry(kind: .notch, screenFrame: s.frame, notchRect: rect, wingCap: max(0, cap), scale: s.scale, uiScale: uiScale)
     }
 
-    /// A floating pill for a display without a notch, menu-bar height, centred.
-    public static func pill(for s: ScreenInfo, menuBarHeight: CGFloat) -> NotchGeometry {
-        let h = menuBarHeight > 0 ? menuBarHeight : fallbackMenuBarHeight
-        let w = min(pillWidth, s.frame.width)
+    /// A floating pill for a display without a notch, menu-bar height, centred. At a larger size
+    /// the pill grows with everything else (it may then hang below the menu bar).
+    public static func pill(for s: ScreenInfo, menuBarHeight: CGFloat, uiScale: CGFloat = 1) -> NotchGeometry {
+        let h = UIScale.scaled(menuBarHeight > 0 ? menuBarHeight : fallbackMenuBarHeight, by: uiScale)
+        let w = min(UIScale.scaled(pillWidth, by: uiScale), s.frame.width)
         let rect = CGRect(x: (s.frame.midX - w / 2).rounded(), y: s.frame.maxY - h, width: w, height: h)
-        let cap = min(Theme.wingMaxWidth, max(0, (s.frame.width - w) / 2 - 200))
-        return NotchGeometry(kind: .pill, screenFrame: s.frame, notchRect: rect, wingCap: cap, scale: s.scale)
+        let cap = min(UIScale.scaled(Theme.Base.wingMaxWidth, by: uiScale), max(0, (s.frame.width - w) / 2 - 200))
+        return NotchGeometry(kind: .pill, screenFrame: s.frame, notchRect: rect, wingCap: cap, scale: s.scale, uiScale: uiScale)
     }
 }
 
@@ -131,7 +138,7 @@ public struct SurfaceLayout: Equatable, Sendable {
     public static func wingWidth(left: CGFloat, right: CGFloat, geometry g: NotchGeometry) -> CGFloat {
         let content = max(left, right)
         guard content > 0 else { return 0 }
-        let w = (content + wingOuterPad + wingInnerGap).rounded(.up)
+        let w = (content + g.ui(wingOuterPad) + g.ui(wingInnerGap)).rounded(.up)
         return min(max(w, g.notchRect.height), g.wingCap)
     }
 
@@ -141,7 +148,7 @@ public struct SurfaceLayout: Equatable, Sendable {
                              clearance: MenuBarClearance?) -> (left: CGFloat, right: CGFloat) {
         let w = wingWidth(left: left, right: right, geometry: g)
         guard g.kind == .notch, let clearance else { return (w, w) }
-        func need(_ c: CGFloat) -> CGFloat { c > 0 ? (c + wingOuterPad + wingInnerGap).rounded(.up) : 0 }
+        func need(_ c: CGFloat) -> CGFloat { c > 0 ? (c + g.ui(wingOuterPad) + g.ui(wingInnerGap)).rounded(.up) : 0 }
         return clearance.clamp(w, need: (need(left), need(right)))
     }
 
@@ -158,7 +165,10 @@ public struct SurfaceLayout: Equatable, Sendable {
         let wl = showWings ? wingLeft : 0, wr = showWings ? wingRight : 0
         let base = CGSize(width: notch.width + wl + wr, height: notch.height)
         let shift = (wr - wl) / 2
-        let closedTop = Theme.closedTopRadius, closedBottom = Theme.closedBottomRadius
+        // A notch keeps the hardware's shape while collapsed; a pill is drawn at the chosen size.
+        let pill = g.kind == .pill
+        let closedTop = pill ? g.ui(Theme.Base.closedTopRadius) : Theme.Base.closedTopRadius
+        let closedBottom = pill ? g.ui(Theme.Base.closedBottomRadius) : Theme.Base.closedBottomRadius
         switch state {
         case .idle:
             return .init(size: notch, topRadius: closedTop, bottomRadius: closedBottom, wingLeft: 0, wingRight: 0, shadow: false)
@@ -167,14 +177,18 @@ public struct SurfaceLayout: Equatable, Sendable {
                          shift: shift, shadow: false)
         case .peek:
             // Grows by half the growth on each side: never more than the menu-bar gap.
-            let grow = Theme.peekGrow
+            let grow = pill ? CGSize(width: g.ui(Theme.Base.peekGrow.width), height: g.ui(Theme.Base.peekGrow.height))
+                            : Theme.Base.peekGrow
             return .init(size: CGSize(width: base.width + grow.width, height: base.height + grow.height),
                          topRadius: closedTop, bottomRadius: closedBottom, wingLeft: wl, wingRight: wr, shift: shift, shadow: false)
         case .peekEvent:
-            let wanted = min(peekEventContentWidth + 2 * peekEventPad + 2 * closedTop, peekEventMaxWidth)
-            let w = max(notch.width + 2 * max(wl, wr), wanted, notch.width + 2 * 44)
-            var l = SurfaceLayout(size: CGSize(width: w.rounded(.up), height: notch.height + Theme.peekEventDrop),
-                                  topRadius: closedTop, bottomRadius: closedBottom + 4, wingLeft: wl, wingRight: wr, shadow: false)
+            // The drop-down grows with the size setting on every display (only its top, in the
+            // menu bar, keeps to the notch).
+            let wanted = min(peekEventContentWidth + 2 * g.ui(peekEventPad) + 2 * closedTop, g.ui(peekEventMaxWidth))
+            let w = max(notch.width + 2 * max(wl, wr), wanted, notch.width + 2 * g.ui(44))
+            var l = SurfaceLayout(size: CGSize(width: w.rounded(.up), height: notch.height + g.ui(Theme.Base.peekEventDrop)),
+                                  topRadius: closedTop, bottomRadius: g.ui(Theme.Base.closedBottomRadius + 4), wingLeft: wl, wingRight: wr,
+                                  shadow: false)
             // Within the menu bar the drop-down keeps to the free room either side of the notch;
             // only below it does it widen (SPEC §1.3: never covers menu-bar items).
             if g.kind == .notch, let clearance {
@@ -190,9 +204,10 @@ public struct SurfaceLayout: Equatable, Sendable {
             }
             return l
         case .expanded:
-            let s = Theme.expandedSize
+            let s = CGSize(width: g.ui(Theme.Base.expandedSize.width), height: g.ui(Theme.Base.expandedSize.height))
             return .init(size: CGSize(width: max(s.width, notch.width + 160), height: max(s.height, notch.height + 120)),
-                         topRadius: Theme.openTopRadius, bottomRadius: Theme.openBottomRadius, wingLeft: 0, wingRight: 0, shadow: true)
+                         topRadius: g.ui(Theme.Base.openTopRadius), bottomRadius: g.ui(Theme.Base.openBottomRadius),
+                         wingLeft: 0, wingRight: 0, shadow: true)
         }
     }
 

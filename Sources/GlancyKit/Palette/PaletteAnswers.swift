@@ -133,6 +133,7 @@ enum BuiltinCommands {
                         keywords: ["display sleep", "screen off", "spegni schermo", "monitor"], primary: CommandText.t("Run")) { PaletteActions.sleepDisplays() },
         ]
         out += updateItems(tag: glancy)
+        out += sizeItems(tag: glancy, settings: model.appSettings)
         // Every tab on the strip.
         let open = model.openTab
         for m in model.enabledSources() {
@@ -146,6 +147,19 @@ enum BuiltinCommands {
         out.append(PaletteItem(id: "tab.home", title: L10n.tr(CommandText.t("Open %@"), tr("Home")), icon: .symbol("house"), tag: glancy,
                                keywords: ["home", "tab"], closesPanel: false, primary: CommandText.t("Open")) { open(nil) })
         return out
+    }
+
+    /// "Size: Normal / Large / Extra large": sets Settings → General → Size; the panel stays open and
+    /// re-lays out at once.
+    static func sizeItems(tag: String, settings: AppSettings?) -> [PaletteItem] {
+        guard let settings else { return [] }
+        let keywords = ["size", "text size", "bigger", "larger", "smaller", "zoom", "scale", "font",
+                        "dimensione", "grandezza", "testo", "più grande", "più piccolo", "carattere"]
+        return UISize.allCases.map { size in
+            PaletteItem(id: "glancy.size." + size.rawValue, title: L10n.tr("Size: %@", tr(GeneralSection.sizeName(size))),
+                        icon: .symbol("textformat.size"), tag: tag, keywords: keywords, closesPanel: false,
+                        primary: CommandText.t("Run")) { [weak settings] in settings?.size = size }
+        }
     }
 
     /// "Check for Updates", and "Install Update X.Y.Z" (suggested) once a check found one.

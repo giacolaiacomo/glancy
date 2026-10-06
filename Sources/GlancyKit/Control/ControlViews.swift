@@ -4,18 +4,18 @@ import SwiftUI
 // the camera mirror in their place), and the system stats on the right.
 
 private enum Metrics {
-    static let statsWidth: CGFloat = 160
-    static let toggleHeight: CGFloat = 68
-    static let toolHeight: CGFloat = 30
-    static let gap: CGFloat = 6
-    static let radius: CGFloat = 12
+    static var statsWidth: CGFloat { 160.ui }
+    static var toggleHeight: CGFloat { 68.ui }
+    static var toolHeight: CGFloat { 30.ui }
+    static var gap: CGFloat { 6.ui }
+    static var radius: CGFloat { 12.ui }
 }
 
 private struct Caption: View {
     let text: String
     var body: some View {
         Text(verbatim: text.uppercased())
-            .font(.system(size: 9.5, weight: .semibold)).tracking(0.6)
+            .font(.system(size: 9.5.ui, weight: .semibold)).tracking(0.6.ui)
             .foregroundStyle(Theme.tertiary)
             .lineLimit(1)
     }
@@ -28,12 +28,12 @@ struct ControlTabView: View {
     let stats: StatsSampler
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 10.ui) {
             Group {
                 if model.mirror != .off {
                     MirrorPanel(module: module, live: model.mirror == .live)
                 } else {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 8.ui) {
                         TogglesRow(module: module, model: model, tiles: settings.layout.toggles, awakeDefault: settings.awakeDefault)
                         lower
                     }
@@ -126,19 +126,19 @@ private struct ToggleTile: View {
                             // otherwise draws its arcs in a light layer colour on the white disc.
                             let ink = on ? Color.black.opacity(0.85) : Theme.secondary
                             Text(Image(systemName: symbol))
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 11.ui, weight: .semibold))
                                 .foregroundStyle(ink)
                         }
                     }
-                    .frame(width: 24, height: 24)
+                    .frame(width: 24.ui, height: 24.ui)
                     Spacer(minLength: 0)
                     if let chip {
                         Button(action: chipAction) {
                             Text(verbatim: chip)
-                                .font(.system(size: 9.5, weight: .semibold)).monospacedDigit()
+                                .font(.system(size: 9.5.ui, weight: .semibold)).monospacedDigit()
                                 .foregroundStyle(on ? Theme.waiting : Theme.secondary)
-                                .padding(.horizontal, 5)
-                                .frame(height: 16)
+                                .padding(.horizontal, 5.ui)
+                                .frame(height: 16.ui)
                                 .background(Capsule().fill(Color.white.opacity(0.08)))
                                 .contentShape(Capsule())
                         }
@@ -146,7 +146,7 @@ private struct ToggleTile: View {
                         .help(ControlText.t("Length"))
                     }
                 }
-                Spacer(minLength: 2)
+                Spacer(minLength: 2.ui)
                 Text(verbatim: ControlText.t(tile.shortTitle))
                     .font(Theme.font(.s, .semibold))
                     .foregroundStyle(Theme.primary)
@@ -156,7 +156,7 @@ private struct ToggleTile: View {
                     .foregroundStyle(on && tile == .keepAwake ? Theme.waiting : Theme.tertiary)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            .padding(8)
+            .padding(8.ui)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)
                 .fill(Color.white.opacity(on ? 0.12 : hover ? 0.09 : 0.06)))
@@ -219,29 +219,29 @@ private struct ToolPill: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 5.ui) {
                 ZStack {
                     if busy {
                         ProgressView().controlSize(.mini)
                     } else {
                         Image(systemName: tile.symbol)
                             .symbolRenderingMode(.monochrome)
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: 10.5.ui, weight: .semibold))
                             .foregroundStyle(hover ? Theme.primary : Theme.secondary)
                     }
                 }
-                .frame(width: 14)
+                .frame(width: 14.ui)
                 Text(verbatim: ControlText.t(tile.title))
                     .font(Theme.font(.s, .medium))
                     .foregroundStyle(Theme.primary)
                     .lineLimit(1).minimumScaleFactor(0.85).allowsTightening(true)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 7)
+            .padding(.horizontal, 7.ui)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 9, style: .continuous)
+            .background(RoundedRectangle(cornerRadius: 9.ui, style: .continuous)
                 .fill(Color.white.opacity(hover ? 0.11 : 0.06)))
-            .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 9.ui, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
@@ -259,28 +259,28 @@ private struct PromptBar: View {
     let prompt: ControlPrompt
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 10.ui) {
             Image(systemName: symbol)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 14.ui, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 30, height: 30)
+                .frame(width: 30.ui, height: 30.ui)
                 .background(Circle().fill(tint.opacity(0.14)))
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2.ui) {
                 Text(verbatim: title).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(2)
                 if let detail {
                     Text(verbatim: detail).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary).lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             if let confirm {
                 if isQuestion { NotchTextButton(ControlText.t("Cancel")) { module.dismissPrompt() } }
                 Button { module.confirm() } label: {
                     Text(verbatim: confirm)
                         .font(Theme.font(.s, .semibold))
                         .foregroundStyle(Color.black)
-                        .padding(.horizontal, 10)
-                        .frame(height: 24)
+                        .padding(.horizontal, 10.ui)
+                        .frame(height: 24.ui)
                         .background(Capsule().fill(destructive ? Theme.failed : Theme.primary))
                         .contentShape(Capsule())
                 }
@@ -288,14 +288,14 @@ private struct PromptBar: View {
             }
             if !isQuestion {
                 Button { module.dismissPrompt() } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.tertiary)
-                        .frame(width: 22, height: 22).contentShape(Rectangle())
+                    Image(systemName: "xmark").font(.system(size: 9.ui, weight: .bold)).foregroundStyle(Theme.tertiary)
+                        .frame(width: 22.ui, height: 22.ui).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help(ControlText.t("Close"))
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 12.ui)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous).fill(Theme.card))
     }
@@ -374,43 +374,43 @@ private struct ColorBar: View {
     let recent: [RGB]
 
     var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+        HStack(spacing: 12.ui) {
+            RoundedRectangle(cornerRadius: 9.ui, style: .continuous)
                 .fill(color.color)
-                .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
-                .frame(width: 48, height: 48)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+                .overlay(RoundedRectangle(cornerRadius: 9.ui, style: .continuous).strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5.ui))
+                .frame(width: 48.ui, height: 48.ui)
+            VStack(alignment: .leading, spacing: 2.ui) {
+                HStack(spacing: 6.ui) {
                     Text(verbatim: color.hex)
-                        .font(.system(size: 15, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 15.ui, weight: .semibold, design: .monospaced))
                         .foregroundStyle(Theme.primary)
                     Label(ControlText.t("Copied"), systemImage: "checkmark")
                         .font(Theme.font(.xs, .medium)).foregroundStyle(Theme.done)
                 }
                 Text(verbatim: color.rgbString)
-                    .font(.system(size: 10.5, design: .monospaced)).foregroundStyle(Theme.tertiary)
-                HStack(spacing: 4) {
+                    .font(.system(size: 10.5.ui, design: .monospaced)).foregroundStyle(Theme.tertiary)
+                HStack(spacing: 4.ui) {
                     ForEach(recent.prefix(RecentColors.limit), id: \.self) { c in
                         Button { module.picked(c, announce: false) } label: {
                             Circle().fill(c.color)
                                 .overlay(Circle().strokeBorder(c == color ? Theme.primary : Color.white.opacity(0.2),
                                                                lineWidth: c == color ? 1.5 : 0.5))
-                                .frame(width: 14, height: 14)
+                                .frame(width: 14.ui, height: 14.ui)
                                 .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
                         .help(c.hex)
                     }
                 }
-                .padding(.top, 2)
+                .padding(.top, 2.ui)
             }
-            Spacer(minLength: 6)
-            VStack(spacing: 6) {
+            Spacer(minLength: 6.ui)
+            VStack(spacing: 6.ui) {
                 RoundAction(symbol: "eyedropper", help: ControlText.t("Pick a color")) { module.pickColor() }
                 RoundAction(symbol: "xmark", help: ControlText.t("Close")) { module.dismissColor() }
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 10.ui)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous).fill(Theme.card))
     }
@@ -424,9 +424,9 @@ private struct RoundAction: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 9.5, weight: .bold))
+                .font(.system(size: 9.5.ui, weight: .bold))
                 .foregroundStyle(hover ? Theme.primary : Theme.secondary)
-                .frame(width: 24, height: 24)
+                .frame(width: 24.ui, height: 24.ui)
                 .background(Circle().fill(Color.white.opacity(hover ? 0.14 : 0.08)))
                 .contentShape(Circle())
         }
@@ -451,8 +451,8 @@ private struct MirrorPanel: View {
                 } else {
                     ZStack {
                         LinearGradient(colors: [Color.white.opacity(0.10), Color.white.opacity(0.03)], startPoint: .top, endPoint: .bottom)
-                        VStack(spacing: 6) {
-                            Image(systemName: "person.crop.square").font(.system(size: 26, weight: .light))
+                        VStack(spacing: 6.ui) {
+                            Image(systemName: "person.crop.square").font(.system(size: 26.ui, weight: .light))
                             Text(verbatim: ControlText.t("Camera preview")).font(Theme.font(.s))
                         }
                         .foregroundStyle(Theme.tertiary)
@@ -461,7 +461,7 @@ private struct MirrorPanel: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
             RoundAction(symbol: "xmark", help: ControlText.t("Close")) { module.toggleMirror() }
-                .padding(8)
+                .padding(8.ui)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -473,10 +473,10 @@ private struct StatsCard: View {
     let stats: StatsSnapshot
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 5.ui) {
             HStack {
                 Caption(text: ControlText.t("System"))
-                Spacer(minLength: 4)
+                Spacer(minLength: 4.ui)
                 if let up = stats.uptime {
                     Text(verbatim: L10n.tr("up %@", ControlFormat.uptime(up)))
                         .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.tertiary).lineLimit(1)
@@ -485,8 +485,8 @@ private struct StatsCard: View {
                 if let open = MonitorLink.open {
                     Button(action: open) {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 8.5, weight: .bold)).foregroundStyle(Theme.tertiary)
-                            .frame(width: 14, height: 14).contentShape(Rectangle())
+                            .font(.system(size: 8.5.ui, weight: .bold)).foregroundStyle(Theme.tertiary)
+                            .frame(width: 14.ui, height: 14.ui).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help(L10n.tr("System monitor"))
@@ -501,26 +501,27 @@ private struct StatsCard: View {
             StatRow(symbol: "internaldrive", label: ControlText.t("Disk"),
                     value: stats.disk.map { L10n.tr("%@ free", ControlFormat.bytes($0.free)) } ?? "—",
                     fraction: stats.disk.map { 1 - Double($0.free) / Double(max($0.total, 1)) })
-            HStack(spacing: 6) {
-                Image(systemName: "network").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14)
+            HStack(spacing: 6.ui) {
+                Image(systemName: "network").font(.system(size: 9.5.ui, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14.ui)
                 Text(verbatim: "↓ " + (stats.down.map(ControlFormat.rate) ?? "—"))
-                Spacer(minLength: 2)
+                Spacer(minLength: 2.ui)
                 Text(verbatim: "↑ " + (stats.up.map(ControlFormat.rate) ?? "—"))
             }
             .font(Theme.font(.xs, .medium)).monospacedDigit().foregroundStyle(Theme.secondary).lineLimit(1)
-            .frame(height: 16)
+            .frame(height: 16.ui)
             if let b = stats.battery {
-                HStack(spacing: 6) {
-                    Image(systemName: "battery.100percent").font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14)
+                HStack(spacing: 6.ui) {
+                    Image(systemName: "battery.100percent").font(.system(size: 9.5.ui, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14.ui)
                     Text(verbatim: L10n.tr("health %d%%", Int((min(b.health, 1) * 100).rounded())))
-                    Spacer(minLength: 2)
+                        .layoutPriority(1)   // the cycles give way first
+                    Spacer(minLength: 2.ui)
                     Text(verbatim: L10n.tr("%d cycles", b.cycles)).foregroundStyle(Theme.tertiary)
                 }
                 .font(Theme.font(.xs, .medium)).monospacedDigit().foregroundStyle(Theme.secondary).lineLimit(1)
-                .frame(height: 16)
+                .frame(height: 16.ui)
             }
         }
-        .padding(10)
+        .padding(10.ui)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous).fill(Theme.card))
     }
@@ -539,11 +540,11 @@ private struct StatRow: View {
     var tint: Color = Theme.secondary
 
     var body: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 9.5, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14)
+        VStack(spacing: 2.ui) {
+            HStack(spacing: 6.ui) {
+                Image(systemName: symbol).font(.system(size: 9.5.ui, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14.ui)
                 Text(verbatim: label).foregroundStyle(Theme.tertiary)
-                Spacer(minLength: 2)
+                Spacer(minLength: 2.ui)
                 Text(verbatim: value).foregroundStyle(Theme.secondary)
             }
             .font(Theme.font(.xs, .medium)).monospacedDigit().lineLimit(1)
@@ -553,8 +554,8 @@ private struct StatRow: View {
                     Capsule().fill(tint).frame(width: geo.size.width * min(1, max(0, fraction ?? 0)))
                 }
             }
-            .frame(height: 2.5)
-            .padding(.leading, 20)
+            .frame(height: 2.5.ui)
+            .padding(.leading, 20.ui)
         }
     }
 }
@@ -564,9 +565,9 @@ private struct StatRow: View {
 struct AwakeWingLeft: View {
     var body: some View {
         Image(systemName: "cup.and.saucer.fill")
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 11.ui, weight: .semibold))
             .foregroundStyle(Theme.waiting)
-            .padding(.leading, 6)
+            .padding(.leading, 6.ui)
     }
 }
 
@@ -578,7 +579,7 @@ struct AwakeWingRight: View {
             .font(Theme.font(.s, .medium)).monospacedDigit()
             .foregroundStyle(Theme.secondary)
             .lineLimit(1)
-            .padding(.trailing, 6)
+            .padding(.trailing, 6.ui)
             .frame(maxWidth: Theme.wingMaxWidth, alignment: .trailing)
     }
 }
@@ -588,8 +589,8 @@ struct ControlPeek: View {
     let title: String
     let detail: String?
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.secondary)
+        HStack(spacing: 8.ui) {
+            Image(systemName: symbol).font(.system(size: 12.ui, weight: .semibold)).foregroundStyle(Theme.secondary)
             Text(verbatim: title).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary)
             if let detail { Text(verbatim: detail).font(Theme.font(.m)).foregroundStyle(Theme.secondary) }
         }
@@ -600,11 +601,11 @@ struct ControlPeek: View {
 struct ColorPeek: View {
     let color: RGB
     var body: some View {
-        HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous).fill(color.color)
-                .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5))
-                .frame(width: 16, height: 16)
-            Text(verbatim: color.hex).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.primary)
+        HStack(spacing: 8.ui) {
+            RoundedRectangle(cornerRadius: 4.ui, style: .continuous).fill(color.color)
+                .overlay(RoundedRectangle(cornerRadius: 4.ui, style: .continuous).strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5.ui))
+                .frame(width: 16.ui, height: 16.ui)
+            Text(verbatim: color.hex).font(.system(size: 12.ui, weight: .semibold, design: .monospaced)).foregroundStyle(Theme.primary)
             Text(verbatim: ControlText.t("Copied")).font(Theme.font(.m)).foregroundStyle(Theme.secondary)
         }
         .lineLimit(1)
@@ -615,19 +616,19 @@ struct ControlHomeCard: View {
     let module: ControlModule
     let model: ControlModel
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 10.ui) {
             Image(systemName: "cup.and.saucer.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 13.ui, weight: .semibold))
                 .foregroundStyle(Color.black.opacity(0.85))
-                .frame(width: 30, height: 30)
+                .frame(width: 30.ui, height: 30.ui)
                 .background(Circle().fill(Theme.waiting))
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 1.ui) {
                 Caption(text: ControlText.t("Keep awake"))
                 Text(verbatim: model.awake.until.map { L10n.tr("Awake until %@", ControlText.time($0)) } ?? ControlText.t("Awake, no end"))
                     .font(Theme.font(.l, .medium)).monospacedDigit()
                     .foregroundStyle(Theme.primary).lineLimit(1)
             }
-            Spacer(minLength: 6)
+            Spacer(minLength: 6.ui)
             NotchTextButton(ControlText.t("Stop")) { module.stopAwake() }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -15,10 +15,10 @@ public struct NotchSwitch: View {
             ZStack(alignment: isOn ? .trailing : .leading) {
                 Capsule().fill(isOn ? Theme.done.opacity(0.9) : Color.white.opacity(0.16))
                 Circle().fill(Color.white)
-                    .padding(2)
+                    .padding(2.ui)
                     .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
             }
-            .frame(width: 28, height: 16)
+            .frame(width: 28.ui, height: 16.ui)
             .animation(Theme.peek, value: isOn)
             .contentShape(Capsule())
         }
@@ -38,7 +38,7 @@ public struct NotchSegments<Value: Hashable>: View {
     }
 
     public var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 2.ui) {
             ForEach(options.indices, id: \.self) { i in
                 let (value, label) = options[i]
                 let on = value == selection
@@ -46,15 +46,15 @@ public struct NotchSegments<Value: Hashable>: View {
                     Text(label)
                         .font(Theme.font(.s, on ? .semibold : .regular))
                         .foregroundStyle(on ? Color.black : Theme.secondary)
-                        .padding(.horizontal, 8)
-                        .frame(height: 20)
+                        .padding(.horizontal, 8.ui)
+                        .frame(height: 20.ui)
                         .background(Capsule().fill(on ? Theme.primary : .clear))
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(2)
+        .padding(2.ui)
         .background(Capsule().fill(Theme.card))
         .animation(Theme.peek, value: selection)
     }
@@ -73,15 +73,15 @@ public struct NotchChip: View {
 
     public var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: symbol).font(.system(size: 10, weight: .semibold))
+            HStack(spacing: 4.ui) {
+                Image(systemName: symbol).font(.system(size: 10.ui, weight: .semibold))
                 if !title.isEmpty { Text(title).font(Theme.font(.s, .medium)) }
             }
             .foregroundStyle(on ? Theme.primary : Theme.tertiary)
-            .padding(.horizontal, 8)
-            .frame(height: 22)
+            .padding(.horizontal, 8.ui)
+            .frame(height: 22.ui)
             .background(Capsule().fill(on ? Color.white.opacity(0.14) : .clear))
-            .overlay(Capsule().strokeBorder(on ? .clear : Theme.hairline, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(on ? .clear : Theme.hairline, lineWidth: 1.ui))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -101,8 +101,8 @@ public struct NotchTextButton: View {
             Text(title)
                 .font(Theme.font(.s, .medium))
                 .foregroundStyle(hover ? Theme.primary : Theme.secondary)
-                .padding(.horizontal, 9)
-                .frame(height: 22)
+                .padding(.horizontal, 9.ui)
+                .frame(height: 22.ui)
                 .background(Capsule().fill(hover ? Color.white.opacity(0.12) : Theme.card))
                 .contentShape(Capsule())
         }
@@ -113,8 +113,8 @@ public struct NotchTextButton: View {
 
 /// Wraps its children onto as many rows as they need.
 public struct FlowLayout: Layout {
-    var spacing: CGFloat = 5
-    public init(spacing: CGFloat = 5) { self.spacing = spacing }
+    var spacing: CGFloat = 5.ui
+    public init(spacing: CGFloat = 5.ui) { self.spacing = spacing }
 
     public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)

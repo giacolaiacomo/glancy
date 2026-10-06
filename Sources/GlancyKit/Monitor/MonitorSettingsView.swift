@@ -6,7 +6,7 @@ struct MonitorSection: View {
 
     var body: some View {
         @Bindable var settings = module.settings
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsRow(MonitorText.t("Opens on"), note: MonitorText.t("The gauge selected when the tab opens")) {
                 NotchSegments(selection: $settings.indicator,
                               options: MonitorIndicator.allCases.map { ($0, MonitorText.t($0.title)) })
@@ -29,7 +29,7 @@ struct MonitorSection: View {
                     NotchTextButton(tr("Reset")) { settings.reset(); module.settingsChanged() }
                 }
             }
-            .padding(.top, 6)
+            .padding(.top, 6.ui)
         }
     }
 }

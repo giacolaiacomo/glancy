@@ -43,12 +43,12 @@ struct ShelfDropTargetsView: View {
     let model: ShelfModel
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             ForEach(ShelfDropAction.allCases, id: \.self) { action in
                 DropTile(action: action, hovered: model.dropHover == action,
                          isDefault: model.dropHover == nil && action == .shelf,
                          subtitle: subtitle(action))
-                    .frame(maxWidth: action == .shelf ? .infinity : 118)
+                    .frame(maxWidth: action == .shelf ? .infinity : 118.ui)
                     .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(dropSpace)) } action: { model.dropFrames[action] = $0 }
             }
         }
@@ -75,14 +75,14 @@ private struct DropTile: View {
 
     var body: some View {
         let lit = hovered || isDefault
-        VStack(spacing: 7) {
+        VStack(spacing: 7.ui) {
             Image(systemName: action.symbol)
-                .font(.system(size: action == .shelf ? 20 : 17, weight: .medium))
+                .font(.system(size: action == .shelf ? 20.ui : 17.ui, weight: .medium))
                 .foregroundStyle(hovered ? Color.black : Theme.primary)
-                .frame(width: action == .shelf ? 46 : 40, height: action == .shelf ? 46 : 40)
+                .frame(width: action == .shelf ? 46.ui : 40.ui, height: action == .shelf ? 46.ui : 40.ui)
                 .background(Circle().fill(hovered ? Theme.primary : Theme.card))
                 .scaleEffect(hovered ? 1.08 : 1)
-            VStack(spacing: 2) {
+            VStack(spacing: 2.ui) {
                 Text(verbatim: action.title)
                     .font(Theme.font(.m, .semibold)).foregroundStyle(lit ? Theme.primary : Theme.secondary)
                     .lineLimit(1)
@@ -91,16 +91,16 @@ private struct DropTile: View {
                     .lineLimit(1).minimumScaleFactor(0.85)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 6.ui)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 14.ui, style: .continuous)
                 .fill(hovered ? Theme.hairline : Theme.card.opacity(isDefault ? 1 : 0.5))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 14.ui, style: .continuous)
                 .strokeBorder(hovered ? Theme.secondary : Theme.hairline,
-                              style: StrokeStyle(lineWidth: hovered ? 1.5 : 1.2, dash: hovered ? [] : [5, 4]))
+                              style: StrokeStyle(lineWidth: hovered ? 1.5.ui : 1.2.ui, dash: hovered ? [] : [5.ui, 4.ui]))
         )
         .accessibilityElement(children: .combine)
     }

@@ -289,13 +289,13 @@ public final class NotesModule: GlancyModule {
 private struct NotesAddedPeek: View {
     let text: String
     var body: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 12)).foregroundStyle(Theme.done)
+        HStack(spacing: 7.ui) {
+            Image(systemName: "checkmark.circle.fill").font(.system(size: 12.ui)).foregroundStyle(Theme.done)
             Text(verbatim: L10n.tr("Added to %@", L10n.tr("Quick notes"))).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary)
             Text(verbatim: text).font(Theme.font(.m)).foregroundStyle(Theme.secondary)
-                .lineLimit(1).frame(maxWidth: 200, alignment: .leading).fixedSize(horizontal: true, vertical: false)
+                .lineLimit(1).frame(maxWidth: 200.ui, alignment: .leading).fixedSize(horizontal: true, vertical: false)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 12.ui)
     }
 }
 

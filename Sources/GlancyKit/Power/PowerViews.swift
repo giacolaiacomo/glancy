@@ -25,9 +25,9 @@ struct PowerWingLeft: View {
         default: PowerLogic.batterySymbol(state.percent)
         }
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
+            .font(.system(size: 13.ui, weight: .semibold))
             .foregroundStyle(event.tint(state))
-            .frame(width: 20, alignment: .center)
+            .frame(width: 20.ui, alignment: .center)
             .fixedSize()
     }
 }
@@ -39,7 +39,7 @@ struct PowerWingRight: View {
     let model: PowerModel
     var body: some View {
         let state = model.battery
-        HStack(spacing: 5) {
+        HStack(spacing: 5.ui) {
             Text(verbatim: "\(state.percent)%")
                 .font(Theme.font(.s, .medium).monospacedDigit())
                 .foregroundStyle(event.tint(state))
@@ -69,18 +69,18 @@ struct BatteryAlertPeek: View {
     let model: PowerModel
     var body: some View {
         let s = model.battery
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             switch alert {
             case .low:
-                Image(systemName: PowerLogic.batterySymbol(s.percent)).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.failed)
+                Image(systemName: PowerLogic.batterySymbol(s.percent)).font(.system(size: 15.ui, weight: .semibold)).foregroundStyle(Theme.failed)
                 Text(verbatim: L10n.tr("Low battery")).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary)
                 Text(verbatim: "\(s.percent)%").font(Theme.font(.m, .semibold).monospacedDigit()).foregroundStyle(Theme.failed)
                 if let m = s.minutesToEmpty {
                     Text(verbatim: L10n.tr("%@ left", PowerText.duration(minutes: m))).font(Theme.font(.m)).foregroundStyle(Theme.secondary)
                 }
-                if s.lowPowerMode { Image(systemName: "leaf.fill").font(.system(size: 11)).foregroundStyle(Theme.waiting) }
+                if s.lowPowerMode { Image(systemName: "leaf.fill").font(.system(size: 11.ui)).foregroundStyle(Theme.waiting) }
             case .full(let limit):
-                Image(systemName: "battery.100percent.bolt").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.done)
+                Image(systemName: "battery.100percent.bolt").font(.system(size: 15.ui, weight: .semibold)).foregroundStyle(Theme.done)
                 Text(verbatim: limit.map { L10n.tr("Charged to %d%%", $0) } ?? L10n.tr("Fully charged"))
                     .font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary)
                 if limit != nil {
@@ -101,13 +101,13 @@ struct BluetoothPeek: View {
     let address: String
     var body: some View {
         if let d = model.devices[address] {
-            HStack(spacing: 10) {
-                Image(systemName: d.symbol).font(.system(size: 17)).foregroundStyle(Theme.primary)
+            HStack(spacing: 10.ui) {
+                Image(systemName: d.symbol).font(.system(size: 17.ui)).foregroundStyle(Theme.primary)
                 Text(verbatim: d.name).font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                 if d.battery.isEmpty {
                     Text(verbatim: L10n.tr("Connected")).font(Theme.font(.m)).foregroundStyle(Theme.secondary)
                 } else {
-                    BatteryGauges(battery: d.battery, size: 18)
+                    BatteryGauges(battery: d.battery, size: 18.ui)
                 }
             }
             .fixedSize()
@@ -118,9 +118,9 @@ struct BluetoothPeek: View {
 /// Rings for left / right / case (or the device's single level), each labelled.
 struct BatteryGauges: View {
     let battery: BluetoothBattery
-    var size: CGFloat = 18
+    var size: CGFloat = 18.ui
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 8.ui) {
             if let l = battery.left { BatteryRing(label: "L", percent: l, size: size) }
             if let r = battery.right { BatteryRing(label: "R", percent: r, size: size) }
             if battery.left == nil, battery.right == nil, let m = battery.main { BatteryRing(label: nil, percent: m, size: size) }
@@ -133,16 +133,16 @@ struct BatteryRing: View {
     let label: String?
     var isCase = false
     let percent: Int
-    var size: CGFloat = 18
+    var size: CGFloat = 18.ui
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 4.ui) {
             ZStack {
-                Circle().stroke(Theme.hairline, lineWidth: 2.5)
+                Circle().stroke(Theme.hairline, lineWidth: 2.5.ui)
                 Circle().trim(from: 0, to: CGFloat(percent) / 100)
-                    .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: 2.5.ui, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 if isCase {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Theme.secondary).frame(width: size * 0.36, height: size * 0.28)
+                    RoundedRectangle(cornerRadius: 1.5.ui).fill(Theme.secondary).frame(width: size * 0.36, height: size * 0.28)
                 } else if let label {
                     Text(verbatim: L10n.tr(label)).font(.system(size: size * 0.42, weight: .bold)).foregroundStyle(Theme.secondary)
                 }
@@ -165,15 +165,15 @@ struct DevicesTab: View {
     let connect: (String) -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .top, spacing: 10.ui) {
+            VStack(alignment: .leading, spacing: 8.ui) {
                 MacBatteryCard(state: model.battery)
                 HeadphonesCard(model: model, connect: connect)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             if let sound, sound.audio.running {
                 SoundControls(module: sound)
-                    .frame(width: 290)
+                    .frame(width: 290.ui)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -183,22 +183,22 @@ struct DevicesTab: View {
 private struct MacBatteryCard: View {
     let state: PowerState
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 10.ui) {
             Image(systemName: state.hasBattery ? PowerLogic.batterySymbol(state.percent, charging: state.isCharging) : "powerplug.fill")
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: 20.ui, weight: .medium))
                 .foregroundStyle(tint)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                .frame(width: 30.ui)
+            VStack(alignment: .leading, spacing: 2.ui) {
+                HStack(alignment: .firstTextBaseline, spacing: 6.ui) {
                     Text(verbatim: state.hasBattery ? "\(state.percent)%" : L10n.tr("This Mac"))
                         .font(Theme.font(.xl, .semibold).monospacedDigit()).foregroundStyle(Theme.primary)
                     if state.lowPowerMode {
-                        HStack(spacing: 3) {
-                            Image(systemName: "leaf.fill").font(.system(size: 9))
+                        HStack(spacing: 3.ui) {
+                            Image(systemName: "leaf.fill").font(.system(size: 9.ui))
                             Text(verbatim: L10n.tr("Low Power Mode")).font(Theme.font(.xs, .medium))
                         }
                         .foregroundStyle(Theme.waiting)
-                        .padding(.horizontal, 6).frame(height: 16)
+                        .padding(.horizontal, 6.ui).frame(height: 16.ui)
                         .background(Capsule().fill(Theme.waiting.opacity(0.15)))
                     }
                 }
@@ -206,8 +206,8 @@ private struct MacBatteryCard: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.card))
+        .padding(.horizontal, 10.ui).padding(.vertical, 8.ui)
+        .background(RoundedRectangle(cornerRadius: 10.ui).fill(Theme.card))
     }
 
     private var tint: Color {
@@ -222,13 +222,13 @@ private struct HeadphonesCard: View {
     let model: PowerModel
     let connect: (String) -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
             let connected = model.audioDevices
             if connected.isEmpty {
                 let paired = Array(model.connectable.prefix(2))
                 if paired.isEmpty {
-                    HStack(spacing: 10) {
-                        Image(systemName: "headphones").font(.system(size: 15)).foregroundStyle(Theme.tertiary).frame(width: 30)
+                    HStack(spacing: 10.ui) {
+                        Image(systemName: "headphones").font(.system(size: 15.ui)).foregroundStyle(Theme.tertiary).frame(width: 30.ui)
                         Text(verbatim: L10n.tr("No headphones connected")).font(Theme.font(.m)).foregroundStyle(Theme.tertiary)
                     }
                 } else {
@@ -238,22 +238,22 @@ private struct HeadphonesCard: View {
                 ForEach(Array(connected.prefix(2))) { d in ConnectedRow(device: d) }
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 8)
+        .padding(.horizontal, 10.ui).padding(.vertical, 8.ui)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.card))
+        .background(RoundedRectangle(cornerRadius: 10.ui).fill(Theme.card))
     }
 
     private struct ConnectedRow: View {
         let device: BluetoothDeviceInfo
         var body: some View {
-            HStack(spacing: 10) {
-                Image(systemName: device.symbol).font(.system(size: 20)).foregroundStyle(Theme.primary).frame(width: 30)
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10.ui) {
+                Image(systemName: device.symbol).font(.system(size: 20.ui)).foregroundStyle(Theme.primary).frame(width: 30.ui)
+                VStack(alignment: .leading, spacing: 4.ui) {
                     Text(verbatim: device.name).font(Theme.font(.l, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                     if device.battery.isEmpty {
                         Text(verbatim: L10n.tr("Connected")).font(Theme.font(.s)).foregroundStyle(Theme.secondary)
                     } else {
-                        BatteryGauges(battery: device.battery, size: 16)
+                        BatteryGauges(battery: device.battery, size: 16.ui)
                     }
                 }
                 Spacer(minLength: 0)
@@ -266,10 +266,10 @@ private struct HeadphonesCard: View {
         let connecting: Bool
         let connect: (String) -> Void
         var body: some View {
-            HStack(spacing: 10) {
-                Image(systemName: device.symbol).font(.system(size: 17)).foregroundStyle(Theme.secondary).frame(width: 30)
+            HStack(spacing: 10.ui) {
+                Image(systemName: device.symbol).font(.system(size: 17.ui)).foregroundStyle(Theme.secondary).frame(width: 30.ui)
                 Text(verbatim: device.name).font(Theme.font(.m, .medium)).foregroundStyle(Theme.secondary).lineLimit(1)
-                Spacer(minLength: 4)
+                Spacer(minLength: 4.ui)
                 if connecting {
                     Text(verbatim: L10n.tr("Connecting…")).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
                 } else {
@@ -285,7 +285,7 @@ struct PowerHomeCard: View {
     let model: PowerModel
     var body: some View {
         let b = model.battery
-        HStack(spacing: 14) {
+        HStack(spacing: 14.ui) {
             if b.hasBattery, b.isCharging || (!b.onAC && b.percent <= PowerLogic.cardLowThreshold) {
                 MacBattery(state: b)
             }
@@ -301,12 +301,12 @@ struct PowerHomeCard: View {
         let state: PowerState
         var body: some View {
             let low = !state.isCharging
-            HStack(spacing: 8) {
+            HStack(spacing: 8.ui) {
                 Image(systemName: state.isCharging ? "bolt.fill" : PowerLogic.batterySymbol(state.percent))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 15.ui, weight: .semibold))
                     .foregroundStyle(low ? Theme.failed : Theme.done)
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
+                    .frame(width: 22.ui)
+                VStack(alignment: .leading, spacing: 2.ui) {
                     Text(verbatim: "\(state.percent)%").font(Theme.font(.l, .semibold).monospacedDigit()).foregroundStyle(Theme.primary)
                     Text(verbatim: detail).font(Theme.font(.s)).foregroundStyle(Theme.secondary).lineLimit(1)
                 }
@@ -325,9 +325,9 @@ struct PowerHomeCard: View {
     private struct Headphones: View {
         let device: BluetoothDeviceInfo
         var body: some View {
-            HStack(spacing: 8) {
-                Image(systemName: device.symbol).font(.system(size: 15)).foregroundStyle(Theme.primary).frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 8.ui) {
+                Image(systemName: device.symbol).font(.system(size: 15.ui)).foregroundStyle(Theme.primary).frame(width: 22.ui)
+                VStack(alignment: .leading, spacing: 2.ui) {
                     Text(verbatim: device.name).font(Theme.font(.l, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
                     Text(verbatim: PowerText.budsLine(device.battery) ?? "")
                         .font(Theme.font(.s).monospacedDigit()).foregroundStyle(Theme.secondary).lineLimit(1)

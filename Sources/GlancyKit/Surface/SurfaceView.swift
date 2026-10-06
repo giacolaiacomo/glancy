@@ -72,7 +72,7 @@ private struct CollapsedContent: View {
             if state == .peek {
                 // A hint of what's below: a small grabber, nothing else.
                 Capsule().fill(Theme.tertiary)
-                    .frame(width: 18, height: 3)
+                    .frame(width: 18.ui, height: 3.ui)
                     .padding(.top, notch.height + 1)
                     .transition(.opacity)
             }
@@ -122,8 +122,8 @@ private struct Wings: View {
                         report(hub.top)
                     }
                     .id(hub.top?.id)
-                    .padding(outerLeading ? .leading : .trailing, SurfaceLayout.wingOuterPad - 4)
-                    .padding(outerLeading ? .trailing : .leading, SurfaceLayout.wingInnerGap - 4)
+                    .padding(outerLeading ? .leading : .trailing, model.geometry.ui(SurfaceLayout.wingOuterPad - 4))
+                    .padding(outerLeading ? .trailing : .leading, model.geometry.ui(SurfaceLayout.wingInnerGap - 4))
                     .transition(.blurFade)
             }
         }
@@ -156,7 +156,7 @@ private struct PeekDrop: View {
                     .transition(.blurFade)
             }
         }
-        .frame(height: Theme.peekEventDrop)
+        .frame(height: model.geometry.ui(Theme.Base.peekEventDrop))
         .padding(.top, notch.height - 2)
         .opacity(visible ? 1 : 0)
         .onChange(of: peek?.id, initial: true) { if peek == nil { model.showPeek(nil, contentWidth: 0) } }

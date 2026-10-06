@@ -8,7 +8,7 @@ struct CommandBarView: View {
     let model: CommandModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6.ui) {
             CommandSearchField(model: model)
             if model.rows.isEmpty {
                 CommandEmpty(model: model)
@@ -27,7 +27,7 @@ private struct CommandSearchField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 7.ui) {
             Image(systemName: "magnifyingglass")
                 .font(Theme.font(.l, .medium))
                 .foregroundStyle(Theme.tertiary)
@@ -39,7 +39,7 @@ private struct CommandSearchField: View {
                 .focused($focused)
                 .onSubmit { model.handle(.enter) }
             if let item = model.selectedItem, item.actionable {
-                HStack(spacing: 8) {
+                HStack(spacing: 8.ui) {
                     KeyHint(key: "↵", label: item.primary)
                     if let s = item.secondary { KeyHint(key: "⌘↵", label: s.title) }
                 }
@@ -47,9 +47,9 @@ private struct CommandSearchField: View {
                 .transition(.opacity)
             }
         }
-        .padding(.horizontal, 10)
-        .frame(height: 30)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.card))
+        .padding(.horizontal, 10.ui)
+        .frame(height: 30.ui)
+        .background(RoundedRectangle(cornerRadius: 10.ui, style: .continuous).fill(Theme.card))
         .onAppear { focused = true }
         .onChange(of: model.visible) { _, on in if on { focused = true } }
     }
@@ -60,7 +60,7 @@ private struct KeyHint: View {
     let label: String
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 4.ui) {
             KeyCap(key)
             Text(verbatim: label)
                 .font(Theme.font(.xs))
@@ -75,11 +75,11 @@ private struct KeyCap: View {
     init(_ text: String) { self.text = text }
     var body: some View {
         Text(verbatim: text)
-            .font(.system(size: 9.5, weight: .medium).monospacedDigit())
+            .font(.system(size: 9.5.ui, weight: .medium).monospacedDigit())
             .foregroundStyle(Theme.secondary)
-            .padding(.horizontal, 4)
-            .frame(minWidth: 16, minHeight: 15)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color.white.opacity(0.08)))
+            .padding(.horizontal, 4.ui)
+            .frame(minWidth: 16.ui, minHeight: 15.ui)
+            .background(RoundedRectangle(cornerRadius: 4.ui, style: .continuous).fill(Color.white.opacity(0.08)))
     }
 }
 
@@ -91,7 +91,7 @@ private struct CommandResults: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 1) {
+                LazyVStack(alignment: .leading, spacing: 1.ui) {
                     ForEach(Array(model.rows.enumerated()), id: \.element.id) { i, item in
                         if let header = model.sections[i] {
                             SectionHeader(text: header)
@@ -113,12 +113,12 @@ private struct SectionHeader: View {
     let text: String
     var body: some View {
         Text(verbatim: text.uppercased())
-            .font(.system(size: 9, weight: .semibold))
-            .tracking(0.6)
+            .font(.system(size: 9.ui, weight: .semibold))
+            .tracking(0.6.ui)
             .foregroundStyle(Theme.tertiary)
-            .padding(.leading, 8)
-            .frame(height: 15, alignment: .bottom)
-            .padding(.bottom, 1)
+            .padding(.leading, 8.ui)
+            .frame(height: 15.ui, alignment: .bottom)
+            .padding(.bottom, 1.ui)
     }
 }
 
@@ -132,8 +132,8 @@ private struct CommandRow: View {
     private var big: Bool { item.kind == .answer || item.kind == .notice }
 
     var body: some View {
-        HStack(spacing: 9) {
-            RowIcon(icon: item.icon, size: big ? 22 : 18)
+        HStack(spacing: 9.ui) {
+            RowIcon(icon: item.icon, size: big ? 22.ui : 18.ui)
             if big {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(verbatim: item.title)
@@ -162,7 +162,7 @@ private struct CommandRow: View {
                         .truncationMode(.tail)
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: 8.ui)
             Text(verbatim: item.tag)
                 .font(Theme.font(.xs))
                 .foregroundStyle(Theme.tertiary)
@@ -173,16 +173,16 @@ private struct CommandRow: View {
                     KeyCap("↵")
                 } else if index < 9, item.actionable {
                     Text(verbatim: "⌘\(index + 1)")
-                        .font(.system(size: 9.5, weight: .medium).monospacedDigit())
+                        .font(.system(size: 9.5.ui, weight: .medium).monospacedDigit())
                         .foregroundStyle(Theme.tertiary.opacity(0.8))
                 }
             }
-            .frame(width: 22, alignment: .trailing)
+            .frame(width: 22.ui, alignment: .trailing)
         }
-        .padding(.horizontal, 8)
-        .frame(height: big ? 38 : 24)
+        .padding(.horizontal, 8.ui)
+        .frame(height: big ? 38.ui : 24.ui)
         .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 7.ui, style: .continuous)
                 .fill(selected ? Color.white.opacity(0.11) : hover ? Color.white.opacity(0.05) : .clear))
         .contentShape(Rectangle())
         .onTapGesture { if item.actionable { action() } }
@@ -223,13 +223,13 @@ private struct CommandEmpty: View {
         let examples = L10n.isItalian
             ? ["12% di 340", "5 km in mi", "100 dollari in euro", "3 ore in min", "0xff"]
             : ["12% of 340", "5 km in mi", "100 usd to eur", "70 f to c", "0xff"]
-        VStack(spacing: 10) {
+        VStack(spacing: 10.ui) {
             if !model.query.trimmingCharacters(in: .whitespaces).isEmpty {
                 Text(verbatim: CommandText.t("No results"))
                     .font(Theme.font(.m, .medium))
                     .foregroundStyle(Theme.secondary)
             }
-            HStack(spacing: 5) {
+            HStack(spacing: 5.ui) {
                 Text(verbatim: CommandText.t("Try"))
                     .font(Theme.font(.xs))
                     .foregroundStyle(Theme.tertiary)
@@ -238,8 +238,8 @@ private struct CommandEmpty: View {
                         Text(verbatim: e)
                             .font(Theme.font(.s))
                             .foregroundStyle(Theme.secondary)
-                            .padding(.horizontal, 8)
-                            .frame(height: 20)
+                            .padding(.horizontal, 8.ui)
+                            .frame(height: 20.ui)
                             .background(Capsule().fill(Theme.card))
                             .contentShape(Capsule())
                     }
@@ -248,7 +248,7 @@ private struct CommandEmpty: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 8)
+        .padding(.bottom, 8.ui)
     }
 }
 
@@ -264,8 +264,8 @@ struct CommandSection: View {
         @Bindable var settings = module.model.settings
         let _ = tick
         let history = module.model.history
-        HStack(alignment: .top, spacing: 22) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .top, spacing: 22.ui) {
+            VStack(alignment: .leading, spacing: 4.ui) {
                 SettingsRow(tr("Shortcut"), note: CommandText.t("Opens the bar from anywhere")) {
                     HotkeyField(id: "command", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
                         module.setHotkey(h)
@@ -282,7 +282,7 @@ struct CommandSection: View {
                 SettingsNote(CommandText.t("Esc clears, then closes"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2.ui) {
                 SettingsGroupTitle(CommandText.t("Results"))
                 toggle(CommandText.t("Applications"), CommandText.t("Launch and reveal apps"), $settings.apps)
                 toggle(CommandText.t("Calculator"), CommandText.t("Arithmetic, %, hex and binary"), $settings.calculator)
@@ -300,7 +300,7 @@ struct CommandSection: View {
     }
 
     private func toggle(_ title: String, _ note: String, _ on: Binding<Bool>) -> some View {
-        SettingsRow(title, note: note, minHeight: 24) { NotchSwitch(isOn: on) }
+        SettingsRow(title, note: note, minHeight: 24.ui) { NotchSwitch(isOn: on) }
     }
 
     private func historyNote(_ h: PaletteHistory) -> String {

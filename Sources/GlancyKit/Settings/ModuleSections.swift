@@ -11,7 +11,9 @@ enum SettingsCatalog {
     static func generalSummary(_ s: AppSettings) -> String {
         let open = s.openModel == .click ? tr("Click") : tr("Hover")
         let lang = switch s.language { case .system: tr("System"); case .en: "English"; case .it: "Italiano" }
-        return "\(open) · \(lang)"
+        // The size only once it is not the normal one (the tile has room for three words).
+        guard s.size != .normal else { return "\(open) · \(lang)" }
+        return "\(open) · \(lang) · \(tr(GeneralSection.sizeName(s.size)))"
     }
 
     /// One line for a module's tile.
@@ -99,7 +101,7 @@ struct ModuleSection: View {
 
     var body: some View {
         let on = context.settings.isEnabled(id)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsHeader(context: context, title: tr(SurfaceContext.name(id))) {
                 if context.modules.contains(where: { $0.id == id }) {
                     NotchSwitch(isOn: Binding(get: { on }, set: { context.setModuleEnabled(id, $0) }))
@@ -141,13 +143,13 @@ private struct PermissionLine: View {
         let center = context.settings.permissions
         let status = center.status(permission)
         if status == .notDetermined || status == .denied {
-            HStack(spacing: 6) {
-                Circle().fill(Theme.waiting).frame(width: 6, height: 6)
+            HStack(spacing: 6.ui) {
+                Circle().fill(Theme.waiting).frame(width: 6.ui, height: 6.ui)
                 Text(verbatim: text).font(Theme.font(.xs)).foregroundStyle(Theme.secondary).lineLimit(1)
-                Spacer(minLength: 6)
+                Spacer(minLength: 6.ui)
                 NotchTextButton(status == .denied ? tr("Open Settings") : tr("Allow…")) { center.request(permission) }
             }
-            .frame(minHeight: 24)
+            .frame(minHeight: 24.ui)
         }
     }
 }
@@ -161,7 +163,7 @@ private struct CalendarSection: View {
     var body: some View {
         let settings = module.settings
         let calendars = settings.availableCalendars
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 5.ui) {
             MeetingSettingsView(module: module, context: context)
             PermissionLine(context: context, permission: .calendar, text: tr("Glancy can't read your calendars yet"))
             if calendars.isEmpty {
@@ -169,14 +171,14 @@ private struct CalendarSection: View {
             } else {
                 let accounts = Dictionary(grouping: calendars, by: \.source)
                 ForEach(accounts.keys.sorted(), id: \.self) { account in
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: 8.ui) {
                         Text(verbatim: account.isEmpty ? tr("Other") : account)
                             .font(Theme.font(.s))
                             .foregroundStyle(Theme.tertiary)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .frame(width: 120, height: 22, alignment: .leading)
-                        FlowLayout(spacing: 4) {
+                            .frame(width: 120.ui, height: 22.ui, alignment: .leading)
+                        FlowLayout(spacing: 4.ui) {
                             ForEach(accounts[account] ?? []) { cal in
                                 CalendarChip(info: cal, on: settings.isSelected(cal.id)) {
                                     settings.setSelected(cal.id, !settings.isSelected(cal.id))
@@ -198,20 +200,20 @@ private struct CalendarChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 5.ui) {
                 Circle()
                     .fill(on ? info.color.color : .clear)
-                    .overlay(Circle().strokeBorder(info.color.color, lineWidth: 1.5))
-                    .frame(width: 8, height: 8)
+                    .overlay(Circle().strokeBorder(info.color.color, lineWidth: 1.5.ui))
+                    .frame(width: 8.ui, height: 8.ui)
                 Text(verbatim: info.title)
                     .font(Theme.font(.s, on ? .medium : .regular))
                     .foregroundStyle(on ? Theme.primary : Theme.tertiary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 8)
-            .frame(height: 22)
+            .padding(.horizontal, 8.ui)
+            .frame(height: 22.ui)
             .background(Capsule().fill(on ? Color.white.opacity(0.12) : .clear))
-            .overlay(Capsule().strokeBorder(on ? .clear : Theme.hairline, lineWidth: 1))
+            .overlay(Capsule().strokeBorder(on ? .clear : Theme.hairline, lineWidth: 1.ui))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -235,13 +237,13 @@ private struct HUDSection: View {
     var body: some View {
         @Bindable var settings = module.settings
         let _ = tick
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             PermissionLine(context: context, permission: .accessibility, text: tr("Needs Accessibility to take over the keys"))
             SettingsRow(tr("Show in the notch"), note: tr("Replaces the system HUD for the keys below")) {
                 NotchSwitch(isOn: $settings.enabled)
             }
             SettingsRow(tr("Keys")) {
-                HStack(spacing: 4) {
+                HStack(spacing: 4.ui) {
                     ForEach(Self.kinds, id: \.0) { kind, title, symbol in
                         NotchChip(symbol: symbol, title: tr(title), on: settings.handles(kind)) {
                             settings.set(kind, !settings.handles(kind))
@@ -252,7 +254,7 @@ private struct HUDSection: View {
                 .disabled(!settings.enabled)
             }
             SettingsNote(tr("Keys left out keep the system HUD. ⌥⇧ still steps by quarters."))
-            HStack(alignment: .top, spacing: 22) {
+            HStack(alignment: .top, spacing: 22.ui) {
                 SettingsRow(tr("Mute microphone shortcut"), note: tr("Mutes or unmutes the default microphone")) {
                     HotkeyField(id: "hud.mic", hotkey: settings.micHotkey, conflict: conflict(settings.micHotkey)) { h in
                         module.setMicHotkey(h)
@@ -284,12 +286,12 @@ private struct PowerSection: View {
 
     var body: some View {
         @Bindable var settings = module.settings
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsRow(tr("Battery in the notch"), note: tr("Plugging in, unplugging, Low Power Mode")) {
                 NotchSwitch(isOn: $settings.batteryActivities)
             }
             SettingsRow(tr("Low battery peek"), note: tr("On battery, once per discharge")) {
-                HStack(spacing: 6) {
+                HStack(spacing: 6.ui) {
                     NotchSegments(selection: $settings.lowFirst, options: [30, 25, 20, 15].map { ($0, "\($0)%") })
                     NotchSegments(selection: $settings.lowSecond, options: [15, 10, 5].map { ($0, "\($0)%") })
                         .opacity(settings.lowAlerts ? 1 : 0.4)
@@ -331,7 +333,7 @@ private struct MediaSection: View {
 
     var body: some View {
         let source = module.model.source
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsRow(tr("Source in use"), note: note(source)) {
                 Text(verbatim: Self.sourceTitle(source))
                     .font(Theme.font(.s, .medium))
@@ -361,7 +363,7 @@ private struct TimerSection: View {
     @State private var lengths = Pomodoro.lengths
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             SettingsRow(tr("Focus")) { stepper(\.focus) }
             SettingsRow(tr("Short break")) { stepper(\.shortBreak) }
             SettingsRow(tr("Long break"), note: tr("After the fourth focus round")) { stepper(\.longBreak) }
@@ -401,9 +403,9 @@ private struct ClipboardSection: View {
     var body: some View {
         @Bindable var settings = module.model.settings
         let _ = tick
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .top, spacing: 22) {
-                VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
+            HStack(alignment: .top, spacing: 22.ui) {
+                VStack(alignment: .leading, spacing: 4.ui) {
                     SettingsRow(tr("Pause history"), note: settings.paused ? tr("Nothing is being recorded") : nil) {
                         NotchSwitch(isOn: $settings.paused)
                     }
@@ -413,7 +415,7 @@ private struct ClipboardSection: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 4.ui) {
                     SettingsRow(tr("Shortcut"), note: tr("Opens the list with the keyboard")) {
                         HotkeyField(id: "clipboard", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
                             module.setHotkey(h)
@@ -430,19 +432,19 @@ private struct ClipboardSection: View {
             if settings.pasteAfterChoosing {
                 PermissionLine(context: context, permission: .accessibility, text: tr("Pasting needs Accessibility"))
             }
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 3.ui) {
                 SettingsGroupTitle(tr("Excluded apps"))
                 if settings.excluded.isEmpty {
                     SettingsNote(tr("None. Right-click an item in the list to never record from its app. Password managers are always skipped."))
                 } else {
-                    FlowLayout(spacing: 4) {
+                    FlowLayout(spacing: 4.ui) {
                         ForEach(settings.excluded.sorted { $0.value < $1.value }, id: \.key) { bundleID, name in
                             ExcludedChip(name: name) { module.model.include(bundleID: bundleID) }
                         }
                     }
                 }
             }
-            .padding(.top, 2)
+            .padding(.top, 2.ui)
         }
         .onAppear { system = HotkeyConflict.systemHotkeys() }
     }
@@ -458,17 +460,17 @@ private struct ExcludedChip: View {
     let name: String
     let remove: () -> Void
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 4.ui) {
             Text(verbatim: name).font(Theme.font(.s)).foregroundStyle(Theme.primary).lineLimit(1)
             Button(action: remove) {
-                Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).foregroundStyle(Theme.tertiary)
-                    .frame(width: 14, height: 14).contentShape(Rectangle())
+                Image(systemName: "xmark").font(.system(size: 8.ui, weight: .bold)).foregroundStyle(Theme.tertiary)
+                    .frame(width: 14.ui, height: 14.ui).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(tr("Record from this app again"))
         }
-        .padding(.leading, 8).padding(.trailing, 4)
-        .frame(height: 22)
+        .padding(.leading, 8.ui).padding(.trailing, 4.ui)
+        .frame(height: 22.ui)
         .background(Capsule().fill(Theme.card))
     }
 }
@@ -546,7 +548,7 @@ private struct WindowsSection: View {
         let all = GlancyHotkeys.bindings(context)
         let failed = Set((Self.actions + Self.arrangeActions).map { hotkeys[keyPath: $0.key] }
             .filter { module.failedHotkeys.contains($0.description) })
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 4.ui) {
             PermissionLine(context: context, permission: .accessibility, text: tr("Moving windows needs Accessibility"))
             SettingsRow(tr("Shortcuts"), note: tr("Halves cycle ½ → ⅔ → ⅓ on repeat")) {
                 NotchSwitch(isOn: Binding(get: { hotkeys.enabled }, set: { on in
@@ -558,7 +560,7 @@ private struct WindowsSection: View {
                                            hotkeys.undo.description))
                 grid(Self.actions, hotkeys: hotkeys, all: all, failed: failed)
                 SettingsGroupTitle(WindowsText.t("More shortcuts"))
-                    .padding(.top, 8)
+                    .padding(.top, 8.ui)
                 SettingsNote(WindowsText.t("Arrange the display under the pointer with a fixed strategy · ⇧ = only the front app"))
                 grid(Self.arrangeActions, hotkeys: hotkeys, all: all, failed: failed)
             }
@@ -573,10 +575,10 @@ private struct WindowsSection: View {
     }
 
     private func grid(_ actions: [Action], hotkeys: WindowsHotkeys, all: [HotkeyBinding], failed: Set<Hotkey>) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 22), GridItem(.flexible())], alignment: .leading, spacing: 2) {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 22.ui), GridItem(.flexible())], alignment: .leading, spacing: 2.ui) {
             ForEach(actions, id: \.id) { a in
                 let key = hotkeys[keyPath: a.key]
-                SettingsRow(tr(a.title), minHeight: 24) {
+                SettingsRow(tr(a.title), minHeight: 24.ui) {
                     HotkeyField(id: a.id, hotkey: key,
                                 conflict: HotkeyConflict.find(HotkeyBinding(id: a.id, title: tr(a.title), hotkey: key),
                                                               among: all, system: system, failed: failed)) { new in

@@ -29,6 +29,9 @@ public final class SurfaceManager {
     /// false in tests: panels are never put on screen and no global monitor / hot key is installed.
     private let presents: Bool
     private let systemInput: Bool
+    /// The size in use (Settings → General → Size, clamped to the displays). The app's views read
+    /// `UIScale.shared`; tests pass their own so they never resize what other tests measure.
+    let uiScale: UIScale
 
     /// How long after a wake / unlock the displays are read once more: they often settle late
     /// (clamshell, external display waking after the built-in one) without a second notification.
@@ -44,8 +47,10 @@ public final class SurfaceManager {
     /// `systemInput` false: panels are shown but no global monitor or Esc hot key is installed
     /// (the lab, rendering tests); default: whenever panels are shown, never in the lab.
     init(context: SurfaceContext, screens: @escaping () -> [ScreenInfo], fullscreenSpaces: @escaping () -> Set<String>,
-         events: SystemEvents, menuBar: MenuBarWatcher? = nil, presents: Bool, systemInput: Bool? = nil) {
+         events: SystemEvents, menuBar: MenuBarWatcher? = nil, presents: Bool, systemInput: Bool? = nil,
+         uiScale: UIScale = .shared) {
         self.context = context
+        self.uiScale = uiScale
         self.menuBar = menuBar ?? MenuBarWatcher(reader: nil, observes: false)
         self.screens = screens
         self.fullscreenSpaces = fullscreenSpaces
@@ -108,21 +113,34 @@ public final class SurfaceManager {
     /// the user opted in (the main display always gets one when no display has a notch). Two displays reporting the same UUID (identical monitors without a
     /// serial number) each keep their own surface.
     func wantedGeometries() -> [String: NotchGeometry] {
-        Self.wanted(screens(), externalPill: context.settings.externalPill, menuBar: NSStatusBar.system.thickness)
+        let all = screens()
+        let requested = context.settings.size
+        let effective = Self.effectiveSize(requested, all, externalPill: context.settings.externalPill)
+        uiScale.set(requested: requested, effective: effective)
+        return Self.wanted(all, externalPill: context.settings.externalPill, menuBar: NSStatusBar.system.thickness,
+                           uiScale: effective.factor)
     }
 
-    nonisolated static func wanted(_ screens: [ScreenInfo], externalPill: Bool, menuBar: CGFloat) -> [String: NotchGeometry] {
+    /// The chosen size, or the largest that fits every display that gets a surface.
+    nonisolated static func effectiveSize(_ requested: UISize, _ screens: [ScreenInfo], externalPill: Bool) -> UISize {
+        var shown = screens.filter { $0.hasNotch || externalPill }
+        if shown.isEmpty, let main = screens.first { shown = [main] }
+        return requested.fitting(shown)
+    }
+
+    nonisolated static func wanted(_ screens: [ScreenInfo], externalPill: Bool, menuBar: CGFloat,
+                                   uiScale: CGFloat = 1) -> [String: NotchGeometry] {
         var out: [String: NotchGeometry] = [:]
         // Menu bar auto-hidden: visibleFrame reaches the top, so fall back to the bar's thickness.
         func pill(_ info: ScreenInfo) -> NotchGeometry {
             let h = info.frame.maxY - info.visibleFrame.maxY
-            return NotchGeometry.pill(for: info, menuBarHeight: h > 0 ? h : menuBar)
+            return NotchGeometry.pill(for: info, menuBarHeight: h > 0 ? h : menuBar, uiScale: uiScale)
         }
         for info in screens {
             var key = info.uuid
             var n = 2
             while out[key] != nil { key = "\(info.uuid)#\(n)"; n += 1 }
-            if let g = NotchGeometry.notch(for: info) {
+            if let g = NotchGeometry.notch(for: info, uiScale: uiScale) {
                 out[key] = g
             } else if externalPill {
                 out[key] = pill(info)
@@ -353,6 +371,7 @@ public final class SurfaceManager {
         withObservationTracking {
             _ = context.settings.hideFromCapture
             _ = context.settings.externalPill
+            _ = context.settings.size
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, self.started else { return }

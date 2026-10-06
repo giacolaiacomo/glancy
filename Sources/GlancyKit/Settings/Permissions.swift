@@ -162,6 +162,23 @@ public final class PermissionCenter {
                 self?.refresh()
             }
         case .accessibility:
+            // Not trusted, yet the switch in System Settings may be on: an entry left by an earlier
+            // build with another signature (an older version, or an ad-hoc one) that macOS no longer
+            // matches to this app. Clearing Glancy's own entry and asking again lists this build,
+            // so turning the switch on works. Nothing is lost: the entry wasn't granting anything.
+            if AXIsProcessTrusted() { return openSettings(p) }    // never reset a working grant
+            if SystemPermissions.inBundle, let id = Bundle.main.bundleIdentifier {
+                asking = .accessibility
+                Task { [weak self] in
+                    await SystemPermissions.resetAccessibility(bundleID: id)
+                    _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+                    self?.defaults.set(true, forKey: Self.axPromptedKey)
+                    self?.openSettings(p)
+                    self?.asking = nil
+                    self?.refresh()
+                }
+                return
+            }
             // The system prompt shows once; after that it is the pane or nothing.
             if defaults.bool(forKey: Self.axPromptedKey) { return openSettings(p) }
             defaults.set(true, forKey: Self.axPromptedKey)
@@ -237,6 +254,22 @@ public final class PermissionCenter {
 /// Reads permission statuses without prompting. Everything here is safe off the main thread.
 enum SystemPermissions {
     static var inBundle: Bool { Bundle.main.bundleURL.pathExtension == "app" && Bundle.main.bundleIdentifier != nil }
+
+    /// `tccutil reset Accessibility <id>`: removes this app's own Accessibility entry (no admin
+    /// rights needed), off the main thread.
+    nonisolated static func resetAccessibility(bundleID: String) async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+                p.arguments = ["reset", "Accessibility", bundleID]
+                p.standardOutput = FileHandle.nullDevice
+                p.standardError = FileHandle.nullDevice
+                if (try? p.run()) != nil { p.waitUntilExit() }
+                cont.resume()
+            }
+        }
+    }
 
     /// Microphone / camera. Without the usage string macOS kills the process on a request, so a
     /// run outside the app bundle reports `unavailable`.

@@ -6,6 +6,13 @@ protocol SurfaceModelDelegate: AnyObject {
     func surfaceLayoutWillChange(_ model: SurfaceModel, to layout: SurfaceLayout)
     func surfaceLayoutDidSettle(_ model: SurfaceModel)
     func surfaceStateDidChange(_ model: SurfaceModel)
+    /// About to collapse: visible-only work (repeating animations) must stop before the
+    /// expanded content is removed, or SwiftUI keeps the removed views animating, unseen.
+    func surfaceWillCollapse(_ model: SurfaceModel)
+}
+
+extension SurfaceModelDelegate {
+    func surfaceWillCollapse(_ model: SurfaceModel) {}
 }
 
 /// The state of one surface (one display). Fine-grained so the collapsed view observes only what it
@@ -83,6 +90,7 @@ public final class SurfaceModel {
         guard expanded else { return }
         lastTab = selectedTab
         closedAt = .now
+        delegate?.surfaceWillCollapse(self)
         transition(Theme.close) {
             expanded = false
             showingSettings = false
@@ -167,7 +175,6 @@ public final class SurfaceModel {
             change()
         }
         let after = layout
-        if ProcessInfo.processInfo.environment["GLANCY_LAB_TRACE"] != nil { print("TRACE transition \(state) wings=\(wingContent) peek=\(String(describing: shownPeek)) size=\(after.size) anim=\(animation != nil) t=\(Date().timeIntervalSince1970)") }
         if after != before { delegate?.surfaceLayoutWillChange(self, to: after) }
         if !animated, !animating { delegate?.surfaceLayoutDidSettle(self) }
         if state != wasState { delegate?.surfaceStateDidChange(self) }

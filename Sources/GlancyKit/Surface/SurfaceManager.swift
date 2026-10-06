@@ -23,6 +23,7 @@ public final class SurfaceManager {
     private let fullscreenSpaces: () -> Set<String>
     /// false in tests: panels are never put on screen and no global monitor / hot key is installed.
     private let presents: Bool
+    private let systemInput: Bool
 
     /// How long after a wake / unlock the displays are read once more: they often settle late
     /// (clamshell, external display waking after the built-in one) without a second notification.
@@ -35,15 +36,19 @@ public final class SurfaceManager {
     }
 
     /// `menuBar` nil: an inert watcher (no reads, no observers) — wings keep their symmetric width.
+    /// `systemInput` false: panels are shown but no global monitor or Esc hot key is installed
+    /// (the lab, rendering tests); default: whenever panels are shown, never in the lab.
     init(context: SurfaceContext, screens: @escaping () -> [ScreenInfo], fullscreenSpaces: @escaping () -> Set<String>,
-         events: SystemEvents, menuBar: MenuBarWatcher? = nil, presents: Bool) {
+         events: SystemEvents, menuBar: MenuBarWatcher? = nil, presents: Bool, systemInput: Bool? = nil) {
         self.context = context
         self.menuBar = menuBar ?? MenuBarWatcher(reader: nil, observes: false)
         self.screens = screens
         self.fullscreenSpaces = fullscreenSpaces
         self.events = events
         self.presents = presents
-        escape = EscapeHotKey(system: presents && !Lab.isActive)
+        let input = systemInput ?? (presents && !Lab.isActive)
+        self.systemInput = input
+        escape = EscapeHotKey(system: input)
     }
 
     public func start() {
@@ -259,7 +264,7 @@ public final class SurfaceManager {
     /// Clicks in other apps close the panel. Exists only while something is expanded.
     private func installClickMonitor() {
         guard clickMonitor == nil else { return }
-        guard presents, !Lab.isActive else { clickMonitor = NSNull(); return }
+        guard systemInput else { clickMonitor = NSNull(); return }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.closeAll() }
         }
@@ -272,12 +277,18 @@ public final class SurfaceManager {
 
     // MARK: Visibility fan-out
 
-    private func updateVisibility() {
-        let models = surfaces.values.map(\.model)
+    /// A surface is about to collapse: modules hear it before its expanded views are removed
+    /// (a pulse still repeating at removal kept the removed views animating, ~4.5% CPU).
+    func surfaceWillCollapse(_ surface: SurfaceController) {
+        updateVisibility(collapsing: surface)
+    }
+
+    private func updateVisibility(collapsing: SurfaceController? = nil) {
+        let models = surfaces.values.filter { $0 !== collapsing }.map(\.model)
         let v: SurfaceVisibility
         if let open = models.first(where: { $0.expanded }) {
             v = open.visibility
-        } else if models.contains(where: { !$0.hidden }) {
+        } else if models.contains(where: { !$0.hidden }) || collapsing.map({ !$0.model.hidden }) == true {
             v = .collapsed
         } else {
             v = .hidden

@@ -25,10 +25,11 @@ private let ultrawide = ScreenInfo(
 @MainActor final class RecordingModule: GlancyModule {
     let id: ModuleID
     var seen: [SurfaceVisibility] = []
+    var onVisibility: ((SurfaceVisibility) -> Void)?
     init(_ id: ModuleID = .agents) { self.id = id }
     func start(hub: ActivityHub) {}
     func stop() {}
-    func visibilityChanged(_ visibility: SurfaceVisibility) { seen.append(visibility) }
+    func visibilityChanged(_ visibility: SurfaceVisibility) { seen.append(visibility); onVisibility?(visibility) }
 }
 
 @MainActor final class SurfaceHarness {

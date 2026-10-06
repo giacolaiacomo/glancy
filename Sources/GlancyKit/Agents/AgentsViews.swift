@@ -31,11 +31,24 @@ struct AgentStateDot: View {
             .fill(color)
             .frame(width: size, height: size)
             .opacity(dim ? 0.4 : 1)
-            .onAppear {
-                guard pulsing else { return }
-                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { dim = true }
+            // The repeating animation is started and stopped explicitly. Rebuilding the dot with
+            // `.id(pulsing)` left the old dot animating, invisible, after about half the collapses:
+            // SwiftUI redrew the surface every frame (~4.5% CPU) with nothing on screen changing.
+            .onChange(of: pulsing, initial: true) { _, on in
+                if on {
+                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { dim = true }
+                } else {
+                    Self.stop($dim)
+                }
             }
-            .id(pulsing)   // turning the pulse off rebuilds the dot: no animation left running
+            .onDisappear { Self.stop($dim) }
+    }
+
+    /// A plain, unanimated write replaces the running repeat: nothing is left ticking.
+    static func stop(_ dim: Binding<Bool>) {
+        var t = Transaction(animation: nil)
+        t.disablesAnimations = true
+        withTransaction(t) { dim.wrappedValue = false }
     }
 }
 

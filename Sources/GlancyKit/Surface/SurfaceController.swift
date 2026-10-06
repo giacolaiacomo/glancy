@@ -49,6 +49,8 @@ final class SurfaceController: SurfaceModelDelegate {
 
     /// Tests: the hosting view currently in the panel.
     var hostForTest: NSView { host }
+    /// Layout passes of the hosting view so far (an idle collapsed surface adds none).
+    var layoutPasses: Int { host.layoutPasses }
 
     var panelFrame: CGRect { panel.frame }
     var panelVisible: Bool { panel.isVisible }
@@ -97,6 +99,10 @@ final class SurfaceController: SurfaceModelDelegate {
             hoverTask?.cancel(); intent.exited()
             model.setHovering(false)
         }
+    }
+
+    func surfaceWillCollapse(_ model: SurfaceModel) {
+        manager?.surfaceWillCollapse(self)
     }
 
     func surfaceStateDidChange(_ model: SurfaceModel) {

@@ -60,6 +60,13 @@ final class SurfaceHostingView: NSHostingView<SurfaceView> {
     var onSwipe: ((Int) -> Void)?
     private var swipe = SwipeTracker()
     private var area: NSTrackingArea?
+    /// Layout passes so far: a collapsed, unchanging surface must add none (tests, the lab).
+    private(set) var layoutPasses = 0
+
+    override func layout() {
+        super.layout()
+        layoutPasses += 1
+    }
 
     required init(rootView: SurfaceView) {
         super.init(rootView: rootView)

@@ -232,7 +232,8 @@ struct TilingPlannerTests {
     @Test func fitFindsTheHole() {
         let left = Geometry.frame(for: CellRect(col: 0, row: 0, w: 1, h: 2), in: grid, on: usable)
         let move = ArrangePlanner.fit(PlanWindow(id: 1, frame: left.insetBy(dx: 40, dy: 40)), others: [left], grid: grid, usable: usable)
-        #expect(move?.cell == CellRect(col: 1, row: 0, w: 1, h: 2))
+        let right = Geometry.frame(for: CellRect(col: 1, row: 0, w: 1, h: 2), in: grid, on: usable)
+        #expect(move.map { PlacementMath.approx($0.to, right, 1) } == true)
         let full = Geometry.frame(for: .all(grid), in: grid, on: usable)
         #expect(ArrangePlanner.fit(PlanWindow(id: 1, frame: .zero), others: [full], grid: grid, usable: usable) == nil)
     }

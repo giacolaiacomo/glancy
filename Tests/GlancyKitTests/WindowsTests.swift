@@ -357,8 +357,9 @@ struct WindowsCyclingTests {
         let model = WindowsModel(backend: backend)
         let line = await model.direct(.fit)
         #expect(backend.commits.last?.kind == .fit)
-        // Mail holds the bottom-left cell; the free 3×2 area left is the top row or the right side.
-        #expect(backend.commits.last?.moves[0].cell?.intersects(CellRect(col: 0, row: 1)) == false)
+        // Mail holds the bottom-left; the window goes where nothing is, clear of Mail.
+        let mail = SampleWindowsBackend.standardWindows.first { $0.id == 13 }!.frame
+        #expect(backend.commits.last.map { !$0.moves[0].to.intersects(mail) } == true)
         #expect(line?.hasPrefix("Terminal kept") == true)
     }
 }

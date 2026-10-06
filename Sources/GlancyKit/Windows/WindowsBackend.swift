@@ -170,7 +170,7 @@ final class SampleWindowsBackend: WindowsBackend {
     func planFit(_ windowID: CGWindowID) -> ArrangePlan? {
         guard let w = window(windowID), let d = display(of: w) else { return nil }
         let g = grid(for: d)
-        let others = windows.filter { $0.id != windowID && self.display(of: $0)?.id == d.id }.map(\.frame)
+        let others = windows.filter { $0.id != windowID && FreeSpace.occupies($0) && self.display(of: $0)?.id == d.id }.map(\.frame)
         guard let m = ArrangePlanner.fit(pw(w), others: others, grid: g, usable: d.usableFrame) else { return nil }
         return ArrangePlan(kind: .fit, displayID: d.id, usable: d.usableFrame, grid: g, moves: [m])
     }

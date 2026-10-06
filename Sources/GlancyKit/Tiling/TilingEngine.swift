@@ -133,14 +133,14 @@ public final class TilingEngine {
         return Arrange.bestGrid(for: max(1, n), fitting: display.usableFrame, like: grid(for: display))
     }
 
-    /// The window into the largest free area of its display.
+    /// The window into the largest empty area of its display: what no other visible window of
+    /// this Space covers (menus and tooltips aside; Glancy's own windows are never tracked).
     public func planFit(_ windowID: CGWindowID) -> ArrangePlan? {
         let all = displays()
         guard let w = registry.window(windowID), let d = display(for: w, in: all) else { return nil }
         let g = grid(for: d)
         let others = registry.windows.filter {
-            $0.id != windowID && $0.isOnScreen && !$0.isMinimized && $0.kind == .tile
-                && ScreenSpace.display(for: $0.frame, in: all)?.id == d.id
+            $0.id != windowID && FreeSpace.occupies($0) && ScreenSpace.display(for: $0.frame, in: all)?.id == d.id
         }.map(\.frame)
         guard let move = ArrangePlanner.fit(planWindow(w), others: others, grid: g, usable: d.usableFrame) else { return nil }
         return ArrangePlan(kind: .fit, displayID: d.id, usable: d.usableFrame, grid: g, moves: [move])

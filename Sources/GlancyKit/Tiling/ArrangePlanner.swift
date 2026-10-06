@@ -89,13 +89,15 @@ public enum ArrangePlanner {
         return (moves, untouched)
     }
 
-    /// The window into the largest free rectangle of cells, ignoring itself. A cell is taken when
-    /// another window covers more than half of it. Nil when the grid is full.
-    public static func fit(_ window: PlanWindow, others: [CGRect], grid: GridSpec, usable: CGRect) -> PlannedMove? {
-        let g = grid.clamped()
-        let taken = Geometry.occupancy(of: others, in: g, on: usable)
-        guard let cell = Arrange.largestRect(free: taken, cols: g.cols, rows: g.rows) else { return nil }
-        return place(window, in: cell, grid: g, usable: usable)
+    /// The window into the largest empty rectangle of the screen: the biggest area no other
+    /// window covers (`FreeSpace`), with the grid's outer gap from the edges and inner gap from
+    /// the others. `others` are the frames of every other visible window of the display, the
+    /// window itself left out (where it sits now counts as free). Nil when no free area of
+    /// `minSize` is left.
+    public static func fit(_ window: PlanWindow, others: [CGRect], grid: GridSpec, usable: CGRect,
+                           minSize: CGSize = FreeSpace.minSize) -> PlannedMove? {
+        guard let frame = FreeSpace.fillFrame(usable: usable, others: others, gaps: grid, minSize: minSize) else { return nil }
+        return PlannedMove(windowID: window.id, from: window.frame, to: frame, cell: nil)
     }
 
     /// Drop `window` on `cell`. When another window (`others`, front to back) mostly fills that

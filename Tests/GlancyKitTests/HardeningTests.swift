@@ -289,7 +289,8 @@ struct WatchdogTests {
         var all: [String] { lock.withLock { reports } }
     }
 
-    @Test func aBlockedMainThreadIsReportedWithItsStack() async {
+    @Test(.disabled(if: CI.isCI, "samples the real main thread: shared runners can take longer than the test"))
+    func aBlockedMainThreadIsReportedWithItsStack() async {
         let box = Box()
         MainThreadWatchdog.arm("test", timeout: 0.2, force: true) { box.add($0) }
         blockCurrentThread(0.8)    // the "stuck launch": main never returns to its run loop

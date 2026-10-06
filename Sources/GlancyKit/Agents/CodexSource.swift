@@ -186,7 +186,11 @@ final class CodexSessionsReader: @unchecked Sendable {
                 t.modified = now()
                 tracks[c.path] = t
             } else {
-                // A new rollout (a session just started), or an old one resumed.
+                // A new rollout (a session just started), or an old one resumed. A file not written
+                // within the forget window is neither: FSEvents can report writes from before the
+                // stream started (late, on busy machines), and those must not revive an old session.
+                if let m = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+                   m < now().addingTimeInterval(-forgetAfter) { continue }
                 guard var t = open(url, modified: now()) else { continue }
                 catchUp(url, &t) { quiet.append($0) }
                 if t.state.isSubagent || t.state.sessionID == nil {

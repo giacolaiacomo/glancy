@@ -6,8 +6,16 @@ none of that leaves your Mac or ends up anywhere you didn't expect.
 
 ## No network
 
-Glancy makes no network requests at all: no telemetry, no crash reporting, no update check, no
-account. Meeting links open in your browser or meeting app only when you click **Join**.
+Glancy has no telemetry, no crash reporting and no account. It makes two kinds of request:
+
+- **Update check** ([Sparkle](https://sparkle-project.org)): `appcast.xml` from the latest GitHub
+  release, at launch and at most once a day when you open the panel (off with Settings → General →
+  Check for updates automatically). No system profile is sent. An update is installed only if its
+  EdDSA signature matches the public key built into Glancy and its code signature matches the
+  installed app's (same Developer ID team).
+- **Exchange rates**: the ECB's reference rates, only when you type a currency in the command bar.
+
+Meeting links open in your browser or meeting app only when you click **Join**.
 
 ## What it reads, and how
 

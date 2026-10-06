@@ -1,6 +1,7 @@
 # Architecture
 
-A short map for contributors. Glancy is one SwiftPM package with no third-party Swift dependencies.
+A short map for contributors. Glancy is one SwiftPM package. Its only third-party dependency is [Sparkle 2](https://sparkle-project.org)
+(in-app updates), embedded by `scripts/build-app.sh` in `Contents/Frameworks`.
 
 ```
 Sources/Glancy/            the executable: calls GlancyApp.run()
@@ -9,13 +10,15 @@ Sources/GlancyKit/         everything else
   Surface/                 the notch: geometry, panel, shape, states, gestures, multi-display manager
   Settings/                settings pages (inside the panel), permissions, launch at login
   Support/                 theme, diagnostics (--diagnose), child-process registry, watchdog
+  Updates/                 Sparkle behind a small driver: when to check (launch, panel open ≤ 1/day), found update
   Agents/ Calendar/ Media/ HUD/ Power/ Timer/ Shelf/ Clipboard/ Windows/ Notifications/
                            one folder per module
   Tiling/                  the window engine used by Windows: registry, placer, planner, history
 Sources/glancy-render/     renders every surface state to PNG off-screen (--demo: made-up data)
 Vendor/mediaremote-adapter BSD-3 now-playing helper, built with cmake and bundled in the app
 hooks/                     the Claude Code hook the Agents module reads
-scripts/                   build-app.sh, lint.sh, render.sh, screenshots.sh, footprint.sh, soak.sh, leaks.sh
+scripts/                   build-app.sh, make-dmg.sh (+ make-appcast.sh), update-e2e.sh, lint.sh, render.sh,
+                           screenshots.sh, footprint.sh, ram-lab.sh, soak.sh, leaks.sh
 ```
 
 ## Modules

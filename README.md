@@ -123,6 +123,10 @@ cd glancy
 
 This builds `~/Applications/Glancy.app`, turns on **Launch at login** and starts it. To update: `git pull && ./install.sh`. To remove it, with its data, settings and permissions: `./uninstall.sh`.
 
+**Updates**
+
+Glancy updates itself with [Sparkle](https://sparkle-project.org). It asks GitHub for the latest release's `appcast.xml` once at launch and, at most once a day, when you open the panel; no timer runs in between. When there is a new version, a green arrow appears in the panel's top row, next to the gear: click it to see what's new and install (Glancy relaunches by itself). **Check now** and the switch **Check for updates automatically** are in Settings → General, and the command bar has **Check for Updates**. Updates are signed (EdDSA, checked by Sparkle) and notarized. If you installed with Homebrew you can keep updating with `brew upgrade --cask glancy` instead.
+
 Building needs the Swift 6.2 toolchain (Xcode 26 or its Command Line Tools: `xcode-select --install`) and `cmake` (`brew install cmake`). `scripts/build-app.sh` signs with the first "Apple Development" certificate in your keychain if you have one, which keeps your permissions across rebuilds; otherwise it signs ad-hoc. Set `GLANCY_SIGN_IDENTITY` to choose.
 
 ## Claude Code setup
@@ -173,7 +177,7 @@ Every permission is optional: without one, its module just does less. Settings �
 
 ## Privacy
 
-Glancy makes **no network requests**, has no telemetry, no account and no update check. What it reads, all locally:
+Glancy has no telemetry and no account. Its only regular network request is the update check: it downloads `appcast.xml` from this repository's latest GitHub release (at launch, then at most once a day when you open the panel; turn it off in Settings → General). Exchange rates are fetched from the ECB only when you type a currency in the command bar. What it reads, all locally:
 
 - **Claude Code:** the hook log above, read-only, from the end. Glancy never writes to it and never runs Claude.
 - **Codex:** the session files in `~/.codex/sessions/`, read-only (only the session's folder, state, first prompt, last tool and last reply are kept, in memory).

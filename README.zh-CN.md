@@ -144,7 +144,7 @@ hook 每个事件向 `~/.claude/hooks/data/cc-dashboard/events.jsonl` 追加一�
 
 ## 隐私
 
-Glancy **不发出任何网络请求**，没有遥测、没有账户、也没有更新检查。它只在本地读取：
+Glancy 没有遥测、没有账户。唯一的常规网络请求是更新检查（Sparkle）：启动时，以及打开面板时最多每天一次，从 GitHub 最新发布下载 `appcast.xml`（可在 设置 → 通用 中关闭）。它只在本地读取：
 
 - **Claude Code**：上面的 hook 日志，只读，从末尾读取。Glancy 从不写入它，也从不运行 Claude。
 - **日历**：通过 EventKit 读取你的日程，只保存在内存中。

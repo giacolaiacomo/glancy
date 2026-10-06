@@ -70,15 +70,14 @@ struct SurfaceDisplayTests {
         let h = SurfaceHarness([builtin, ultrawide])
         #expect(h.ids == ["BUILTIN"])
         #expect(h.manager.visibility == .collapsed)
-        // Lid closed: the built-in display disappears.
+        // Lid closed: the built-in display disappears; with no notch left the external gets the pill.
         h.setScreens([ultrawide])
-        #expect(h.ids.isEmpty)
-        #expect(h.manager.visibility == .hidden)
-        // Lid opened.
+        #expect(h.ids == ["ACER"])
+        #expect(h.manager.visibility == .collapsed)
+        // Lid opened: back to the notch only.
         h.setScreens([ultrawide, builtin])
         #expect(h.ids == ["BUILTIN"])
         #expect(h.manager.visibility == .collapsed)
-        #expect(h.module.seen == [.collapsed, .hidden, .collapsed])
     }
 
     @Test func clamshellWhileExpandedLeavesNoEscOrClickMonitorBehind() {
@@ -91,7 +90,7 @@ struct SurfaceDisplayTests {
         h.setScreens([ultrawide])
         #expect(!h.manager.escapeRegistered, "Esc must not stay hijacked once the panel's display is gone")
         #expect(!h.manager.clickMonitorInstalled)
-        #expect(h.manager.visibility == .hidden)
+        #expect(h.manager.visibility == .collapsed, "the pill on the external display, closed")
     }
 
     @Test func externalPillFollowsTheSettingAndHotPlug() {
@@ -144,6 +143,18 @@ struct SurfaceDisplayTests {
         #expect(w["ACER"]?.notchRect.height == 24)
     }
 
+    @Test func withoutAnyNotchTheMainDisplayGetsThePill() {
+        // A MacBook closed on an external display: nothing would show, and Glancy would look broken.
+        let w = SurfaceManager.wanted([ultrawide], externalPill: false, menuBar: 24)
+        #expect(w.count == 1)
+        #expect(w["ACER"]?.kind == .pill)
+        // With a notch somewhere, the setting decides as before.
+        let both = SurfaceManager.wanted([builtin, ultrawide], externalPill: false, menuBar: 24)
+        #expect(both.count == 1)
+        #expect(both.values.first?.kind == .notch)
+        #expect(SurfaceManager.wanted([], externalPill: false, menuBar: 24).isEmpty)
+    }
+
     @Test func repeatedNotificationsWithNoChangeDoNothing() {
         let h = SurfaceHarness([builtin])
         let s = h.builtinSurface
@@ -175,7 +186,7 @@ struct SurfaceSessionTests {
 
     @Test func lidOpenedWhileAsleepIsSeenOnWake() {
         let h = SurfaceHarness([ultrawide])
-        #expect(h.ids.isEmpty)
+        #expect(h.ids == ["ACER"])
         h.post(NSWorkspace.willSleepNotification)
         h.box.screens = [ultrawide, builtin]    // changed while asleep, no notification
         h.post(NSWorkspace.didWakeNotification)

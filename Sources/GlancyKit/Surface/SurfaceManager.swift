@@ -105,7 +105,7 @@ public final class SurfaceManager {
     // MARK: Displays
 
     /// The surfaces we want right now: every notched display, plus non-notched ones as a pill when
-    /// the user opted in. Two displays reporting the same UUID (identical monitors without a
+    /// the user opted in (the main display always gets one when no display has a notch). Two displays reporting the same UUID (identical monitors without a
     /// serial number) each keep their own surface.
     func wantedGeometries() -> [String: NotchGeometry] {
         Self.wanted(screens(), externalPill: context.settings.externalPill, menuBar: NSStatusBar.system.thickness)
@@ -113,6 +113,11 @@ public final class SurfaceManager {
 
     nonisolated static func wanted(_ screens: [ScreenInfo], externalPill: Bool, menuBar: CGFloat) -> [String: NotchGeometry] {
         var out: [String: NotchGeometry] = [:]
+        // Menu bar auto-hidden: visibleFrame reaches the top, so fall back to the bar's thickness.
+        func pill(_ info: ScreenInfo) -> NotchGeometry {
+            let h = info.frame.maxY - info.visibleFrame.maxY
+            return NotchGeometry.pill(for: info, menuBarHeight: h > 0 ? h : menuBar)
+        }
         for info in screens {
             var key = info.uuid
             var n = 2
@@ -120,11 +125,12 @@ public final class SurfaceManager {
             if let g = NotchGeometry.notch(for: info) {
                 out[key] = g
             } else if externalPill {
-                // Menu bar auto-hidden: visibleFrame reaches the top, so fall back to the bar's thickness.
-                let h = info.frame.maxY - info.visibleFrame.maxY
-                out[key] = NotchGeometry.pill(for: info, menuBarHeight: h > 0 ? h : menuBar)
+                out[key] = pill(info)
             }
         }
+        // No notch anywhere (a Mac without one, or a MacBook closed on an external display): without
+        // a surface Glancy would run invisibly and look broken, so the main display gets the pill.
+        if out.isEmpty, let main = screens.first { out[main.uuid] = pill(main) }
         return out
     }
 

@@ -31,7 +31,7 @@
 - **Closed:** exactly the hardware notch. When something is happening, "wings" grow either side with the most important live activity: an agent waiting for you, a meeting about to start, a timer, the volume HUD, what's playing.
 - **Peek:** hover for a hint, or a short drop-down when something happens (a session finished, AirPods connected, a new track).
 - **Open:** click for the full panel with tabs. Esc, a click outside or moving away closes it.
-- Wings never sit on top of your menus or status items. On displays without a notch, an optional small pill.
+- Wings never sit on top of your menus or status items. Without a notch (a Mac without one, or a MacBook closed on an external display) a small pill at the top centre; on extra displays it's optional.
 - Hidden from screenshots and screen sharing (a setting, on by default). English and Italian.
 
 **Agents**
@@ -189,12 +189,12 @@ Settings live in `~/Library/Preferences/ai.glancy.app.plist`; data (clipboard, s
 ## Requirements
 
 - macOS 14 Sonoma or later. Developed on macOS 26 with a 14" MacBook Pro and an external ultrawide.
-- A MacBook with a notch for the full experience; other displays get an optional pill.
+- A MacBook with a notch for the full experience; without one, Glancy shows a small pill at the top centre instead.
 - For Agents: Claude Code with the hook above, Codex or OpenCode (nothing to set up).
 
 ## Limitations
 
-- **Made for the notch.** On Macs and displays without one (a closed MacBook on an external display, say) Glancy shows nothing unless you turn on **Pill on external displays** in Settings → General; the pill works, but it's not the point.
+- **Made for the notch.** When no display has one (a Mac without a notch, or a MacBook closed on an external display) Glancy shows a small pill at the top centre of the main display; **Pill on external displays** in Settings → General adds it to extra displays too. The pill works, but it's not the point.
 - **Some features need Accessibility,** see [Permissions](#permissions).
 - **Window tiling depends on each app.** Some apps refuse sizes below their minimum or animate their own frames; Glancy re-anchors such windows to the cell's edges and tells you which ones didn't fit exactly. Tiling is the newest part of Glancy and has seen less real-world use than the rest.
 - **Builds you make yourself** without a certificate are ad-hoc signed and lose their permissions on every rebuild: macOS sees a new app. Allow them again in System Settings.

@@ -2,7 +2,11 @@
 # Builds a universal Glancy.app signed with Developer ID, notarizes and staples it, then wraps it
 # in a signed, notarized, stapled DMG (drag to Applications).
 #
-#   scripts/make-dmg.sh            → dist/Glancy-<version>.dmg
+#   GLANCY_VERSION=X.Y.Z scripts/make-dmg.sh   → dist/Glancy-X.Y.Z.dmg + dist/appcast.xml
+#
+# The appcast (scripts/make-appcast.sh) points Sparkle at the DMG of release vX.Y.Z and carries its
+# EdDSA signature: the private key must be in the login keychain (Sparkle's generate_keys, account
+# "glancy"; the first signing may ask for keychain access). Attach both files to the release.
 #
 # Needs, once:
 #   - a "Developer ID Application" certificate in the login keychain (Xcode → Settings → Accounts →
@@ -56,3 +60,6 @@ spctl -a -t open --context context:primary-signature -v "$DMG"
 spctl -a -t exec -v "$WORK/Glancy.app"
 shasum -a 256 "$DMG"
 echo "built $DMG"
+
+echo "==> appcast (EdDSA-signed, the stapled DMG as shipped)"
+"$ROOT/scripts/make-appcast.sh" "$DMG" "$VERSION" "$DIST/appcast.xml"

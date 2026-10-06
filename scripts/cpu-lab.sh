@@ -10,21 +10,24 @@
 #
 # A measurement: CPU % of the lab process (ps time delta) and layout passes per second of each
 # surface (SurfaceHostingView.layoutPasses, from the lab's SIGUSR2 line).
-# `--monitor S`: also the Monitor tab held open for S seconds (CPU %, plus a 10 s `sample`).
+# `--monitor S`: also the Monitor tab held open for S seconds (CPU %, plus a 10 s `sample`), in the
+# state `--monitor-state` (default "monitor": that module alone; "all": every module, as on a Mac
+# with agents working, music playing… and the other display's wings beside the open panel).
 # The table goes to lab-out/cpu-<label>/table.txt.
 #
-# Usage: scripts/cpu-lab.sh [--label NAME] [--states "a b …"] [--window S] [--monitor S] [--no-build]
+# Usage: scripts/cpu-lab.sh [--label NAME] [--states "a b …"|none] [--monitor-state NAME] [--window S] [--monitor S] [--no-build]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-LABEL="run"; STATES=""; WINDOW=6; MONITOR=0; BUILD=1
+LABEL="run"; STATES=""; WINDOW=6; MONITOR=0; MONITOR_STATE="monitor"; BUILD=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --label) LABEL="$2"; shift ;;
     --states) STATES="$2"; shift ;;
     --window) WINDOW="$2"; shift ;;
     --monitor) MONITOR="$2"; shift ;;
+    --monitor-state) MONITOR_STATE="$2"; shift ;;
     --no-build) BUILD=0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -46,6 +49,7 @@ if [[ -z "$STATES" ]]; then
   STATES="$(sed -nE 's/.*Case\(name: "([^"]+)".*/\1/p; s/.*agentsCase\("([^"]+)".*/\1/p' Sources/GlancyKit/App/CollapsedStates.swift | tr '\n' ' ')"
 fi
 
+[[ "$STATES" == none ]] && STATES=""   # --states none: the Monitor run only
 OUT="$ROOT/lab-out/cpu-$LABEL"
 mkdir -p "$OUT"
 PID=""; SCRATCH=""; LOG=""
@@ -117,7 +121,7 @@ done
 
 MON=""
 if [[ $MONITOR -gt 0 ]]; then
-  launch monitor monitor
+  launch "$MONITOR_STATE" monitor
   wait_for "lab: ready" 1 30
   from=$(( $(lines) + 1 ))
   kill -USR1 "$PID"
@@ -125,8 +129,8 @@ if [[ $MONITOR -gt 0 ]]; then
   sleep 3
   c0="$(cpu_seconds)"; sleep "$MONITOR"; c1="$(cpu_seconds)"
   MON="$(awk -v a="$c0" -v b="$c1" -v t="$MONITOR" 'BEGIN { printf "%.2f", (b - a) / t * 100 }')"
-  sample "$PID" 10 -file "$OUT/monitor.sample.txt" > /dev/null 2>&1 || true
-  echo "monitor tab open ${MONITOR}s: ${MON}% CPU (sample: $OUT/monitor.sample.txt)"
+  sample "$PID" 10 -file "$OUT/monitor-$MONITOR_STATE.sample.txt" > /dev/null 2>&1 || true
+  echo "monitor tab open ${MONITOR}s ($MONITOR_STATE): ${MON}% CPU (sample: $OUT/monitor-$MONITOR_STATE.sample.txt)"
   cleanup
 fi
 
@@ -135,5 +139,5 @@ fi
   printf '%-26s %8s %9s %9s %8s %9s %9s\n' "state" "cpu %" "notch/s" "pill/s" "cpu %" "notch/s" "pill/s"
   printf '%-26s %28s %28s\n' "" "closed (never opened)" "after open+close on each"
   for r in "${ROWS[@]+"${ROWS[@]}"}"; do echo "$r"; done
-  [[ -n "$MON" ]] && echo "monitor tab open ${MONITOR}s: ${MON}% CPU"
+  [[ -n "$MON" ]] && echo "monitor tab open ${MONITOR}s ($MONITOR_STATE): ${MON}% CPU"
 } | tee -a "$OUT/table.txt"

@@ -113,7 +113,7 @@ enum CollapsedStates {
         Case(name: "hud.volume.gone", modules: [.hud], settle: 3, apply: { r in r.module(HUDModule.self)?.showSample() }),
         Case(name: "hud.micMuted", modules: [.hud], apply: { r in r.module(HUDModule.self)?.showMicSample(.mutedInUse) }),
         Case(name: "hud.inUse", modules: [.hud], apply: { r in r.module(HUDModule.self)?.showMicSample(.cameraInUse) }),
-        Case(name: "power.charging", modules: [.power], apply: { r in r.set.power.showSample(.pluggedIn) }),
+        Case(name: "power.charging", modules: [.power], settle: 5, apply: { r in r.set.power.showSample(.pluggedIn) }),
         Case(name: "power.airpods.peek", modules: [.power], settle: 4.5, apply: { r in r.set.power.showSamplePeek() }),
         Case(name: "power.low.peek", modules: [.power], settle: 4.5, apply: { r in r.set.power.showSampleAlert(.low(10)) }),
         // Recording: the elapsed time, refreshed once a second.
@@ -134,7 +134,7 @@ enum CollapsedStates {
         // The demo call in 6 minutes: "in 6 min", changed once a minute.
         Case(name: "calendar.soon", modules: [.calendar]),
         // Under 2 minutes: a seconds countdown.
-        Case(name: "calendar.imminent", modules: [.calendar], busyShare: 0.25, prepare: { r in
+        Case(name: "calendar.imminent", modules: [.calendar], busyShare: 0.25, settle: 5.5, prepare: { r in
             r.set.calendar.eventList = [calendarEvent(in: 100)]
         }),
         Case(name: "calendar.started", modules: [.calendar], prepare: { r in

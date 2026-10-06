@@ -1,7 +1,8 @@
 # scripts/lint.sh allow-list: one "path:pattern" per line, each with the reason above it.
 # Only code that runs while the surface is visible (expanded) may appear here.
-# The working pulse: driven by AgentsModel.pulse, which is true only while the panel is expanded.
-Sources/GlancyKit/Agents/AgentsViews.swift:repeatForever
+# Control: the spinner of a tile whose action is running (Control tab, expanded only; it goes with
+# the action).
+Sources/GlancyKit/Control/ControlViews.swift:ProgressView\(\)
 # Windows, hosting views, pickers, samplers, capture sessions: each built on a user's action and
 # released after it (or the surface's own, rebuilt after each collapse).
 # Windows preview overlay: built on the first preview, destroyed when the preview fades.

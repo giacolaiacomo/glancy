@@ -113,9 +113,22 @@ struct CollapsedCostTests {
             }
         }
 
+        /// Waits (up to 10 s) for one quiet 0.5 s across every rig, so a single late settle on a slow
+        /// machine (CI: one pass in every state at once) isn't counted; a burn never goes quiet.
+        func quiesce() async throws {
+            var last = rigs.map(\.passes), quiet = 0.0, waited = 0.0
+            while quiet < 0.5, waited < 10 {
+                try await wait(0.05); waited += 0.05
+                let now = rigs.map(\.passes)
+                quiet = zip(now, last).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 } ? quiet + 0.05 : 0
+                last = now
+            }
+        }
+
         // Steady, never opened. The margin covers a main actor slowed by the parallel suite: a peek
         // timer that fires late retracts late.
         try await wait((cases.map(\.settle).max() ?? 1) + 1.5)
+        try await quiesce()
         try await measure("closed", window: 2)
 
         // Opened and closed on the built-in notch, then on the external pill.
@@ -127,6 +140,7 @@ struct CollapsedCostTests {
         try await wait(1)
         for rig in rigs { rig.manager.closeAll() }
         try await wait(1.5)   // the close springs settle
+        try await quiesce()
         try await measure("after open/close", window: 2)
 
         #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")

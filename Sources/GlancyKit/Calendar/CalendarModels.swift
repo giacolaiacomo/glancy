@@ -136,9 +136,15 @@ public enum CalendarLogic {
 
     /// The event that owns the wings right now (highest phase, then earliest start).
     public static func activeEvent(_ events: [CalendarEvent], now: Date) -> (event: CalendarEvent, phase: CalendarPhase)? {
-        countdownEvents(events).compactMap { e in phase(of: e, now: now).map { (e, $0) } }
-            .max { a, b in a.1 != b.1 ? a.1 < b.1 : a.0.start > b.0.start }
-            .map { (event: $0.0, phase: $0.1) }
+        let candidates: [(event: CalendarEvent, phase: CalendarPhase)] = countdownEvents(events).compactMap {
+            (e: CalendarEvent) -> (event: CalendarEvent, phase: CalendarPhase)? in
+            guard let p = phase(of: e, now: now) else { return nil }
+            return (event: e, phase: p)
+        }
+        return candidates.max { (a, b) -> Bool in
+            if a.phase != b.phase { return a.phase < b.phase }
+            return a.event.start > b.event.start
+        }
     }
 
     public struct Day: Equatable, Sendable {

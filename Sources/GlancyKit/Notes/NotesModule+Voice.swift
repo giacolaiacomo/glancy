@@ -141,10 +141,11 @@ extension NotesSample {
         var x = seed &* 6364136223846793005 &+ 1442695040888963407
         return (0..<count).map { i in
             x = x &* 6364136223846793005 &+ 1442695040888963407
-            let noise = Double(x >> 33) / Double(UInt32.max >> 1)
-            let syllable = 0.55 + 0.45 * sin(Double(i) * 0.9 + Double(seed))
-            let pause = i % 13 == 12 || i % 13 == 0 ? 0.25 : 1
-            return UInt8(max(18, min(255, 255 * syllable * pause * (0.55 + 0.45 * noise))))
+            let noise: Double = Double(x >> 33) / Double(UInt32.max >> 1)
+            let syllable: Double = 0.55 + 0.45 * sin(Double(i) * 0.9 + Double(seed))
+            let pause: Double = i % 13 == 12 || i % 13 == 0 ? 0.25 : 1
+            let level: Double = 255 * syllable * pause * (0.55 + 0.45 * noise)
+            return UInt8(max(18, min(255, level)))
         }
     }
 }
@@ -157,8 +158,11 @@ extension NotesModule {
 
     public func prepareForRender(_ state: VoiceRenderState) {
         guard sample else { return }
-        let levels: [Float] = (0..<VoiceNotes.meterBars).map { i in
-            Float(0.18 + 0.7 * abs(sin(Double(i) * 0.55)) * (i % 7 == 0 ? 0.35 : 1))
+        // Typed step by step: one expression of literals overran the type checker on CI's slower Macs.
+        let levels: [Float] = (0..<VoiceNotes.meterBars).map { (i: Int) -> Float in
+            let wave: Double = abs(sin(Double(i) * 0.55))
+            let damp: Double = i % 7 == 0 ? 0.35 : 1
+            return Float(0.18 + 0.7 * wave * damp)
         }
         voice.card = nil
         voice.setSample(phase: .idle)

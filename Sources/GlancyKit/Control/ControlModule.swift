@@ -417,7 +417,7 @@ public final class ControlModule: GlancyModule {
         s.disk = DiskReading(free: 212_000_000_000, total: 494_000_000_000)
         s.down = 1_240_000; s.up = 86_000
         s.battery = BatteryReading(cycles: 214, health: 0.93)
-        s.uptime = 3 * 86400 + 4 * 3600 + 120
+        s.uptime = TimeInterval(3 * 86_400 + 4 * 3_600 + 120)
         stats.show(s)
         switch state {
         case .awake: break

@@ -7,10 +7,19 @@ final class NotchPanel: NSPanel {
     /// Set by a module that needs typing (timer entry, tiling keyboard mode), while expanded only.
     var allowsKey = false
 
+    /// 100, one under the menus (`popUpMenu`, 101). Measured on macOS 26.6 (CGWindowList): the
+    /// menu bar is 24 ("Menubar"), status items 25, the full-screen menu-bar hot zone 26
+    /// (`_NSFullScreenMouseDetectionWindow`); yet the owner saw Chrome's menu bar drawn over the
+    /// old `mainMenu + 3` (27), a reveal surface CGWindowList does not expose at rest. So the
+    /// whole menu-bar band below the menus goes under us, while menus opened from the bar (101), tooltips and the screen saver,
+    /// lock screen and shielding windows (1000+) stay above. The cost: other apps' floating
+    /// panels between 27 and 99 sit under the notch where they overlap it.
+    static let surfaceLevel = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue - 1)
+
     init(frame: CGRect) {
         super.init(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
-        level = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 3)
+        level = Self.surfaceLevel
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         isOpaque = false
         backgroundColor = .clear

@@ -357,3 +357,20 @@ struct SurfaceClickTests {
         #expect(!s.model.expanded)
     }
 }
+
+@Suite("Surface: window level")
+@MainActor struct SurfaceLevelTests {
+    /// Regression: at `mainMenu + 3` (27) the menu bar revealed in a full-screen space was drawn over
+    /// the panel. The surface sits over the whole menu-bar band, under menus and the screen saver.
+    @Test func panelSitsAboveTheMenuBarBandBelowMenusAndScreenSaver() {
+        let panel = NotchPanel(frame: CGRect(x: 0, y: 0, width: 200, height: 32))
+        #expect(panel.level == NotchPanel.surfaceLevel)
+        #expect(panel.level.rawValue == 100)
+        #expect(panel.level > .mainMenu && panel.level > .statusBar)
+        #expect(panel.level.rawValue > 26)          // the full-screen menu-bar hot zone
+        #expect(panel.level < .popUpMenu)           // menus opened from the bar drop over it
+        #expect(panel.level < .screenSaver)         // lock screen / screen saver / shielding stay above
+        #expect(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        panel.close()
+    }
+}

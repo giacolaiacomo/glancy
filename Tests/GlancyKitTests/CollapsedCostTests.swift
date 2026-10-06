@@ -69,8 +69,12 @@ final class CostRig {
 // on a notched display and a pill, before and after the panel was opened and closed on each: at most
 // one layout pass a second for a countdown that shows seconds, none for anything else. A continuous
 // animation in a closed surface lays out on every frame and fails by thousands.
+/// Dozens of off-screen surfaces measuring their own layout: run on their own (CI's
+/// "Collapsed cost" step), because they slow the main actor for every timing test running beside them.
+let collapsedCostTestsEnabled = ProcessInfo.processInfo.environment["GLANCY_COST_TESTS"] == "1"
+
 @MainActor
-@Suite("Collapsed cost", .serialized)
+@Suite("Collapsed cost", .serialized, .enabled(if: collapsedCostTestsEnabled))
 struct CollapsedCostTests {
     @Test func everyCollapsedStateIsQuiet() async throws {
         guard !NSScreen.screens.isEmpty else { return }   // no window server

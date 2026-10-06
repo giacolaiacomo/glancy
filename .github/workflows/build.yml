@@ -23,6 +23,8 @@ jobs:
         # CI=true skips the few tests that read this Mac's real TCC/MediaRemote state or need a tight
         # main-thread budget (see Tests/GlancyKitTests/CIEnvironment.swift).
         run: swift test
+      - name: Collapsed cost (a closed notch draws nothing)
+        run: GLANCY_COST_TESTS=1 swift test --filter CollapsedCost
       - name: Self-test
         run: .build/debug/Glancy --self-test
       - name: App bundle (the same script Homebrew and install.sh use), ad-hoc signed

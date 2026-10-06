@@ -33,14 +33,16 @@ public final class MonitorSettings {
         indicator = s?.indicator ?? .cpu
         grouping = s?.grouping ?? .apps
         sparklines = s?.sparklines ?? true
-        rate = s?.rate ?? .s1
+        // 2 s by default: the tab's whole cost (a scan of every process, the gauges and rows
+        // redrawn) is per update; 1 s stays a choice.
+        rate = s?.rate ?? .s2
         loading = false
     }
 
-    var isDefault: Bool { indicator == .cpu && grouping == .apps && sparklines && rate == .s1 }
+    var isDefault: Bool { indicator == .cpu && grouping == .apps && sparklines && rate == .s2 }
 
     public func reset() {
-        indicator = .cpu; grouping = .apps; sparklines = true; rate = .s1
+        indicator = .cpu; grouping = .apps; sparklines = true; rate = .s2
     }
 
     private func save() {
@@ -169,8 +171,14 @@ actor MonitorWorker {
         snapshot.apps = apps
         snapshot.processCount = scanner.lastCount
         snapshot.scanMillis = scanner.lastMillis
-        return snapshot
+        // The main thread gets the top rows only (ranked here), not ~600 rows a tick.
+        var out = snapshot
+        out.rankAndTrim(limit: Self.topRows)
+        return out
     }
+
+    /// Rows the tab shows per gauge.
+    static let topRows = 5
 }
 
 /// Samples once per interval while `isRunning`. Started and stopped only by the module's
@@ -178,7 +186,7 @@ actor MonitorWorker {
 @MainActor @Observable
 public final class MonitorSampler {
     public private(set) var snapshot = MonitorSnapshot()
-    /// The last ~60 values of each gauge, oldest first, for the sparklines.
+    /// The last 60 values of each gauge (two minutes at the default 2 s), oldest first, for the sparklines.
     public private(set) var history: [MonitorIndicator: [Double]] = [:]
     public private(set) var samples = 0
     public var isRunning: Bool { task != nil }
@@ -205,12 +213,16 @@ public final class MonitorSampler {
         if fresh { history = [:] }
         task = Task { [weak self] in
             if fresh { await worker.reset(engine: engine) }
+            // Rates need two readings: on a fresh open the second comes after 1 s at most, so the
+            // rows don't wait a whole 2 s interval on "Measuring…".
+            var wait = fresh ? min(interval, .seconds(1)) : interval
             while !Task.isCancelled {
                 let gpu = self?.wantsGPUProcesses ?? false
                 let snap = await worker.sample(gpu: gpu)
                 guard !Task.isCancelled, let self else { return }
                 self.adopt(snap)
-                try? await Delay.sleep(for: interval)
+                try? await Delay.sleep(for: wait)
+                wait = interval
             }
         }
     }
@@ -223,19 +235,22 @@ public final class MonitorSampler {
     private func adopt(_ s: MonitorSnapshot) {
         snapshot = s
         samples += 1
-        push(.cpu, s.cpu)
-        push(.memory, s.memory.map { Double($0.used) / Double(max($0.total, 1)) })
-        push(.gpu, s.gpu)
-        push(.disk, (s.diskRead ?? 0) + (s.diskWrite ?? 0))
-        push(.network, (s.down ?? 0) + (s.up ?? 0))
-        push(.energy, s.power?.watts)
+        // One write to the observed history per update (not one per gauge).
+        var h = history
+        Self.push(&h, .cpu, s.cpu)
+        Self.push(&h, .memory, s.memory.map { Double($0.used) / Double(max($0.total, 1)) })
+        Self.push(&h, .gpu, s.gpu)
+        Self.push(&h, .disk, (s.diskRead ?? 0) + (s.diskWrite ?? 0))
+        Self.push(&h, .network, (s.down ?? 0) + (s.up ?? 0))
+        Self.push(&h, .energy, s.power?.watts)
+        history = h
     }
 
-    private func push(_ i: MonitorIndicator, _ v: Double?) {
+    private static func push(_ history: inout [MonitorIndicator: [Double]], _ i: MonitorIndicator, _ v: Double?) {
         guard let v else { return }
         var h = history[i] ?? []
         h.append(v)
-        if h.count > Self.historyLength { h.removeFirst(h.count - Self.historyLength) }
+        if h.count > historyLength { h.removeFirst(h.count - historyLength) }
         history[i] = h
     }
 

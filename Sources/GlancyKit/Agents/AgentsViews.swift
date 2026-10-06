@@ -19,36 +19,53 @@ extension AgentDot {
     var color: Color { state == .done && !fresh ? Theme.idle : state.color }
 }
 
-/// A state dot. A working dot breathes with one 1.6 s animation, only while `pulsing`.
+/// A state dot. A working dot breathes three times (0.8 s to 40 % and 0.8 s back, ~5 s in all)
+/// when it starts pulsing (the panel opens on it, a session starts working), then rests at full.
+///
+/// Every animation here ends by itself. A repeating animation cannot be stopped in place: an
+/// unanimated write is combined with the running repeat (SwiftUI's DefaultCombiningAnimation), so
+/// the wing dots kept breathing on a closed notch beside a panel open on another display (2.8% CPU
+/// on a two-display Mac). And a view removed while something in it still animates is never let go:
+/// the Home page, shown for an instant before the panel switched to another tab, stayed in the
+/// window breathing, unseen, for as long as the panel was open (~4% CPU). So the breath is a short
+/// chain of finite half-breaths, never more than three breaths, and stops early when `pulsing`
+/// goes false or the dot disappears.
 struct AgentStateDot: View {
     let color: Color
     let pulsing: Bool
     var size: CGFloat = 6.ui
     @State private var dim = false
+    /// `pulsing` as of the last change, read by the completion of the running half-breath.
+    @State private var live = false
+    @State private var halfBreathsLeft = 0
+    @State private var breathing = false
+    static let breaths = 3
 
     var body: some View {
         Circle()
             .fill(color)
             .frame(width: size, height: size)
             .opacity(dim ? 0.4 : 1)
-            // The repeating animation is started and stopped explicitly. Rebuilding the dot with
-            // `.id(pulsing)` left the old dot animating, invisible, after about half the collapses:
-            // SwiftUI redrew the surface every frame (~4.5% CPU) with nothing on screen changing.
             .onChange(of: pulsing, initial: true) { _, on in
-                if on {
-                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) { dim = true }
-                } else {
-                    Self.stop($dim)
-                }
+                live = on
+                guard on else { return }
+                halfBreathsLeft = 2 * Self.breaths
+                if !breathing { breathe() }
             }
-            .onDisappear { Self.stop($dim) }
+            .onDisappear { live = false }
     }
 
-    /// A plain, unanimated write replaces the running repeat: nothing is left ticking.
-    static func stop(_ dim: Binding<Bool>) {
-        var t = Transaction(animation: nil)
-        t.disablesAnimations = true
-        withTransaction(t) { dim.wrappedValue = false }
+    /// One half-breath, then the next while live and some are left; a dimmed dot always comes back
+    /// to full first.
+    private func breathe() {
+        guard (live && halfBreathsLeft > 0) || dim else { breathing = false; return }
+        breathing = true
+        halfBreathsLeft -= 1
+        withAnimation(.easeInOut(duration: 0.8), completionCriteria: .logicallyComplete) {
+            dim.toggle()
+        } completion: {
+            breathe()
+        }
     }
 }
 
@@ -63,7 +80,9 @@ struct AgentsWingLeft: View {
         let shown = dots.prefix(dots.count > Self.maxDots ? Self.maxDots - 1 : Self.maxDots)
         HStack(spacing: 4.ui) {
             ForEach(shown) { d in
-                AgentStateDot(color: d.color, pulsing: model.pulse && d.state == .working)
+                // Still in the wings: a closed surface never animates (one may be on screen beside an open
+                // panel on another display, and nothing there would ever stop it).
+                AgentStateDot(color: d.color, pulsing: false)
             }
             if dots.count > shown.count {
                 Text("+\(dots.count - shown.count)")

@@ -15,9 +15,22 @@ PATTERNS=(
   '[^A-Za-z.]Timer\('
   'TimelineView'
   'usleep\('
-  'repeatForever'
   'addGlobalMonitorForEvents\(matching:[^)]*mouseMoved'
   'addLocalMonitorForEvents\(matching:[^)]*mouseMoved'
+)
+
+# Animations that never end by themselves. A repeating animation cannot be stopped in place (an
+# unanimated write is combined with the running repeat and it keeps going): the Agents dots kept a
+# closed notch laid out on every frame (2.8% CPU). Same for phase/keyframe animators, symbol effects
+# (`.contentTransition(.symbolEffect(.replace))` is a one-shot and allowed) and spinning indeterminate
+# progress views. Loops are built from finite animations whose completion decides whether to go on.
+PATTERNS+=(
+  'repeatForever'
+  'repeatCount'
+  'phaseAnimator'
+  'keyframeAnimator'
+  '[^(]\.symbolEffect\('
+  'ProgressView\(\)'
 )
 
 # Windows, hosting views, pickers, samplers and capture sessions cost megabytes for as long as they
@@ -58,6 +71,26 @@ for pat in "${PATTERNS[@]}"; do
   done < <(grep -rnE --include='*.swift' "$pat" Sources || true)
 done
 
+# Wings and peeks are drawn on a closed surface, which may sit on screen beside a panel open on
+# another display: nothing in them may animate on its own. A state dot there is never pulsing, and
+# no wing or peek view starts an animation (`withAnimation`) or a timeline. (A self-updating
+# countdown text is fine: one change a second, no animation.)
+while IFS= read -r file; do
+  while IFS= read -r hit; do
+    [[ -z "$hit" ]] && continue
+    echo "lint: $file:$hit"
+    fail=1
+  done < <(awk '
+    { line = $0; sub(/\/\/.*$/, "", line) }
+    line ~ /^(private |fileprivate |public )?(struct|final class|class|enum|extension) / {
+      inside = (line ~ /^(private |fileprivate |public )?struct [A-Za-z]*(Wing|Peek)[A-Za-z]*[ :<]/) ; name = line
+    }
+    inside && ((line ~ /pulsing: / && line !~ /pulsing: false/) || line ~ /withAnimation|TimelineView/) {
+      printf "%d: animation in a wing/peek view: %s\n", NR, $0
+    }
+  ' "$file")
+done < <(grep -rlE --include='*.swift' 'struct [A-Za-z]*(Wing|Peek)' Sources)
+
 # Callbacks that run off the main thread must not be main-actor isolated. In Swift 6 a closure
 # literal formed in a @MainActor context and handed straight to an Apple API whose block is not
 # @Sendable inherits the main actor, and the runtime traps (EXC_BREAKPOINT in
@@ -94,8 +127,9 @@ while IFS= read -r file; do
 done < <(grep -rlE --include='*.swift' '@MainActor' Sources)
 
 if [[ $fail -ne 0 ]]; then
-  echo "lint: FAILED — no timers, TimelineView, usleep or mouse-moved monitors (SPEC §1); windows," >&2
-  echo "      hosting views, pickers, samplers and capture sessions only on a user's action (allow-list);" >&2
+  echo "lint: FAILED — no timers, TimelineView, usleep or mouse-moved monitors (SPEC §1); no endless" >&2
+  echo "      animations (repeat, phase/keyframe animators, symbol effects, spinners), none in wings/peeks;" >&2
+  echo "      windows, hosting views, pickers, samplers and capture sessions only on a user's action (allow-list);" >&2
   echo "      AppleScript only through AppleScriptRunner; off-main callbacks @Sendable, @objc entry" >&2
   echo "      points of @MainActor classes nonisolated (allow-list: path:isolation:<line text>)." >&2
   exit 1

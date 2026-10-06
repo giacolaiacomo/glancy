@@ -136,10 +136,14 @@ struct GeneralSection: View {
                         NotchSegments(selection: $settings.language,
                                       options: [(.system, tr("System")), (.en, "English"), (.it, "Italiano")])
                     }
-                    SettingsRow(tr("Size"), note: sizeNote(settings.size), noteColor: Theme.waiting, noteLines: 2) {
+                    SettingsRow(tr("Size")) {
                         NotchSegments(selection: $settings.size,
                                       options: UISize.allCases.map { ($0, tr(Self.sizeName($0))) })
                             .fixedSize()
+                    }
+                    // The whole column's width: the segments leave the title little room.
+                    if let note = sizeNote(settings.size) {
+                        Text(verbatim: note).font(Theme.font(.xs)).foregroundStyle(Theme.waiting).lineLimit(2)
                     }
                     SettingsRow(tr("Launch at login"), note: launchNote(launch.state)) {
                         NotchSwitch(isOn: Binding(get: { launch.state == .on }, set: { launch.set($0) }),
@@ -266,13 +270,11 @@ struct SettingsRow<Control: View>: View {
     let note: String?
     let noteColor: Color
     let minHeight: CGFloat
-    let noteLines: Int
     let control: Control
 
     init(_ title: String, note: String? = nil, noteColor: Color = Theme.tertiary, minHeight: CGFloat = 26.ui,
-         noteLines: Int = 1, @ViewBuilder control: () -> Control) {
-        self.title = title; self.note = note; self.noteColor = noteColor; self.minHeight = minHeight
-        self.noteLines = noteLines; self.control = control()
+         @ViewBuilder control: () -> Control) {
+        self.title = title; self.note = note; self.noteColor = noteColor; self.minHeight = minHeight; self.control = control()
     }
 
     var body: some View {
@@ -283,7 +285,7 @@ struct SettingsRow<Control: View>: View {
                     .foregroundStyle(Theme.primary)
                     .lineLimit(1)
                 if let note {
-                    Text(verbatim: note).font(Theme.font(.xs)).foregroundStyle(noteColor).lineLimit(noteLines)
+                    Text(verbatim: note).font(Theme.font(.xs)).foregroundStyle(noteColor).lineLimit(1)
                 }
             }
             Spacer(minLength: 6.ui)

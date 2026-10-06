@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/hero.jpg" alt="Glancy: the MacBook notch as a live surface for Claude Code agents, meetings, music, clipboard and windows">
+  <img src="docs/hero.jpg" alt="Glancy: the MacBook notch as a live surface for coding agents, meetings, music, clipboard and windows">
 </p>
 
 <p align="center">
   <a href="https://github.com/giacolaiacomo/glancy/actions/workflows/build.yml"><img src="https://github.com/giacolaiacomo/glancy/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-no%20dependencies-F05138?logo=swift&logoColor=white" alt="Swift, no dependencies">
-  <img src="https://img.shields.io/badge/RAM-~19%20MB-2ea44f" alt="~19 MB RAM">
+  <img src="https://img.shields.io/badge/RAM-~18%20MB-2ea44f" alt="~18 MB RAM">
   <img src="https://img.shields.io/badge/telemetry-none-2ea44f" alt="No telemetry">
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT">
 </p>
@@ -15,9 +15,9 @@
 
 # Glancy
 
-**Your MacBook's notch, put to work.** Glancy turns the notch into a small live surface: which Claude Code sessions are working or waiting for you, your next meeting with a Join button, what's playing, a timer, a file shelf, your clipboard history and a window tiler. Hover to peek, click to open.
+**Your MacBook's notch, put to work.** Glancy turns the notch into a small live surface: which coding agents (Claude Code, Codex, OpenCode) are working or waiting for you, your next meeting with a Join button, what's playing, a timer, a file shelf, your clipboard history and a window tiler. Newer tabs add a command bar, a control centre, notes with voice notes and a system monitor. Hover to peek, click to open.
 
-**Light by design.** About 19 MB of RAM and 0 CPU-seconds a minute at idle, with no timers or polling while the notch is closed: everything is driven by system events. Nothing leaves your Mac.
+**Light by design.** About 18 MB of RAM and 0 CPU-seconds a minute at idle, with no timers or polling while the notch is closed: everything is driven by system events. Nothing leaves your Mac.
 
 <p align="center">
   <img src="docs/screens.jpg" alt="Home, Agents, Calendar, Media, Clipboard and Windows tabs">
@@ -34,12 +34,13 @@
 - Wings never sit on top of your menus or status items. On displays without a notch, an optional small pill.
 - Hidden from screenshots and screen sharing (a setting, on by default). English and Italian.
 
-**Claude Code agents**
+**Agents**
+- Claude Code (Terminal, VS Code, Cursor, the Claude app), Codex (CLI, VS Code, the Codex app) and OpenCode on one board.
 - Every live session as a dot in the wings: working, **waiting for permission** (amber), done, failed.
 - The Agents tab: project, state, time in that state, last tool and the last prompt, for every session.
-- Click a session to bring its terminal forward (Terminal, iTerm, Ghostty, Warp, VS Code). ⌥-click to bring it forward and tile it.
+- Click a session to bring it forward: its terminal (Terminal, iTerm, Ghostty, Warp), its editor window (VS Code, Cursor) or the Codex app. ⌥-click to bring it forward and tile it.
 - **Lay out sessions** tiles all your Claude terminals at once, previewed first and undoable.
-- Reads a small hook log (see [Claude Code setup](#claude-code-setup)); Glancy never talks to Claude itself.
+- Claude Code needs a small hook ([setup](#claude-code-setup)); Codex and OpenCode need none ([setup](#codex-and-opencode)). Glancy only reads: it never talks to an agent.
 
 **Calendar**
 - Your next meeting, with a countdown and a **Join** button for Zoom, Google Meet, Teams, Webex, Whereby and FaceTime links.
@@ -68,7 +69,26 @@
 - A live map of the display in the notch: hover cells to preview on the real screen, click to place.
 - Pick a grid (2×1 up to anything), arrange the whole screen, one app, or exactly the windows you pick (⌘-click, in order). Strategies: Balanced, one per cell, columns, rows, master + stack.
 - Drag a window into the notch to drop it on a cell. Keyboard: ⌃⌥Space opens the map, ⌃⌥←/→/↑/↓ halves, maximise and restore, ⌃⌥F fit, ⌃⌥B/C/R/M/G arrange (add ⇧ for the front app only), ⌃⌥Z undo. Every shortcut is configurable.
+- **Auto-arrange** (⌃⌥A): picks a layout for the windows on the display under the pointer and applies it at once (⇧ for the front app only); undo with ⌃⌥Z.
+- **Workspaces:** save where every window sits on every display and bring it back in one click, with an optional shortcut each. Missing apps open on restore, and one can apply itself when that display setup connects.
 - Every arrangement is previewed before it's applied and can be undone.
+
+**Command bar**
+- ⌃⌥K opens a search field over everything: apps, a calculator, unit and currency conversions (rates from the ECB, fetched only when you type a currency query), a web-search fallback, and every module's commands (join the next meeting, keep awake for an hour, save a workspace, top CPU…). ⏎ runs, ⌘⏎ does the secondary action.
+- Learns what you use. Each source can be switched off in Settings → Command bar.
+
+**Control**
+- A tab of toggles (Keep awake, Dark mode, Wi-Fi, desktop icons, hidden files) and one-shot tools (lock, display off, screen saver, screenshot, colour picker, camera mirror, empty Trash, eject all).
+- Keep awake takes a duration and shows its end time; emptying the Trash asks first.
+
+**Notes**
+- Plain-text `.md` notes in a folder you can open in Finder, saved as you type; `- [ ] ` makes a tick box and a note can be pinned to Home. ⌃⌥N opens a note.
+- **Voice notes:** ⌃⌥V starts and stops a recording from any app (stops by itself after 5, 15, 30 or 60 minutes; 30 by default). Saved as `.m4a` next to the notes, with playback and drag-out.
+- **Transcription** is on by default and entirely on this Mac (on-device Speech Recognition); nothing is sent anywhere.
+
+**Monitor**
+- CPU, memory, GPU, disk, network and energy as indicators on the left; on the right, the top apps for the selected one (or each process). Quit or force quit from the list (force quit asks first).
+- Sampled only while the tab is open (every 1 or 2 s, your choice).
 
 **Notifications** (opt-in, experimental)
 - The last notifications in a tab, grouped by app, with a peek as they arrive and a per-app mute list. Off by default; needs Full Disk Access to read them (read-only).
@@ -79,20 +99,19 @@ Glancy needs macOS 14 or later. It runs on Apple Silicon and Intel and is made f
 
 **Download**
 
-1. Download `Glancy-x.y.z.zip` from the [latest release](https://github.com/giacolaiacomo/glancy/releases/latest), unzip it and drag **Glancy** to Applications.
-2. Open it. Glancy isn't signed with a paid Apple Developer ID, so the first time macOS says it can't verify it: click **Done**, then open **System Settings → Privacy & Security** and click **Open Anyway**. Or, in Terminal: `xattr -dr com.apple.quarantine /Applications/Glancy.app`.
+1. Download `Glancy-x.y.z.dmg` from the [latest release](https://github.com/giacolaiacomo/glancy/releases/latest), open it and drag **Glancy** to Applications.
+2. Open it. It is signed with a Developer ID and notarized by Apple, so it opens normally and keeps its permissions across updates.
 3. The first launch opens a short permission checklist in the notch. Every permission is optional.
 
-The release zip is built from the tagged source by [GitHub Actions](.github/workflows/release.yml), so you can check exactly what went into it. It is ad-hoc signed, which has one catch: macOS treats each new version as a new app, so after an update you may have to allow Accessibility and the others again. Building it yourself with an Apple Development certificate avoids that (see below).
+The [GitHub Actions workflow](.github/workflows/release.yml) builds and checks every tagged release from source; it no longer uploads anything. The DMG itself is made by `scripts/make-dmg.sh`.
 
-**Homebrew** (builds from source)
+**Homebrew** (installs the notarized app)
 
 ```sh
-brew install giacolaiacomo/tap/glancy
-brew services start glancy     # start now and at every login
+brew install --cask giacolaiacomo/tap/glancy
 ```
 
-To update: `brew upgrade glancy`. To remove it: `brew services stop glancy && brew uninstall glancy`.
+To update: `brew upgrade --cask glancy`. To remove it: `brew uninstall --cask glancy` (add `--zap` to also remove its data and settings). If you installed the old formula, which built from source, run `brew uninstall glancy` first. To start it at login, turn on **Launch at login** in Settings → General.
 
 **From source**
 
@@ -102,7 +121,7 @@ cd glancy
 ./install.sh
 ```
 
-This builds `~/Applications/Glancy.app`, turns on **Open at login** and starts it. To update: `git pull && ./install.sh`. To remove it, with its data, settings and permissions: `./uninstall.sh`.
+This builds `~/Applications/Glancy.app`, turns on **Launch at login** and starts it. To update: `git pull && ./install.sh`. To remove it, with its data, settings and permissions: `./uninstall.sh`.
 
 Building needs the Swift 6.2 toolchain (Xcode 26 or its Command Line Tools: `xcode-select --install`) and `cmake` (`brew install cmake`). `scripts/build-app.sh` signs with the first "Apple Development" certificate in your keychain if you have one, which keeps your permissions across rebuilds; otherwise it signs ad-hoc. Set `GLANCY_SIGN_IDENTITY` to choose.
 
@@ -147,6 +166,9 @@ Every permission is optional: without one, its module just does less. Settings �
 | **Bluetooth** | AirPods and headphones connecting, with battery | No headphone peeks |
 | **Notifications** | The alert when a timer ends | Timer ends silently in the notch |
 | **Automation** (Music, Spotify) | A fallback reader for those two apps, used only if the main now-playing reader doesn't work on your macOS | Media still works through the main reader |
+| **Microphone** | Voice notes and the mic mute shortcut | No voice notes, no mic mute |
+| **Speech Recognition** | Voice notes written out, on this Mac | Recordings stay audio only |
+| **Camera** | The Control tab's camera mirror | No mirror |
 | **Full Disk Access** | Reading macOS's notification database, only if you turn on the Notifications module | Notifications module stays off |
 
 ## Privacy
@@ -168,17 +190,17 @@ Settings live in `~/Library/Preferences/ai.glancy.app.plist`; data (clipboard, s
 
 - macOS 14 Sonoma or later. Developed on macOS 26 with a 14" MacBook Pro and an external ultrawide.
 - A MacBook with a notch for the full experience; other displays get an optional pill.
-- For Agents: Claude Code with the hook above.
+- For Agents: Claude Code with the hook above, Codex or OpenCode (nothing to set up).
 
 ## Limitations
 
-- **Made for the notch.** On Macs and displays without one, Glancy shows a small pill at the top centre instead (off by default); it works, but it's not the point.
+- **Made for the notch.** On Macs and displays without one (a closed MacBook on an external display, say) Glancy shows nothing unless you turn on **Pill on external displays** in Settings → General; the pill works, but it's not the point.
 - **Some features need Accessibility,** see [Permissions](#permissions).
 - **Window tiling depends on each app.** Some apps refuse sizes below their minimum or animate their own frames; Glancy re-anchors such windows to the cell's edges and tells you which ones didn't fit exactly. Tiling is the newest part of Glancy and has seen less real-world use than the rest.
-- **Ad-hoc signed builds** (the release zip, or building without a certificate) lose their permissions on every update: macOS sees a new app. Allow them again in System Settings.
+- **Builds you make yourself** without a certificate are ad-hoc signed and lose their permissions on every rebuild: macOS sees a new app. Allow them again in System Settings.
 - **Notifications are experimental.** macOS's notification database is private and undocumented; the reader checks the schema and turns itself off if it doesn't recognise it. It has only been checked against fixtures, not across macOS versions.
 - **Media** relies on a private macOS framework through mediaremote-adapter. If a future macOS breaks it, Glancy falls back to Music and Spotify only.
-- The now-playing helper is a separate process of about 5 MB, on top of Glancy's ~19 MB.
+- The now-playing helper is a separate process of about 5 MB, on top of Glancy's ~18 MB.
 
 ## Development
 
@@ -193,7 +215,7 @@ scripts/footprint.sh                           # memory and CPU of an idle run
 Glancy --diagnose                              # state of the running app (modules, displays, resources)
 ```
 
-Each module lives in `Sources/GlancyKit/<Module>/` and implements `GlancyModule` (start, stop, visibility, tab, Home card); `Modules.swift` registers them. The rule that keeps Glancy light: a closed notch runs no timers, animations or polling, only system event observers. `scripts/lint.sh` enforces it. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Releases: publishing a GitHub release runs [release.yml](.github/workflows/release.yml), which builds the universal app and attaches the zip.
+Each module lives in `Sources/GlancyKit/<Module>/` and implements `GlancyModule` (start, stop, visibility, tab, Home card); `Modules.swift` registers them. The rule that keeps Glancy light: a closed notch runs no timers, animations or polling, only system event observers. `scripts/lint.sh` enforces it. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Releases: publishing a GitHub release runs [release.yml](.github/workflows/release.yml), which builds and checks the universal app from the tag; the notarized DMG is made with `scripts/make-dmg.sh`.
 
 ## Credits
 

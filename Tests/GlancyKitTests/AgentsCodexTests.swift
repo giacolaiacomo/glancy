@@ -304,7 +304,7 @@ private func write(_ lines: [String], to url: URL, append: Bool = false) {
     }
 }
 
-private func eventually(_ timeout: Double = 5, _ cond: () -> Bool) async -> Bool {
+private func eventually(_ timeout: Double = 10, _ cond: () -> Bool) async -> Bool {
     let end = Date.now.addingTimeInterval(timeout)
     while Date.now < end {
         if cond() { return true }

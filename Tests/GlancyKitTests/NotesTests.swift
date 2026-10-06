@@ -245,7 +245,7 @@ private func files(_ dir: URL) -> [String] {
         var opened: [ModuleID?] = []
         hub.onOpenRequest = { opened.append($0) }
         module.start(hub: hub)
-        try? await Task.sleep(for: .milliseconds(30))   // the (empty) load
+        await loaded(module)   // the (empty) load
 
         // Nothing yet: a new note, the tab opens.
         module.quickNote()
@@ -285,7 +285,7 @@ private func files(_ dir: URL) -> [String] {
         let module = NotesModule(store: NotesStore(directory: tempDir("cmd")), settings: settings(), debounce: .milliseconds(10))
         let hub = ActivityHub()
         module.start(hub: hub)
-        try? await Task.sleep(for: .milliseconds(30))
+        await loaded(module)
         L10n.apply(.en)   // another suite may have switched the language
         #expect(NotesModule.appendText("note buy milk") == "buy milk")
         #expect(NotesModule.appendText("Nota comprare latte") == "comprare latte")
@@ -418,4 +418,10 @@ private func files(_ dir: URL) -> [String] {
         #expect(m.lyrics.settings.shown)
         m.stop()
     }
+}
+
+/// Waits for the module's launch load (slow CI machines need far more than a fixed few ms).
+@MainActor private func loaded(_ module: NotesModule, timeout: Double = 10) async {
+    let end = Date.now.addingTimeInterval(timeout)
+    while !module.model.loaded, Date.now < end { try? await Task.sleep(for: .milliseconds(5)) }
 }

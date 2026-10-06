@@ -84,7 +84,7 @@ private func makeMonitor(_ source: FakeMonitorSource = FakeMonitorSource(), acti
 }
 
 @MainActor
-private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 2) async -> Bool {
+private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 10) async -> Bool {
     let end = Date.now.addingTimeInterval(timeout)
     while Date.now < end {
         if cond() { return true }

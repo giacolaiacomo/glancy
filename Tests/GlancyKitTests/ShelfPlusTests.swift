@@ -28,7 +28,7 @@ private struct Temp {
 
 /// Waits (briefly) for a condition that an event will make true.
 @MainActor
-private func eventually(_ seconds: Double = 4, _ condition: () -> Bool) async -> Bool {
+private func eventually(_ seconds: Double = 10, _ condition: () -> Bool) async -> Bool {
     let end = Date().addingTimeInterval(seconds)
     while Date() < end {
         if condition() { return true }

@@ -88,7 +88,7 @@ private final class EventBox: @unchecked Sendable {
     func add(_ e: NotificationWatcher.Event) { lock.withLock { events.append(e) } }
     var all: [NotificationWatcher.Event] { lock.withLock { events } }
 
-    func wait(until predicate: ([NotificationWatcher.Event]) -> Bool, timeout: TimeInterval = 3) async -> Bool {
+    func wait(until predicate: ([NotificationWatcher.Event]) -> Bool, timeout: TimeInterval = 10) async -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if predicate(all) { return true }

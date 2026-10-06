@@ -270,7 +270,7 @@ private func item(_ text: String, pinned: Bool = false, date: Date = .now, app: 
 @Suite @MainActor struct ClipboardModelTests {
     /// Waits for the model's off-main ingest to land.
     private func settle(_ until: () -> Bool) async {
-        for _ in 0..<200 where !until() { try? await Task.sleep(for: .milliseconds(10)) }
+        for _ in 0..<1000 where !until() { try? await Task.sleep(for: .milliseconds(10)) }
     }
 
     @Test func capturesThenOwnWriteIsNotRecaptured() async throws {

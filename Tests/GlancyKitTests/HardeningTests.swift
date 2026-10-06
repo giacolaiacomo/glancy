@@ -53,7 +53,7 @@ private func alive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 }
 private func blockCurrentThread(_ seconds: Double) { Thread.sleep(forTimeInterval: seconds) }
 
 @MainActor
-private func waitUntil(_ seconds: Double = 5, _ cond: () -> Bool) async -> Bool {
+private func waitUntil(_ seconds: Double = 10, _ cond: () -> Bool) async -> Bool {
     let end = Date.now.addingTimeInterval(seconds)
     while !cond() {
         if Date.now > end { return false }

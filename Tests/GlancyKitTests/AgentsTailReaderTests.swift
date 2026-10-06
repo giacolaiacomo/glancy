@@ -33,7 +33,7 @@ private func append(_ s: String, to url: URL) {
 }
 
 /// Waits (bounded) for file events to arrive; the reader itself never polls.
-private func eventually(isolation: isolated (any Actor)? = #isolation, _ timeout: Double = 3, _ cond: () -> Bool) async -> Bool {
+private func eventually(isolation: isolated (any Actor)? = #isolation, _ timeout: Double = 10, _ cond: () -> Bool) async -> Bool {
     let end = Date.now.addingTimeInterval(timeout)
     while Date.now < end {
         if cond() { return true }

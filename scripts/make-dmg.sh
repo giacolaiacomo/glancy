@@ -2,11 +2,16 @@
 # Builds a universal Glancy.app signed with Developer ID, notarizes and staples it, then wraps it
 # in a signed, notarized, stapled DMG (drag to Applications).
 #
-#   GLANCY_VERSION=X.Y.Z scripts/make-dmg.sh   → dist/Glancy-X.Y.Z.dmg + dist/appcast.xml
+#   GLANCY_VERSION=X.Y.Z scripts/make-dmg.sh   → dist/Glancy-X.Y.Z.dmg + dist/Glancy.dmg + dist/appcast.xml
+#
+# dist/Glancy.dmg is a byte-for-byte copy of the versioned DMG under a stable name: attach it to
+# every release too, so https://github.com/giacolaiacomo/glancy/releases/latest/download/Glancy.dmg
+# (the README's Download button) always serves the newest version. Sparkle's appcast keeps
+# pointing at the versioned file.
 #
 # The appcast (scripts/make-appcast.sh) points Sparkle at the DMG of release vX.Y.Z and carries its
 # EdDSA signature: the private key must be in the login keychain (Sparkle's generate_keys, account
-# "glancy"; the first signing may ask for keychain access). Attach both files to the release.
+# "glancy"; the first signing may ask for keychain access). Attach all three files to the release.
 #
 # Needs, once:
 #   - a "Developer ID Application" certificate in the login keychain (Xcode → Settings → Accounts →
@@ -60,6 +65,12 @@ spctl -a -t open --context context:primary-signature -v "$DMG"
 spctl -a -t exec -v "$WORK/Glancy.app"
 shasum -a 256 "$DMG"
 echo "built $DMG"
+
+echo "==> stable name for the README's download link"
+STABLE="$DIST/Glancy.dmg"
+cp -f "$DMG" "$STABLE"
+cmp -s "$DMG" "$STABLE" || { echo "copy to $STABLE differs from $DMG" >&2; exit 1; }
+echo "built $STABLE (same bytes)"
 
 echo "==> appcast (EdDSA-signed, the stapled DMG as shipped)"
 "$ROOT/scripts/make-appcast.sh" "$DMG" "$VERSION" "$DIST/appcast.xml"

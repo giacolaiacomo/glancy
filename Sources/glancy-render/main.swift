@@ -335,9 +335,11 @@ enum Render {
         }
         // Agents from every source (lot AG): made-up sessions — Claude Code in Terminal and in VS
         // Code, the Codex CLI and the Codex app, OpenCode — the waiting wing, the board, Home, the
-        // waiting peek. Nothing of the user's is read; no window is touched.
+        // waiting peek, with the sample plan limits beside the board. Nothing of the user's is read;
+        // no window is touched.
         do {
             let agents = AgentsModule.renderSample()
+            agents.seedLimitsSample()
             let hub = ActivityHub()
             agents.start(hub: hub)
             let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [agents])
@@ -450,7 +452,7 @@ enum Render {
                 settings.navigation.go(.index, animated: false)
                 // Agents: the wings, the tab, the waiting drop-down.
                 let sizeAgents = AgentsModule.renderSample()
-                sizeAgents.seedLimitsSample()
+                seedSizeLimits(sizeAgents)
                 let hub = ActivityHub()
                 sizeAgents.start(hub: hub)
                 let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [sizeAgents])
@@ -463,7 +465,7 @@ enum Render {
                 sizeAgents.stop()
                 // No session: the empty board beside the limits.
                 let noSessions = AgentsModule.renderEmpty()
-                noSessions.seedLimitsSample()
+                seedSizeLimits(noSessions)
                 let hub2 = ActivityHub()
                 noSessions.start(hub: hub2)
                 noSessions.visibilityChanged(.expanded(.agents))
@@ -730,3 +732,14 @@ private struct MenuBar: View {
 }
 
 Render.run()
+
+/// The size shots' limits: the owner's cached readings with `--limits-cache <file>` (read-only), else the sample.
+@MainActor
+func seedSizeLimits(_ agents: AgentsModule) {
+    if let i = CommandLine.arguments.firstIndex(of: "--limits-cache"), i + 1 < CommandLine.arguments.count {
+        let c = UsageLimitsStore.readCache(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+        agents.seedLimits(claude: c.claude, codex: c.codex, breakdown: nil)
+    } else {
+        agents.seedLimitsSample()
+    }
+}

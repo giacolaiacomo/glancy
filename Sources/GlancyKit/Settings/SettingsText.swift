@@ -79,7 +79,7 @@ let settingsItalian: [String: String] = [
     "Microphone": "Microfono",
     "Camera": "Fotocamera",
     "Speech Recognition": "Riconoscimento vocale",
-    "Voice notes and the mic mute": "Note vocali e microfono silenziato",
+    "Voice notes, the mic mute and meetings": "Note vocali, microfono silenziato e riunioni",
     "The camera mirror": "Lo specchio della fotocamera",
     "Voice notes written out, on this Mac": "Trascrizione delle note vocali, su questo Mac",
     "Your next meeting, with a Join button": "La prossima riunione, con il tasto Partecipa",

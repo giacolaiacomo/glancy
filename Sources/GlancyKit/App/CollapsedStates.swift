@@ -34,10 +34,11 @@ enum CollapsedStates {
 
     static func named(_ name: String) -> Case? { all.first { $0.name == name } }
 
-    static let all: [Case] = agents + media + timer + devices + calendar + others + [
+    static let all: [Case] = agents + media + timer + devices + calendar + meetings + others + [
         Case(name: "all", modules: nil, settle: 3.5, apply: { r in
             r.module(ControlModule.self)?.prepareForRender(.awake)
             r.module(NotesModule.self)?.prepareForRender(.wing)
+            r.module(MeetingsModule.self)?.prepareForRender(.recording)
             r.module(PowerModule.self)?.showSamplePeek()
             r.module(HUDModule.self)?.showSample()
             r.context.updates = AppUpdates.sample(available: "9.9.9")
@@ -151,6 +152,19 @@ enum CollapsedStates {
             r.set.calendar.eventList = [calendarEvent(in: -30)]
         }),
         Case(name: "calendar.overrun", modules: [.calendar], settle: 4, apply: { r in r.module(CalendarModule.self)?.prepareForRender(.overrun) }),
+    ]
+
+    // MARK: Meetings
+
+    static let meetings: [Case] = [
+        // Recording: a red dot and the minutes, changed once a minute (the next change is a
+        // minute after `apply`, past the measurement).
+        Case(name: "meetings.recording", modules: [.meetings], apply: { r in r.module(MeetingsModule.self)?.prepareForRender(.recording) }),
+        // A call took the microphone: "Record this meeting?" drops down, then goes (10 s).
+        Case(name: "meetings.offer.peek", modules: [.meetings], settle: 11.5, apply: { r in r.module(MeetingsModule.self)?.showSampleOffer() }),
+        // The lab's recording: synthetic audio at real time through the real writers (two AAC
+        // tracks into the scratch folder), so cpu-lab measures what recording costs.
+        Case(name: "meetings.encode", modules: [.meetings], apply: { r in r.module(MeetingsModule.self)?.startSyntheticRecording() }),
     ]
 
     // MARK: Notifications, shelf, control, monitor, updates

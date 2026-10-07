@@ -58,6 +58,15 @@ enum Render {
         let only = args.firstIndex(of: "--only").flatMap { i in
             args.index(after: i) < args.endIndex ? args[args.index(after: i)].split(separator: ",").map(String.init) : nil
         }
+        /// A view at its full height on the panel's black, at the panel's width (settings sections
+        /// longer than the panel).
+        func sheet<V: View>(_ name: String, _ view: V, width: CGFloat = 626) {
+            if let only, !only.contains(where: { name.contains($0) }) { return }
+            let file = out.appendingPathComponent("\(name)\(suffix).png")
+            Render.sheet(view, width: width, to: file)
+            print("wrote \(file.lastPathComponent)  sheet")
+        }
+
         func shot(_ name: String, _ ctx: SurfaceContext, dark: Bool = false, geometry: NotchGeometry = geometry,
                   menus: MenuBarClearance? = nil, crop: CGSize = Render.standardCrop, _ setup: (SurfaceModel) -> Void = { _ in }) {
             if let only, !only.contains(where: { name.contains($0) }) { return }
@@ -348,6 +357,77 @@ enum Render {
             notesModule.stop()
             notesModule.start(hub: live.hub)
         }
+        // Meetings (lot W10-MEET, opt-in): turned on for these shots only. Made-up recordings and
+        // fixed states: no microphone, no audio tap, no permission asked, nothing recorded or played.
+        if let meetings = modules.compactMap({ $0 as? MeetingsModule }).first {
+            settings.setEnabled(.meetings, true)
+            meetings.stop()
+            meetings.start(hub: live.hub)
+            for state in MeetingsModule.RenderState.allCases {
+                meetings.prepareForRender(state)
+                meetings.visibilityChanged(.expanded(.meetings))
+                shot("18-meetings-tab-\(state.rawValue)", live) { $0.expand(tab: .meetings) }
+            }
+            // Recording: the wing alone, then Home with the card among the others.
+            meetings.prepareForRender(.recording)
+            meetings.visibilityChanged(.collapsed)
+            let solo = SurfaceContext(hub: live.hub, settings: settings, launchAtLogin: launch, modules: [meetings])
+            shot("18-meetings-wing", solo)
+            shot("18-meetings-wing-among", live)
+            shot("18-meetings-home-recording", live) { $0.expand(tab: nil) }
+            meetings.prepareForRender(.offer)
+            shot("18-meetings-home-offer", live) { $0.expand(tab: nil) }
+            meetings.prepareForRender(.transcribing)
+            shot("18-meetings-home-transcribing", live) { $0.expand(tab: nil) }
+            // At rest with Meetings set to Always on Home: the last recording.
+            meetings.prepareForRender(.list)
+            settings.setHomeMode(.meetings, .always)
+            for w in HomeWidget.allCases where w != .meetings && w != .agents { settings.setShownOnHome(w, false) }
+            shot("18-meetings-home-idle", solo) { $0.expand(tab: nil) }
+            settings.resetHome()
+            // The drop-downs: the question as a call starts; a recording that began by itself.
+            do {
+                let hub = ActivityHub()
+                meetings.stop(); meetings.start(hub: hub)
+                let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [meetings])
+                meetings.showSampleOffer()
+                shot("18-meetings-peek-offer", ctx)
+            }
+            do {
+                let hub = ActivityHub()
+                meetings.stop(); meetings.start(hub: hub)
+                let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [meetings])
+                meetings.showSampleAutoPeek()
+                shot("18-meetings-peek-auto", ctx)
+            }
+            // Settings → Meetings (on): in the panel, then the whole section (the panel shows its top).
+            meetings.stop(); meetings.start(hub: live.hub)
+            meetings.prepareForRender(.list)
+            settings.navigation.go(.module(.meetings), animated: false)
+            shot("18-meetings-settings", live) { $0.expand(tab: nil); $0.toggleSettings() }
+            sheet("18-meetings-settings-full", meetings.settingsSection(live))
+            // Permissions with only Meetings registered: its rows (Microphone, System audio, and
+            // Speech Recognition where the Mac needs it) on screen.
+            let meetingAccess: [PermissionKind: PermissionStatus] = [.microphone: .granted, .systemAudio: .notDetermined,
+                                                                     .speech: .notDetermined]
+            settings.permissions.probe = .fixed(meetingAccess)
+            settings.permissions.apply(meetingAccess)
+            settings.navigation.go(.permissions, animated: false)
+            let own = SurfaceContext(hub: live.hub, settings: settings, launchAtLogin: launch, modules: [meetings])
+            shot("18-meetings-permissions", own) { $0.expand(tab: nil); $0.toggleSettings() }
+            settings.navigation.go(.index, animated: false)
+            // The largest size: nothing clipped.
+            UIScale.shared.set(requested: .extraLarge, effective: .extraLarge)
+            settings.size = .extraLarge
+            meetings.prepareForRender(.recording)
+            shot("18-meetings-tab-xl-recording", live, geometry: builtInGeometry(uiScale: UISize.extraLarge.factor),
+                 crop: CGSize(width: 1080, height: 340)) { $0.expand(tab: .meetings) }
+            UIScale.shared.set(requested: .normal, effective: .normal)
+            settings.size = .normal
+            meetings.prepareForRender(.list)
+            meetings.visibilityChanged(.collapsed)
+            settings.setEnabled(.meetings, false)
+        }
         // Focus & meetings (FO): synthetic meetings and Pomodoro on a hub of their own; the Focus
         // controller is frozen (no `shortcuts` is run, Focus is never touched).
         FocusController.shared.prepareForRender(.missing([FocusController.offShortcut]))
@@ -568,6 +648,31 @@ enum Render {
                               auxLeft: CGRect(x: 0, y: 950, width: 665, height: 32),
                               auxRight: CGRect(x: 850, y: 950, width: 662, height: 32), isBuiltin: true, scale: 2)
         return NotchGeometry.notch(for: info, uiScale: uiScale)!
+    }
+
+    static func sheet<V: View>(_ view: V, width: CGFloat, to url: URL) {
+        let root = view.padding(16).frame(width: width, alignment: .topLeading).background(Color.black)
+            .environment(\.colorScheme, .dark)
+        let host = NSHostingView(rootView: root)
+        host.frame = CGRect(x: 0, y: 0, width: width, height: 100)
+        let window = NSWindow(contentRect: CGRect(x: -10_000, y: -10_000, width: width, height: 100),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = host
+        for _ in 0..<5 {
+            host.frame.size = CGSize(width: width, height: max(100, host.fittingSize.height))
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.06))
+        }
+        host.display()
+        let size = host.frame.size
+        let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale), pixelsHigh: Int(size.height * scale),
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                   colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        rep.size = size
+        host.cacheDisplay(in: host.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        window.contentView = nil
+        window.close()
     }
 
     static func render(model: SurfaceModel, context: SurfaceContext, geometry g: NotchGeometry, dark: Bool,

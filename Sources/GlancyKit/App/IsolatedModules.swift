@@ -74,8 +74,13 @@ enum IsolatedModules {
                                     scheduler: TaskWakeScheduler())
         let monitor = MonitorModule(source: LiveMonitorSource(), actions: LiveMonitorActions(),
                                     settings: MonitorSettings(defaults: defaults("monitor")))
+        // Meetings: made-up recordings; no listener, no microphone, no tap, no prompt.
+        let meetings = MeetingsModule(store: MeetingsStore(directory: dir("meetings")), settings: MeetingsSettings(defaults: defaults("meetings")),
+                                      system: .sample, sample: true)
+        meetings.calendar = calendar
+        meetings.notes = notes
         var modules: [any GlancyModule] = [agents, calendar, media, timer, shelf, clipboard, windows, hud, power, notifications,
-                                           notes, control, monitor]
+                                           notes, control, monitor, meetings]
         let command = CommandModule(settings: CommandSettings(defaults: defaults("command")), history: PaletteHistory(url: nil),
                                     apps: AppIndex(), rates: CurrencyRates(cacheURL: nil), sample: true)
         command.sources = CommandModule.weakly(modules)

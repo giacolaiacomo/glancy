@@ -58,7 +58,7 @@ public final class AppSettings {
     }
 
     /// Opt-in modules (a large permission): off until the user turns them on, existing settings included.
-    public static let defaultDisabled: Set<ModuleID> = [.notifications]
+    public static let defaultDisabled: Set<ModuleID> = [.notifications, .meetings]
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

@@ -16,8 +16,14 @@ public enum Modules {
         // Voice notes: "Mic muted — unmute to record" reads and lifts the HUD's mute. Weak.
         let notes = NotesModule()
         notes.micControl = hud
-        var list: [any GlancyModule] = [agents, CalendarModule(), MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power,
-                                        NotificationsModule(), notes, ControlModule(), MonitorModule()]
+        // Meetings (opt-in): names a call after the calendar meeting on, ends it with the meeting,
+        // and sends each transcript to Notes. Weak: either off just loses that.
+        let calendar = CalendarModule()
+        let meetings = MeetingsModule()
+        meetings.calendar = calendar
+        meetings.notes = notes
+        var list: [any GlancyModule] = [agents, calendar, MediaModule(), TimerModule(), ShelfModule(), ClipboardModule(), windows, hud, power,
+                                        NotificationsModule(), notes, ControlModule(), MonitorModule(), meetings]
         // Command bar: every other module's commands()/results(for:), held weakly.
         let command = CommandModule()
         command.sources = CommandModule.weakly(list)

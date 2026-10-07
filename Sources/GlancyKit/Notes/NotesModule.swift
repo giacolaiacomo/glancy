@@ -113,6 +113,14 @@ public final class NotesModule: GlancyModule {
         model.setVisible(on)
     }
 
+    /// A note from another module (Meetings: a transcript), first line = title. False while the
+    /// module is off: nothing is written then.
+    @discardableResult
+    public func addNote(_ text: String) -> Bool {
+        guard started else { return false }
+        return model.addExternal(text: text) != nil
+    }
+
     // MARK: Hotkey
 
     private func registerHotkey() {

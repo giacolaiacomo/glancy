@@ -1,10 +1,10 @@
 import SwiftUI
 
-// The Control tab: a row of toggle tiles, the tools below (or a question / the colour just picked /
-// the camera mirror in their place), and the system stats on the right.
+// The Control tab: a row of toggle tiles across the page, the tools below in even rows (or a
+// question / the colour just picked / the camera mirror in their place). System figures (CPU,
+// memory, disk, network, uptime, battery health) are the Monitor tab's.
 
 private enum Metrics {
-    static var statsWidth: CGFloat { 160.ui }
     static var toggleHeight: CGFloat { 68.ui }
     static var toolHeight: CGFloat { 30.ui }
     static var gap: CGFloat { 6.ui }
@@ -25,27 +25,19 @@ struct ControlTabView: View {
     let module: ControlModule
     let model: ControlModel
     let settings: ControlSettings
-    let stats: StatsSampler
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10.ui) {
-            Group {
-                if model.mirror != .off {
-                    MirrorPanel(module: module, live: model.mirror == .live)
-                } else {
-                    VStack(spacing: 8.ui) {
-                        TogglesRow(module: module, model: model, tiles: settings.layout.toggles, awakeDefault: settings.awakeDefault)
-                        lower
-                    }
+        Group {
+            if model.mirror != .off {
+                MirrorPanel(module: module, live: model.mirror == .live)
+            } else {
+                VStack(spacing: 8.ui) {
+                    TogglesRow(module: module, model: model, tiles: settings.layout.toggles, awakeDefault: settings.awakeDefault)
+                    lower
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            if settings.showStats {
-                StatsCard(stats: stats.snapshot)
-                    .frame(width: Metrics.statsWidth)
-                    .frame(maxHeight: .infinity, alignment: .top)
-            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder private var lower: some View {
@@ -54,7 +46,7 @@ struct ControlTabView: View {
         } else if let color = model.picked {
             ColorBar(module: module, color: color, recent: model.recent.colors)
         } else {
-            ToolsGrid(module: module, model: model, tiles: settings.layout.tools, wide: !settings.showStats)
+            ToolsGrid(module: module, model: model, tiles: settings.layout.tools)
         }
     }
 }
@@ -183,14 +175,24 @@ private struct ToggleTile: View {
 
 // MARK: - Tools
 
+/// How the tools share the page's width. Pure.
+enum ControlGrid {
+    /// Pills per row: up to four in one row, else two rows (three or more past twelve) filled as
+    /// evenly as possible, so the last row is never mostly empty (8 → 4 + 4, 10 → 5 + 5, 7 → 4 + 3).
+    static func perRow(_ count: Int) -> Int {
+        guard count > 4 else { return max(count, 1) }
+        let rows = max(2, (count + 5) / 6)
+        return (count + rows - 1) / rows
+    }
+}
+
 private struct ToolsGrid: View {
     let module: ControlModule
     let model: ControlModel
     let tiles: [ControlTile]
-    let wide: Bool
 
     var body: some View {
-        let perRow = wide ? 5 : 4
+        let perRow = ControlGrid.perRow(tiles.count)
         let rows = stride(from: 0, to: tiles.count, by: perRow).map { Array(tiles[$0..<min($0 + perRow, tiles.count)]) }
         VStack(spacing: Metrics.gap) {
             ForEach(rows.indices, id: \.self) { r in
@@ -464,99 +466,6 @@ private struct MirrorPanel: View {
                 .padding(8.ui)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-// MARK: - Stats
-
-private struct StatsCard: View {
-    let stats: StatsSnapshot
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5.ui) {
-            HStack {
-                Caption(text: ControlText.t("System"))
-                Spacer(minLength: 4.ui)
-                if let up = stats.uptime {
-                    Text(verbatim: L10n.tr("up %@", ControlFormat.uptime(up)))
-                        .font(Theme.font(.xs)).monospacedDigit().foregroundStyle(Theme.tertiary).lineLimit(1)
-                }
-                // Monitor link (lot MON): the full monitor, when that module is on.
-                if let open = MonitorLink.open {
-                    Button(action: open) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8.5.ui, weight: .bold)).foregroundStyle(Theme.tertiary)
-                            .frame(width: 14.ui, height: 14.ui).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(L10n.tr("System monitor"))
-                }
-            }
-            StatRow(symbol: "cpu", label: ControlText.t("CPU"),
-                    value: stats.cpu.map { "\(Int(($0 * 100).rounded()))%" } ?? "—", fraction: stats.cpu)
-            StatRow(symbol: "memorychip", label: ControlText.t("Memory"),
-                    value: stats.memory.map { gb($0.used) + " / " + gb($0.total, whole: true) + " GB" } ?? "—",
-                    fraction: stats.memory.map { Double($0.used) / Double(max($0.total, 1)) },
-                    tint: stats.memory.map { $0.pressure >= 4 ? Theme.failed : $0.pressure >= 2 ? Theme.waiting : Theme.secondary } ?? Theme.secondary)
-            StatRow(symbol: "internaldrive", label: ControlText.t("Disk"),
-                    value: stats.disk.map { L10n.tr("%@ free", ControlFormat.bytes($0.free)) } ?? "—",
-                    fraction: stats.disk.map { 1 - Double($0.free) / Double(max($0.total, 1)) })
-            HStack(spacing: 6.ui) {
-                Image(systemName: "network").font(.system(size: 9.5.ui, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14.ui)
-                Text(verbatim: "↓ " + (stats.down.map(ControlFormat.rate) ?? "—"))
-                Spacer(minLength: 2.ui)
-                Text(verbatim: "↑ " + (stats.up.map(ControlFormat.rate) ?? "—"))
-            }
-            .font(Theme.font(.xs, .medium)).monospacedDigit().foregroundStyle(Theme.secondary).lineLimit(1)
-            .frame(height: 16.ui)
-            if let b = stats.battery {
-                HStack(spacing: 6.ui) {
-                    Image(systemName: "battery.100percent").font(.system(size: 9.5.ui, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14.ui)
-                    Text(verbatim: L10n.tr("health %d%%", Int((min(b.health, 1) * 100).rounded())))
-                        .layoutPriority(1)   // the cycles give way first
-                    Spacer(minLength: 2.ui)
-                    Text(verbatim: L10n.tr("%d cycles", b.cycles)).foregroundStyle(Theme.tertiary)
-                }
-                .font(Theme.font(.xs, .medium)).monospacedDigit().foregroundStyle(Theme.secondary).lineLimit(1)
-                .frame(height: 16.ui)
-            }
-        }
-        .padding(10.ui)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous).fill(Theme.card))
-    }
-
-    /// "10.6" used, "16" installed (RAM comes in whole gigabytes).
-    private func gb(_ b: UInt64, whole: Bool = false) -> String {
-        String(format: whole ? "%.0f" : "%.1f", Double(b) / 1_073_741_824)
-    }
-}
-
-private struct StatRow: View {
-    let symbol: String
-    let label: String
-    let value: String
-    let fraction: Double?
-    var tint: Color = Theme.secondary
-
-    var body: some View {
-        VStack(spacing: 2.ui) {
-            HStack(spacing: 6.ui) {
-                Image(systemName: symbol).font(.system(size: 9.5.ui, weight: .semibold)).foregroundStyle(Theme.tertiary).frame(width: 14.ui)
-                Text(verbatim: label).foregroundStyle(Theme.tertiary)
-                Spacer(minLength: 2.ui)
-                Text(verbatim: value).foregroundStyle(Theme.secondary)
-            }
-            .font(Theme.font(.xs, .medium)).monospacedDigit().lineLimit(1)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.08))
-                    Capsule().fill(tint).frame(width: geo.size.width * min(1, max(0, fraction ?? 0)))
-                }
-            }
-            .frame(height: 2.5.ui)
-            .padding(.leading, 20.ui)
-        }
     }
 }
 

@@ -3,8 +3,8 @@ import Foundation
 
 // The Monitor's readings: one `MonitorSource` (live: Mach, sysctl, IOKit, libproc; tests: a fake),
 // the system maths (CPU split, per-core load, disk and network rates) and the process scanner.
-// CPU, memory, network, disk space and uptime come from Control's `StatsSource`: one reader for
-// both tabs, never two samplers at once (each runs only while its own tab is on screen).
+// CPU, memory, network, disk space, battery health and uptime come from a `StatsSource`
+// (SystemStats.swift); the sampler runs only while the Monitor tab is on screen.
 
 public struct PowerReading: Equatable, Sendable {
     /// What the Mac draws: from the adapter on AC (`SystemPowerIn`), from the battery otherwise.
@@ -25,7 +25,7 @@ public struct DiskIOCounters: Equatable, Sendable {
 }
 
 public protocol MonitorSource: Sendable {
-    /// CPU, memory, network, disk space, boot time (shared with the Control tab).
+    /// CPU, memory, network, disk space, battery health, boot time.
     var stats: StatsSource { get }
     func cores() -> [CPUTicks]?
     func swap() -> SwapReading?
@@ -60,6 +60,8 @@ public struct MonitorSnapshot: Equatable, Sendable {
     public var power: PowerReading?
     public var thermal = 0
     public var uptime: TimeInterval?
+    /// Battery cycles and health (full-charge vs design capacity); nil without a battery.
+    public var battery: BatteryReading?
     /// The right column's sources, each already holding the "System processes" remainder. The
     /// live sampler leaves them empty on the main thread and hands over `top` instead.
     public var apps: [MonitorRow] = []

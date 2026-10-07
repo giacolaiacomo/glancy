@@ -3,17 +3,15 @@ import SwiftUI
 
 /// Control center (wave 4): toggles (keep awake, dark mode, Wi-Fi, desktop icons, hidden files),
 /// one-shot tools (lock, display off, screen saver, screenshot, colour picker, camera mirror, empty
-/// Trash, eject all) and system stats.
+/// Trash, eject all). System figures live in the Monitor tab.
 ///
 /// Event-driven: toggle states are read when the tab opens and after each action; keep-awake ends
-/// with one scheduled wake-up at its deadline (plus a check after system wake). The one periodic
-/// task, the 1 Hz stats sampler, runs only while the Control tab is on screen.
+/// with one scheduled wake-up at its deadline (plus a check after system wake). Nothing periodic.
 @MainActor
 public final class ControlModule: GlancyModule {
     public let id: ModuleID = .control
     public let model = ControlModel()
     public let settings: ControlSettings
-    public let stats: StatsSampler
 
     let actions: SystemActions
     private let scheduler: WakeScheduling
@@ -27,14 +25,13 @@ public final class ControlModule: GlancyModule {
     var closeDelay: Duration = .milliseconds(350)
 
     public convenience init() {
-        self.init(actions: LiveSystemActions(), settings: ControlSettings(), scheduler: TaskWakeScheduler(), stats: StatsSampler())
+        self.init(actions: LiveSystemActions(), settings: ControlSettings(), scheduler: TaskWakeScheduler())
     }
 
-    public init(actions: SystemActions, settings: ControlSettings, scheduler: WakeScheduling, stats: StatsSampler) {
+    public init(actions: SystemActions, settings: ControlSettings, scheduler: WakeScheduling) {
         self.actions = actions
         self.settings = settings
         self.scheduler = scheduler
-        self.stats = stats
         // Settings → Control shows these strings even while the module is off.
         L10n.addItalian(controlItalian)
     }
@@ -56,7 +53,6 @@ public final class ControlModule: GlancyModule {
 
     public func stop() {
         started = false
-        stats.stop()
         if model.awake.isOn { _ = actions.holdAwake(false) }
         model.awake = AwakeState()
         expiry?.cancel(); expiry = nil
@@ -75,9 +71,7 @@ public final class ControlModule: GlancyModule {
         let onTab = v == .expanded(.control)
         if onTab {
             if was != v { refreshStates() }
-            if settings.showStats { stats.start() } else { stats.stop() }
         } else {
-            stats.stop()
             model.mirror = .off
             if was == .expanded(.control) {
                 model.prompt = nil
@@ -385,7 +379,7 @@ public final class ControlModule: GlancyModule {
 
     public var tab: PanelTab? {
         PanelTab(module: .control, symbol: "switch.2", title: "Control") { [unowned self] in
-            AnyView(ControlTabView(module: self, model: model, settings: settings, stats: stats))
+            AnyView(ControlTabView(module: self, model: model, settings: settings))
         }
     }
 
@@ -411,14 +405,6 @@ public final class ControlModule: GlancyModule {
         model.wifi = true
         model.recent = RecentColors([RGB(r: 255, g: 136, b: 0), RGB(r: 52, g: 120, b: 246), RGB(r: 48, g: 209, b: 88),
                                      RGB(r: 191, g: 90, b: 242), RGB(r: 255, g: 69, b: 58), RGB(r: 242, g: 242, b: 247)])
-        var s = StatsSnapshot()
-        s.cpu = 0.23
-        s.memory = MemoryReading(used: 11_400_000_000, total: 17_179_869_184, pressure: 1)
-        s.disk = DiskReading(free: 212_000_000_000, total: 494_000_000_000)
-        s.down = 1_240_000; s.up = 86_000
-        s.battery = BatteryReading(cycles: 214, health: 0.93)
-        s.uptime = TimeInterval(3 * 86_400 + 4 * 3_600 + 120)
-        stats.show(s)
         switch state {
         case .awake: break
         case .colorPicked: model.picked = RGB(r: 255, g: 136, b: 0)

@@ -281,17 +281,30 @@ struct MonitorModuleTests {
         #expect(!m.sampler.isRunning)
     }
 
-    @Test func controlAndMonitorNeverSampleTogether() {
+    @Test func footerHasUptimeAndBatteryHealth() async {
+        // What Control's System card had and the gauges don't: uptime, battery health and cycles,
+        // read by the Monitor's own sampler (battery: IOKit, at the first tick).
         let (m, _, _, _) = makeMonitor()
-        let defaults = UserDefaults(suiteName: "glancy.test.control.\(UUID().uuidString)")!
-        let c = ControlModule(actions: FakeSystemActions(), settings: ControlSettings(defaults: defaults), scheduler: FakeScheduler(),
-                              stats: StatsSampler(source: FakeStatsSource(), interval: .milliseconds(10)))
-        c.start(hub: ActivityHub())
-        for v: SurfaceVisibility in [.expanded(.control), .expanded(.monitor), .expanded(nil), .expanded(.control), .collapsed] {
-            m.visibilityChanged(v); c.visibilityChanged(v)
-            #expect(!(m.sampler.isRunning && c.stats.isRunning))
-        }
-        m.stop(); c.stop()
+        m.visibilityChanged(.expanded(.monitor))
+        let end = Date.now.addingTimeInterval(5)
+        while m.sampler.snapshot.battery == nil, Date.now < end { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(m.sampler.snapshot.battery == BatteryReading(cycles: 10, health: 0.95))
+        #expect(abs((m.sampler.snapshot.uptime ?? 0) - 3600) < 30)
+        let f = MonitorText.footer(uptime: m.sampler.snapshot.uptime, battery: m.sampler.snapshot.battery)
+        #expect(f.uptime == "up 1h 0m")
+        #expect(f.battery == "health 95% · 10 cycles")
+        m.stop()
+        #expect(MonitorText.uptime(3 * 86400 + 4 * 3600 + 59) == "3d 4h")
+        #expect(MonitorText.uptime(5 * 3600 + 12 * 60) == "5h 12m")
+        #expect(MonitorText.footer(uptime: 3 * 86400 + 4 * 3600, battery: BatteryReading(cycles: 214, health: 0.93))
+                == ("up 3d 4h", "health 93% · 214 cycles"))
+        // Health over 100% (a new battery) reads 100%; no battery, no battery text.
+        #expect(MonitorText.footer(uptime: nil, battery: BatteryReading(cycles: 1, health: 1.04)).battery == "health 100% · 1 cycles")
+        #expect(MonitorText.footer(uptime: 60, battery: nil).battery == nil)
+        L10n.apply(.it)
+        #expect(MonitorText.footer(uptime: 3 * 86400 + 4 * 3600, battery: BatteryReading(cycles: 214, health: 0.93)).uptime
+                == "acceso da 3g 4h")
+        L10n.apply(.en)
     }
 
     @Test func tabOpensOnTheDefaultAndKeepsTheChoiceWhileOpen() {
@@ -410,13 +423,6 @@ struct MonitorModuleTests {
         #expect(acts.quits.map(\.name) == ["Google Chrome"])
         L10n.apply(.en)
         m.stop()
-    }
-
-    @Test func linkFromControlExistsOnlyWhileRunning() {
-        let (m, _, _, _) = makeMonitor()
-        #expect(MonitorLink.open != nil)
-        m.stop()
-        #expect(MonitorLink.open == nil)
     }
 
     @Test func settingsPersist() {

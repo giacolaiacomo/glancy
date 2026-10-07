@@ -2,9 +2,9 @@ import Darwin
 import Foundation
 import IOKit
 
-// System stats for the Control tab: sampled once a second, and only while that tab is on screen.
-// Raw counters come from a `StatsSource` (live: Mach host statistics, sysctl, IOKit); the maths
-// (deltas, percentages, rates) is pure and tested with a fake source.
+// The system readings the Monitor tab samples (only while it is on screen): raw counters from a
+// `StatsSource` (live: Mach host statistics, sysctl, IOKit) and the pure maths over them (deltas,
+// load), tested with a fake source.
 
 /// Raw cumulative CPU ticks (all cores).
 public struct CPUTicks: Equatable, Sendable {
@@ -42,8 +42,8 @@ public struct NetworkCounters: Equatable, Sendable {
     public init(received: UInt64, sent: UInt64) { self.received = received; self.sent = sent }
 }
 
-/// Where readings come from. Cheap calls (< 1 ms) except `disk` and `battery`, which the sampler
-/// reads once when sampling starts and then rarely.
+/// Where readings come from. Cheap calls (< 1 ms) except `disk` and `battery`, which the Monitor's
+/// worker reads once when sampling starts and then rarely.
 public protocol StatsSource: Sendable {
     func cpu() -> CPUTicks?
     func memory() -> MemoryReading?
@@ -53,58 +53,8 @@ public protocol StatsSource: Sendable {
     func bootTime() -> Date?
 }
 
-/// What the tab draws.
-public struct StatsSnapshot: Equatable, Sendable {
-    public var cpu: Double?                  // 0…1
-    public var memory: MemoryReading?
-    public var disk: DiskReading?
-    public var down: Double?                 // bytes per second
-    public var up: Double?
-    public var battery: BatteryReading?
-    public var uptime: TimeInterval?
-    public init() {}
-}
-
-/// Turns successive readings into a snapshot. Pure, no clock of its own: `sample(now:)` is given
-/// the time so rates are exact in tests.
-public struct StatsEngine {
-    private var lastCPU: CPUTicks?
-    private var lastNet: NetworkCounters?
-    private var lastNetTime: Date?
-    public private(set) var snapshot = StatsSnapshot()
-    public private(set) var samples = 0
-
-    public init() {}
-
-    /// One step. `slow` = also read the disk and the battery (first sample, then every 30 s).
-    public mutating func sample(_ source: StatsSource, now: Date, slow: Bool) {
-        samples += 1
-        if let c = source.cpu() {
-            if let p = lastCPU { snapshot.cpu = Self.cpuLoad(from: p, to: c) }
-            lastCPU = c
-        }
-        snapshot.memory = source.memory()
-        if let n = source.network() {
-            if let p = lastNet, let t = lastNetTime, now > t {
-                let dt = now.timeIntervalSince(t)
-                snapshot.down = Double(Self.delta(p.received, n.received)) / dt
-                snapshot.up = Double(Self.delta(p.sent, n.sent)) / dt
-            }
-            lastNet = n; lastNetTime = now
-        }
-        if slow {
-            snapshot.disk = source.disk()
-            snapshot.battery = source.battery()
-        }
-        if let boot = source.bootTime() { snapshot.uptime = max(0, now.timeIntervalSince(boot)) }
-    }
-
-    /// Keeps the disk and battery values read off the main thread.
-    mutating func adopt(disk: DiskReading?, battery: BatteryReading?) {
-        if let disk { snapshot.disk = disk }
-        if let battery { snapshot.battery = battery }
-    }
-
+/// Counter maths. Pure.
+public enum StatsEngine {
     /// Busy share of the ticks between two readings; nil when no time passed.
     static func cpuLoad(from a: CPUTicks, to b: CPUTicks) -> Double? {
         let total = Double(delta(a.total, b.total))
@@ -208,64 +158,4 @@ public struct LiveStatsSource: StatsSource {
         guard sysctl(&mib, 2, &tv, &size, nil, 0) == 0, tv.tv_sec > 0 else { return nil }
         return Date(timeIntervalSince1970: TimeInterval(tv.tv_sec) + TimeInterval(tv.tv_usec) / 1_000_000)
     }
-}
-
-// MARK: - Sampler (visible-only)
-
-/// Runs the engine once a second while `isRunning`. Started and stopped only by the module's
-/// `visibilityChanged` (Control tab on screen): never runs while collapsed. Slow readings (disk,
-/// battery) are taken off the main thread.
-@MainActor @Observable
-public final class StatsSampler {
-    public private(set) var snapshot = StatsSnapshot()
-    public private(set) var samples = 0
-    public var isRunning: Bool { task != nil }
-
-    @ObservationIgnored private var engine = StatsEngine()
-    @ObservationIgnored private var task: Task<Void, Never>?
-    @ObservationIgnored private let source: StatsSource
-    @ObservationIgnored private let interval: Duration
-    @ObservationIgnored static let slowEvery = 30
-
-    public init(source: StatsSource = LiveStatsSource(), interval: Duration = .seconds(1)) {
-        self.source = source; self.interval = interval
-    }
-
-    public func start() {
-        guard task == nil else { return }
-        let source = self.source
-        let interval = self.interval
-        task = Task { [weak self] in
-            var tick = 0
-            while !Task.isCancelled {
-                // Fast counters are sub-millisecond, read here; disk and IOKit go to a
-                // background thread at the first tick and every 30 s.
-                if tick % Self.slowEvery == 0 {
-                    let (disk, battery) = await Task.detached(priority: .utility) { (source.disk(), source.battery()) }.value
-                    guard !Task.isCancelled, let self else { return }
-                    self.engine.adopt(disk: disk, battery: battery)
-                }
-                guard !Task.isCancelled, let self else { return }
-                self.engine.sample(source, now: .now, slow: false)
-                self.snapshot = self.engine.snapshot
-                self.samples = self.engine.samples
-                tick += 1
-                try? await Delay.sleep(for: interval)
-            }
-        }
-    }
-
-    public func stop() {
-        task?.cancel()
-        task = nil
-    }
-
-    /// For renders: one synchronous sample, no task.
-    public func sampleOnce() {
-        engine.sample(source, now: .now, slow: true)
-        snapshot = engine.snapshot
-    }
-
-    /// For renders: fixed figures.
-    func show(_ s: StatsSnapshot) { snapshot = s }
 }

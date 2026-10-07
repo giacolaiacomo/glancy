@@ -2,13 +2,14 @@ import AppKit
 import SwiftUI
 
 // The Monitor tab: on the left, the gauges in two columns (one selected); on the right, the top
-// five apps or processes for that gauge. Fits the panel's 156 pt page.
+// five apps or processes for that gauge, and a footer line with what the gauges don't show (uptime,
+// battery health and cycles). Fits the panel's 156 pt page.
 
 private enum Metrics {
     static var gaugesWidth: CGFloat { 304.ui }
     static var gap: CGFloat { 5.ui }
     static var radius: CGFloat { 11.ui }
-    static var rowHeight: CGFloat { 22.ui }
+    static var rowHeight: CGFloat { 20.ui }
     static let rows = 5
     static var valueWidth: CGFloat { 62.ui }
     static var barWidth: CGFloat { 46.ui }
@@ -247,6 +248,10 @@ private struct TopList: View {
             } else {
                 rows
             }
+            if model.confirm == nil {
+                Spacer(minLength: 0)
+                SystemFooter(snap: snap)
+            }
         }
         .padding(.horizontal, 10.ui)
         .padding(.vertical, 7.ui)
@@ -299,6 +304,40 @@ private struct TopList: View {
                 } else {
                     Color.clear.frame(height: Metrics.rowHeight)
                 }
+            }
+        }
+    }
+}
+
+/// "◷ up 3d 4h   ▭ health 93% · 214 cycles": quiet, at the foot of the list.
+private struct SystemFooter: View {
+    let snap: MonitorSnapshot
+
+    var body: some View {
+        let f = MonitorText.footer(uptime: snap.uptime, battery: snap.battery)
+        HStack(spacing: 12.ui) {
+            if let up = f.uptime {
+                Label { Text(verbatim: up) } icon: { Image(systemName: "clock") }
+                    .help(MonitorText.t("Time since the Mac started."))
+            }
+            if let battery = f.battery {
+                Label { Text(verbatim: battery) } icon: { Image(systemName: "battery.75percent") }
+                    .help(MonitorText.t("Battery health: full charge against the design capacity, and charge cycles."))
+            }
+            Spacer(minLength: 0)
+        }
+        .labelStyle(FooterLabel())
+        .font(Theme.font(.xs).monospacedDigit())
+        .foregroundStyle(Theme.tertiary)
+        .lineLimit(1)
+        .frame(height: 13.ui)
+    }
+
+    private struct FooterLabel: LabelStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            HStack(spacing: 4.ui) {
+                configuration.icon.font(.system(size: 8.5.ui, weight: .semibold))
+                configuration.title
             }
         }
     }

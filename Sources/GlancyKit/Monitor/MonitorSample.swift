@@ -15,6 +15,7 @@ enum MonitorSample {
         s.power = PowerReading(watts: 13.7, onBattery: false)
         s.thermal = 0
         s.uptime = 3 * 86400 + 4 * 3600
+        s.battery = BatteryReading(cycles: 214, health: 0.93)
 
         func app(_ name: String, _ bundle: String?, cpu: Double, mem: Double, disk: Double = 0, energy: Double = 0, gpu: Double = 0,
                  pids: [pid_t]) -> MonitorRow {

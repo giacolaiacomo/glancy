@@ -49,12 +49,10 @@ public final class MonitorModule: GlancyModule {
         started = true
         self.hub = hub
         L10n.addItalian(monitorItalian)
-        MonitorLink.open = { [weak self] in self?.open(on: .cpu) }
     }
 
     public func stop() {
         started = false
-        MonitorLink.open = nil
         sampler.stop()
         removeKeys()
         noteClear?.cancel(); noteClear = nil
@@ -297,13 +295,6 @@ public final class MonitorModule: GlancyModule {
             model.confirm = .forceQuit(MonitorTarget(chrome))
         }
     }
-}
-
-/// How another tab (Control's stats card) opens the Monitor: set while the module runs, nil when
-/// it's off (the link then hides).
-@MainActor
-public enum MonitorLink {
-    public static var open: (() -> Void)?
 }
 
 /// App icons for the rows, cached while the tab is open and dropped when it closes.

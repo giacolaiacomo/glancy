@@ -33,6 +33,21 @@ enum MonitorText {
 
     static func rate(_ bps: Double) -> String { ControlFormat.rate(bps) }
 
+    /// "3d 4h", "5h 12m", "12m" (IT "3g 4h").
+    static func uptime(_ t: TimeInterval) -> String {
+        let m = Int(max(0, t)) / 60
+        let d = m / 1440, h = (m % 1440) / 60, mm = m % 60
+        if d > 0 { return "\(d)\(L10n.isItalian ? "g" : "d") \(h)h" }
+        if h > 0 { return "\(h)h \(mm)m" }
+        return "\(mm)m"
+    }
+
+    /// The footer's facts the gauges don't show: "up 3d 4h", "health 93% · 214 cycles".
+    static func footer(uptime: TimeInterval?, battery: BatteryReading?) -> (uptime: String?, battery: String?) {
+        (uptime.map { L10n.tr("up %@", Self.uptime($0)) },
+         battery.map { L10n.tr("health %d%%", Int((min($0.health, 1) * 100).rounded())) + " · " + L10n.tr("%d cycles", $0.cycles) })
+    }
+
     /// "13.7 W", "240 mW", "0 mW".
     static func watts(_ w: Double) -> String {
         if w >= 10 { return String(format: "%.0f W", w) }
@@ -88,6 +103,12 @@ enum MonitorText {
 let monitorItalian: [String: String] = [
     "Monitor": "Monitor",
     "System monitor": "Monitor di sistema",
+    "up %@": "acceso da %@",
+    "health %d%%": "salute %d%%",
+    "%d cycles": "%d cicli",
+    "Battery health: full charge against the design capacity, and charge cycles.":
+        "Salute della batteria: carica completa rispetto alla capacità di progetto, e cicli di carica.",
+    "Time since the Mac started.": "Tempo dall'avvio del Mac.",
     "CPU, memory and the apps using them": "CPU, memoria e le app che le usano",
 
     // Gauges

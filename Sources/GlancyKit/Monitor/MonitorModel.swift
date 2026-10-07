@@ -163,7 +163,10 @@ actor MonitorWorker {
     }
 
     func sample(gpu: Bool, now: UInt64 = DispatchTime.now().uptimeNanoseconds) -> MonitorSnapshot {
-        if tick % Self.slowEvery == 0 { snapshot.disk = source.stats.disk() }
+        if tick % Self.slowEvery == 0 {
+            snapshot.disk = source.stats.disk()
+            snapshot.battery = source.stats.battery()   // IOKit: at the first tick, then every 30
+        }
         tick += 1
         system.sample(source, into: &snapshot, now: now)
         let (processes, apps) = scanner.scan(source, now: now, busyCores: snapshot.busyCores, gpu: gpu)

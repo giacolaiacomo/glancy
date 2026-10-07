@@ -87,8 +87,7 @@ final class FakeStatsSource: StatsSource, @unchecked Sendable {
 private func makeControl(_ actions: FakeSystemActions = FakeSystemActions(), scheduler: FakeScheduler = FakeScheduler(),
                          interval: Duration = .milliseconds(10)) -> (ControlModule, FakeSystemActions, FakeScheduler, ActivityHub) {
     let defaults = UserDefaults(suiteName: "glancy.test.control.\(UUID().uuidString)")!
-    let m = ControlModule(actions: actions, settings: ControlSettings(defaults: defaults), scheduler: scheduler,
-                          stats: StatsSampler(source: FakeStatsSource(), interval: interval))
+    let m = ControlModule(actions: actions, settings: ControlSettings(defaults: defaults), scheduler: scheduler)
     m.closeDelay = .milliseconds(1)
     let hub = ActivityHub()
     m.start(hub: hub)
@@ -316,32 +315,39 @@ private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 10) async -
 // MARK: - Stats
 
 @MainActor
-@Suite("Control: stats", .serialized) struct ControlStatsTests {
-    @Test func samplesOnlyWhileTabVisible() async {
+@Suite("Control: no stats, even rows", .serialized) struct ControlStatsTests {
+    @Test func noSamplerAndNoStatsCardAnyMore() async {
+        // System figures moved to the Monitor tab: Control runs nothing while its tab is open.
         let (m, _, _, _) = makeControl()
-        #expect(!m.stats.isRunning)
+        let before = ResourceCensus.of(m).total   // the wake observer only
+        m.visibilityChanged(.expanded(.control))
+        #expect(ResourceCensus.of(m).total == before, "opening the tab starts nothing")
         m.visibilityChanged(.collapsed)
-        m.visibilityChanged(.expanded(nil))
-        #expect(!m.stats.isRunning, "Home is not the Control tab")
-        m.visibilityChanged(.expanded(.control))
-        #expect(m.stats.isRunning)
-        #expect(await settle { m.stats.samples >= 3 })
-        #expect(m.stats.snapshot.cpu != nil)
-        #expect(m.stats.snapshot.disk == DiskReading(free: 100, total: 400))
-        m.visibilityChanged(.collapsed)
-        #expect(!m.stats.isRunning)
-        let frozen = m.stats.samples
-        try? await Task.sleep(for: .milliseconds(80))
-        #expect(m.stats.samples == frozen, "no sampling while collapsed")
-        m.visibilityChanged(.expanded(.control))
-        #expect(m.stats.isRunning)
-        m.visibilityChanged(.hidden)
-        #expect(!m.stats.isRunning)
-        m.settings.showStats = false
-        m.visibilityChanged(.expanded(.control))
-        #expect(!m.stats.isRunning)
         m.stop()
         #expect(ResourceCensus.of(m).total == 0)
+        // An older save that still has "showStats" loads, and the key is gone from the next save.
+        let d = UserDefaults(suiteName: "glancy.test.control.legacy.\(UUID().uuidString)")!
+        let old = #"{"layout":{"order":[],"hidden":[]},"awakeDefault":"h2","showStats":false,"awakeInWings":true,"screenshotTarget":"clipboard"}"#
+        d.set(Data(old.utf8), forKey: ControlSettings.key)
+        let s = ControlSettings(defaults: d)
+        #expect(s.awakeDefault == .h2)
+        s.awakeInWings = false
+        #expect(String(decoding: d.data(forKey: ControlSettings.key) ?? Data(), as: UTF8.self).contains("showStats") == false)
+    }
+
+    @Test func toolsShareRowsEvenly() {
+        #expect(ControlGrid.perRow(8) == 4)    // the default tools: 4 + 4, no hole
+        #expect(ControlGrid.perRow(10) == 5)
+        #expect(ControlGrid.perRow(7) == 4)
+        #expect(ControlGrid.perRow(5) == 3)
+        #expect(ControlGrid.perRow(4) == 4)
+        #expect(ControlGrid.perRow(13) == 5)   // three rows past twelve
+        #expect(ControlGrid.perRow(0) == 1)
+        for n in 1...16 {
+            let per = ControlGrid.perRow(n), rows = (n + per - 1) / per
+            #expect(rows * per - n < per, "never a whole empty row (\(n))")
+            #expect(rows == 1 || n - (rows - 1) * per >= per / 2, "the last row is at least half full (\(n))")
+        }
     }
 
     @Test func engineMaths() {
@@ -351,23 +357,6 @@ private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 10) async -
                                     to: CPUTicks(user: 1, system: 1, idle: 1, nice: 0)) == nil)
         #expect(StatsEngine.delta(100, 40) == 0, "counter reset is not a huge jump")
 
-        struct Net: StatsSource {
-            let rx: UInt64
-            func cpu() -> CPUTicks? { nil }
-            func memory() -> MemoryReading? { nil }
-            func network() -> NetworkCounters? { NetworkCounters(received: rx, sent: rx / 2) }
-            func disk() -> DiskReading? { nil }
-            func battery() -> BatteryReading? { nil }
-            func bootTime() -> Date? { Date(timeIntervalSinceReferenceDate: 0) }
-        }
-        var e = StatsEngine()
-        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
-        e.sample(Net(rx: 1000), now: t0, slow: true)
-        #expect(e.snapshot.down == nil)
-        e.sample(Net(rx: 3000), now: t0.addingTimeInterval(2), slow: false)
-        #expect(e.snapshot.down == 1000)
-        #expect(e.snapshot.up == 500)
-        #expect(e.snapshot.uptime == 1002)
     }
 
     @Test func liveSourceReadsThisMac() {
@@ -379,11 +368,11 @@ private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 10) async -
         #expect(s.network() != nil)
         #expect(s.bootTime() != nil)
         #expect((s.disk()?.total ?? 0) > 0)
+        // A Mac with a battery reports cycles and a health in a sane range.
+        if let b = s.battery() { #expect(b.cycles >= 0 && b.health > 0.3 && b.health < 1.3) }
     }
 
     @Test func formats() {
-        #expect(ControlFormat.uptime(3 * 86400 + 4 * 3600 + 59) == "3d 4h")
-        #expect(ControlFormat.uptime(5 * 3600 + 12 * 60) == "5h 12m")
         #expect(ControlFormat.rate(1_240_000) == "1.2 MB/s")
         #expect(ControlFormat.rate(86_000) == "86 KB/s")
         #expect(ControlFormat.length(5400) == "1h 30m")
@@ -463,11 +452,9 @@ private func settle(_ cond: @MainActor () -> Bool, timeout: Double = 10) async -
             var l = s.layout
             l.hidden = [.mirror]
             s.layout = l
-            s.showStats = false
             let again = ControlSettings(defaults: d)
             #expect(again.awakeDefault == .h2)
             #expect(again.layout.hidden == [.mirror])
-            #expect(!again.showStats)
         }
     }
 }

@@ -144,19 +144,6 @@ let controlItalian: [String: String] = [
     "Recent": "Recenti",
     "Clear colors": "Cancella i colori",
 
-    // Stats
-    "System": "Sistema",
-    "CPU": "CPU",
-    "Memory": "Memoria",
-    "Disk": "Disco",
-    "Network": "Rete",
-    "Battery": "Batteria",
-    "Uptime": "Acceso da",
-    "up %@": "acceso da %@",
-    "%@ free": "%@ liberi",
-    "%d cycles": "%d cicli",
-    "health %d%%": "salute %d%%",
-
     // Settings
     "Tiles": "Riquadri",
     "%d of %d tiles": "%d di %d riquadri",
@@ -168,8 +155,6 @@ let controlItalian: [String: String] = [
     "The length the tile starts with": "La durata con cui parte il riquadro",
     "Keep awake in the notch": "Tieni sveglio nella notch",
     "A cup in the wings while it's on": "Una tazzina ai lati della notch finché è attivo",
-    "System stats": "Statistiche di sistema",
-    "Read once a second, only while this tab is open": "Lette una volta al secondo, solo mentre la scheda è aperta",
     "Screenshots go to": "Le istantanee vanno",
     "Clipboard": "Appunti",
     "Desktop": "Scrivania",

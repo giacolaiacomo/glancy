@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings → Control: which tiles show and their order, keep-awake default, stats, screenshots.
+/// Settings → Control: which tiles show and their order, keep-awake default, screenshots.
 struct ControlSection: View {
     let module: ControlModule
 
@@ -13,9 +13,6 @@ struct ControlSection: View {
             SettingsRow(ControlText.t("Keep awake in the notch"), note: ControlText.t("A cup in the wings while it's on")) {
                 NotchSwitch(isOn: Binding(get: { settings.awakeInWings },
                                           set: { settings.awakeInWings = $0; module.settingsChanged() }))
-            }
-            SettingsRow(ControlText.t("System stats"), note: ControlText.t("Read once a second, only while this tab is open")) {
-                NotchSwitch(isOn: $settings.showStats)
             }
             SettingsRow(ControlText.t("Screenshots go to")) {
                 NotchSegments(selection: $settings.screenshotTarget,
@@ -31,7 +28,7 @@ struct ControlSection: View {
             HStack {
                 SettingsNote(ControlText.t("Dark mode asks for Automation (System Events); Empty Trash for Automation (Finder); the mirror for the camera, on first use."))
                 Spacer()
-                if settings.layout != ControlLayout() || settings.awakeDefault != .h1 || !settings.showStats
+                if settings.layout != ControlLayout() || settings.awakeDefault != .h1
                     || !settings.awakeInWings || settings.screenshotTarget != .clipboard {
                     NotchTextButton(tr("Reset")) { settings.reset(); module.settingsChanged() }
                 }

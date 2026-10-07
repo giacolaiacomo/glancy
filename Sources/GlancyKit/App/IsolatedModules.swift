@@ -71,7 +71,7 @@ enum IsolatedModules {
         notes.micControl = hud
         power.sound = hud
         let control = ControlModule(actions: LiveSystemActions(), settings: ControlSettings(defaults: defaults("control")),
-                                    scheduler: TaskWakeScheduler(), stats: StatsSampler())
+                                    scheduler: TaskWakeScheduler())
         let monitor = MonitorModule(source: LiveMonitorSource(), actions: LiveMonitorActions(),
                                     settings: MonitorSettings(defaults: defaults("monitor")))
         var modules: [any GlancyModule] = [agents, calendar, media, timer, shelf, clipboard, windows, hud, power, notifications,

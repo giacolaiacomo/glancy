@@ -58,7 +58,6 @@ public final class ControlModel {
 public final class ControlSettings {
     public var layout: ControlLayout { didSet { save() } }
     public var awakeDefault: AwakeDuration { didSet { save() } }
-    public var showStats: Bool { didSet { save() } }
     public var awakeInWings: Bool { didSet { save() } }
     public var screenshotTarget: ScreenshotTargetSetting { didSet { save() } }
 
@@ -72,7 +71,6 @@ public final class ControlSettings {
     private struct Stored: Codable {
         var layout: ControlLayout
         var awakeDefault: AwakeDuration
-        var showStats: Bool
         var awakeInWings: Bool
         var screenshotTarget: ScreenshotTargetSetting
     }
@@ -84,7 +82,6 @@ public final class ControlSettings {
         layout.normalize()
         self.layout = layout
         awakeDefault = s?.awakeDefault ?? .h1
-        showStats = s?.showStats ?? true
         awakeInWings = s?.awakeInWings ?? true
         screenshotTarget = s?.screenshotTarget ?? .clipboard
         loading = false
@@ -92,7 +89,7 @@ public final class ControlSettings {
 
     private func save() {
         guard !loading else { return }
-        let s = Stored(layout: layout, awakeDefault: awakeDefault, showStats: showStats, awakeInWings: awakeInWings,
+        let s = Stored(layout: layout, awakeDefault: awakeDefault, awakeInWings: awakeInWings,
                        screenshotTarget: screenshotTarget)
         if let d = try? JSONEncoder().encode(s) { defaults.set(d, forKey: Self.key) }
     }
@@ -108,7 +105,6 @@ public final class ControlSettings {
     public func reset() {
         layout = ControlLayout()
         awakeDefault = .h1
-        showStats = true
         awakeInWings = true
         screenshotTarget = .clipboard
     }

@@ -120,7 +120,7 @@ private func ownersReadings(now: Date) -> (UsageReading, UsageReading) {
     #expect(LimitsLayout.homeItems(claude: s.claude, codex: s.codex, now: now, limit: 2).count == 2)
 }
 
-@Test func compactRowNamesTheToolAWaitingSessionAsksFor() {
+@MainActor @Test func compactRowNamesTheToolAWaitingSessionAsksFor() {
     var store = AgentSessionStore()
     let now = Date()
     store.apply(AgentEvent(ts: now.addingTimeInterval(-30), kind: .userPromptSubmit, sessionID: "s", cwd: "/p/api", prompt: "Run it"))

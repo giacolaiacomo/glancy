@@ -139,5 +139,5 @@ fi
   printf '%-26s %8s %9s %9s %8s %9s %9s\n' "state" "cpu %" "notch/s" "pill/s" "cpu %" "notch/s" "pill/s"
   printf '%-26s %28s %28s\n' "" "closed (never opened)" "after open+close on each"
   for r in "${ROWS[@]+"${ROWS[@]}"}"; do echo "$r"; done
-  [[ -n "$MON" ]] && echo "monitor tab open ${MONITOR}s ($MONITOR_STATE): ${MON}% CPU"
+  if [[ -n "$MON" ]]; then echo "monitor tab open ${MONITOR}s ($MONITOR_STATE): ${MON}% CPU"; fi
 } | tee -a "$OUT/table.txt"

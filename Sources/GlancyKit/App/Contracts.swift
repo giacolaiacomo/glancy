@@ -30,6 +30,9 @@ public protocol GlancyModule: AnyObject {
     var tab: PanelTab? { get }
     /// A compact card for the Home tab, or nil when the module has nothing worth a glance.
     func homeCard() -> AnyView?
+    /// Every card this module offers Home now (Settings → Home picks among them). By default its
+    /// `homeCard()`, as the module's own widget.
+    func homeWidgets() -> [HomeWidgetCard]
     /// Fixed actions this module offers to the command bar (filtered there by title/keywords).
     /// Built on demand when the bar opens; never cached across opens.
     func commands() -> [GlancyCommand]
@@ -42,6 +45,10 @@ public extension GlancyModule {
     func visibilityChanged(_ visibility: SurfaceVisibility) {}
     var tab: PanelTab? { nil }
     func homeCard() -> AnyView? { nil }
+    func homeWidgets() -> [HomeWidgetCard] {
+        guard let w = HomeWidget(module: id), let card = homeCard() else { return [] }
+        return [HomeWidgetCard(w, card)]
+    }
     func commands() -> [GlancyCommand] { [] }
     func results(for query: String) -> [GlancyCommand] { [] }
 }

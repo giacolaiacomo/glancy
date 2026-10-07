@@ -193,6 +193,95 @@ struct LimitCell: View {
     }
 }
 
+// MARK: Home
+
+/// Home's plan limits: the most relevant readings (Claude's session and week, then the fullest
+/// other one) in a row, each with its countdown; a click opens the Agents tab on the Limits page.
+/// The caption line (plan, age) only when the card has the height; three readings only when the
+/// width lets each one read whole.
+struct LimitsHomeCard: View {
+    let limits: UsageLimitsStore
+    let open: () -> Void
+
+    var body: some View {
+        let now = limits.clock
+        let claude = limits.claudeEnabled ? limits.claude : nil, codex = limits.codexEnabled ? limits.codex : nil
+        let items = LimitsLayout.homeItems(claude: claude, codex: codex, now: now)
+        let lead = items.first.flatMap { $0.service == .claude ? claude : codex }
+        Button(action: open) {
+            ViewThatFits(in: .vertical) {
+                VStack(alignment: .leading, spacing: 7.ui) {
+                    caption(lead, now: now)
+                    readings(items, now: now, ages: false)
+                }
+                readings(items, now: now, ages: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(LimitsText.t("Plan limits: open for the details and where they went."))
+    }
+
+    private func caption(_ lead: UsageReading?, now: Date) -> some View {
+        HStack(spacing: 6.ui) {
+            Text(LimitsText.t("Limits"))
+                .font(Theme.font(.xs, .semibold))
+                .foregroundStyle(Theme.tertiary)
+            if let lead, let plan = lead.plan {
+                Text(plan)
+                    .font(Theme.font(.xs, .semibold))
+                    .foregroundStyle(lead.service.tint)
+                    .padding(.horizontal, 5.ui)
+                    .frame(height: 14.ui)
+                    .background(Capsule().fill(lead.service.tint.opacity(0.16)))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6.ui)
+            if let lead, lead.isStale(at: now) {
+                Text(LimitsText.ago(lead.updated, now: now))
+                    .font(Theme.font(.xs))
+                    .foregroundStyle(Theme.waiting)
+                    .lineLimit(1)
+            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8.ui, weight: .bold))
+                .foregroundStyle(Theme.tertiary)
+        }
+        .frame(height: 16.ui)
+    }
+
+    /// Three readings when each has ~120 pt, else the first two.
+    private func readings(_ items: [LimitsLayout.HomeItem], now: Date, ages: Bool) -> some View {
+        ViewThatFits(in: .horizontal) {
+            row(items, now: now, ages: ages)
+            row(Array(items.prefix(2)), now: now, ages: ages)
+        }
+    }
+
+    private func row(_ items: [LimitsLayout.HomeItem], now: Date, ages: Bool) -> some View {
+        HStack(alignment: .top, spacing: 10.ui) {
+            ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                let first = i == 0 || items[i - 1].service != item.service
+                if first {
+                    Image(systemName: item.service.symbol)
+                        .font(.system(size: 9.ui, weight: .bold))
+                        .foregroundStyle(item.service.tint)
+                        .frame(width: 12.ui, height: 13.ui)
+                        .padding(.trailing, -4.ui)
+                        .help(item.service.name)
+                }
+                // Without the caption, an old reading says its age on its first cell.
+                let reading = item.service == .claude ? limits.claude : limits.codex
+                LimitCell(limit: item.limit, service: item.service, now: now, showsReset: item.showsReset, percent: item.percent,
+                          ago: ages && first && item.stale ? reading.map { LimitsText.ago($0.updated, now: now) } : nil)
+                    .frame(minWidth: 112.ui)
+                    .opacity(item.stale ? 0.5 : 1)
+            }
+        }
+    }
+}
+
 // MARK: Pages
 
 struct LimitsPage: View {

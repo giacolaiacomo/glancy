@@ -5,6 +5,7 @@ import SwiftUI
 public enum SettingsRoute: Hashable, Sendable {
     case index
     case general
+    case home
     case modules
     case permissions
     case module(ModuleID)

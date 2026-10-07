@@ -4,6 +4,31 @@
 // Batteria, HUD, Notifiche; "notch" stays "notch".
 
 let settingsItalian: [String: String] = [
+    // Home (Settings → Home and the empty page)
+    "Home is empty": "La Home è vuota",
+    "No widget is turned on for Home.": "Nessun widget è acceso per la Home.",
+    "Choose widgets": "Scegli i widget",
+    "Move up": "Sposta su",
+    "Move down": "Sposta giù",
+    "%@ is off in Modules": "%@ è spento in Moduli",
+    "%d widgets on": "%d widget accesi",
+    "A card shows only when it has something; if they don't all fit, the most urgent go first.":
+        "Una scheda compare solo quando ha qualcosa; se non entrano tutte, passano prima le più urgenti.",
+    "Limits": "Limiti",
+    "Sessions": "Sessioni",
+    "Battery": "Batteria",
+    "Next meeting": "Riunione",
+    "Pinned note": "Nota fissata",
+    "Keep awake": "Tieni sveglio",
+    "While a session is live": "Mentre una sessione è attiva",
+    "Claude Code and Codex usage, with resets": "Utilizzo di Claude Code e Codex, con gli azzeramenti",
+    "When a meeting is coming up": "Quando c'è una riunione in arrivo",
+    "While something is playing": "Mentre qualcosa è in riproduzione",
+    "While a timer runs": "Mentre un timer è in corso",
+    "When a note is pinned": "Quando una nota è fissata",
+    "When files are on the shelf": "Quando ci sono file sul ripiano",
+    "While Keep awake is on": "Mentre Tieni sveglio è acceso",
+    "Charging, low battery, headphones": "In carica, batteria scarica, cuffie",
     // Index
     "%d of %d on": "%d di %d attivi",
     "%d to allow": "%d da consentire",

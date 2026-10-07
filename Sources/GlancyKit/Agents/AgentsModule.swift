@@ -178,9 +178,23 @@ public final class AgentsModule: GlancyModule {
     }
 
     public var tab: PanelTab? {
-        PanelTab(module: .agents, symbol: Self.symbol, title: LocalizedStringKey(AgentsText.t("Agents"))) { [model, limits, tabPage] in
-            AnyView(AgentsTab(model: model, limits: limits, page: tabPage))
+        PanelTab(module: .agents, symbol: Self.symbol, title: LocalizedStringKey(AgentsText.t("Agents"))) { [weak self, model, limits] in
+            AnyView(AgentsTab(model: model, limits: limits, page: self?.takeTabPage() ?? .sessions))
         }
+    }
+
+    /// The page asked for by Home's limits card, used once by the next tab built.
+    private var pendingPage: AgentsTabPage?
+
+    private func takeTabPage() -> AgentsTabPage {
+        defer { pendingPage = nil }
+        return pendingPage ?? tabPage
+    }
+
+    /// Opens the tab on the Limits page (Home's card).
+    func openLimitsPage() {
+        pendingPage = .limits
+        model.hub?.requestOpen(.agents)
     }
 
     /// The tab's glyph: agents of every kind, not only terminals (SF Symbols 1, macOS 14 ok).
@@ -188,6 +202,22 @@ public final class AgentsModule: GlancyModule {
 
     public func homeCard() -> AnyView? {
         model.highlights(limit: 1).isEmpty ? nil : AnyView(AgentsHomeCard(model: model))
+    }
+
+    /// The sessions card and the plan limits card (Settings → Home orders and hides each).
+    public func homeWidgets() -> [HomeWidgetCard] {
+        var out: [HomeWidgetCard] = []
+        if let card = homeCard() { out.append(HomeWidgetCard(.agents, card)) }
+        let now = limits.clock
+        let items = LimitsLayout.homeItems(claude: limits.claudeEnabled ? limits.claude : nil,
+                                           codex: limits.codexEnabled ? limits.codex : nil, now: now)
+        if !items.isEmpty {
+            // Nearly used up or on pace to run out: it goes before the calm cards.
+            let hot = items.contains { !$0.stale && ($0.percent >= 90 || $0.limit.runsOutAt(now: now) != nil) }
+            out.append(HomeWidgetCard(.limits, AnyView(LimitsHomeCard(limits: limits) { [weak self] in self?.openLimitsPage() }),
+                                      priority: hot ? 70 : 0))
+        }
+        return out
     }
 }
 

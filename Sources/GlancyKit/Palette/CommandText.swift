@@ -38,6 +38,7 @@ enum CommandText {
         "offline": "offline",
         "Glancy Settings": "Impostazioni di Glancy",
         "Command Bar Settings": "Impostazioni della barra dei comandi",
+        "Home Settings": "Impostazioni della Home",
         "Quit Glancy": "Esci da Glancy",
         "Lock Screen": "Blocca schermo",
         "Sleep": "Stop",

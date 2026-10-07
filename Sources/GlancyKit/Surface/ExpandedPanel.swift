@@ -174,39 +174,42 @@ private struct TabIcon: View {
     }
 }
 
-/// Home: glance rows stacked on the left (meeting, sessions, timer…), the media tile on the right.
-/// Rows get the width they need to read; nothing is squeezed into thirds.
+/// Home: the widgets chosen in Settings → Home that have something to show, in the user's order
+/// (the most urgent make the cut first). One card takes the page, two stack, three and four go in
+/// two columns; the media tile stays on the right. Nothing is squeezed into thirds.
 struct HomePage: View {
     let context: SurfaceContext
 
     var body: some View {
-        let cards = context.enabledModules.compactMap { m in m.homeCard().map { (m.id, $0) } }
-        // Two glance rows on the left; the right tile is media, or else the third card.
-        // Most urgent first (live priority: waiting agent 90, meeting now 85, timer ending 80…),
-        // then the panel's usual order.
-        let others = cards.filter { $0.0 != .media }.enumerated().sorted { a, b in
-            let pa = context.hub.priority(of: a.element.0), pb = context.hub.priority(of: b.element.0)
-            return pa != pb ? pa > pb : a.offset < b.offset
-        }.map(\.element)
-        let rows = Array(others.prefix(2))
-        let tile = cards.first { $0.0 == .media } ?? others.dropFirst(2).first
-        if cards.isEmpty {
-            EmptyHome()
+        let settings = context.settings
+        let cards = HomePage.available(context)
+        let shown = HomeLayout.pick(cards.map(\.widget), order: settings.homeOrder) { w in
+            cards.first { $0.widget == w }?.priority ?? context.hub.priority(of: w.module)
+        }
+        let arrangement = HomeLayout.arrange(shown)
+        if arrangement.columns.isEmpty {
+            EmptyHome(nothingChosen: !HomeWidget.allCases.contains { settings.isShownOnHome($0) && settings.isEnabled($0.module) }) {
+                SurfaceRoute.openSettings?(.home)
+            }
         } else {
             HStack(alignment: .top, spacing: 10.ui) {
-                if !rows.isEmpty {
+                ForEach(Array(arrangement.columns.enumerated()), id: \.offset) { i, column in
+                    let tile = arrangement.tileLast && i == arrangement.columns.count - 1
                     VStack(spacing: 8.ui) {
-                        ForEach(rows, id: \.0) { card in HomeCard { card.1 } }
+                        ForEach(column, id: \.self) { w in
+                            if let card = cards.first(where: { $0.widget == w }) { HomeCard { card.view } }
+                        }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                }
-                if let tile {
-                    HomeCard { tile.1 }
-                        .frame(width: rows.isEmpty ? nil : 196.ui)
-                        .frame(maxHeight: .infinity)
+                    .frame(width: tile ? 196.ui : nil)
+                    .frame(maxWidth: tile ? nil : .infinity, maxHeight: .infinity, alignment: .top)
                 }
             }
         }
+    }
+
+    /// The cards of the widgets turned on in Settings → Home whose module is on and has something.
+    static func available(_ context: SurfaceContext) -> [HomeWidgetCard] {
+        context.enabledModules.flatMap { $0.homeWidgets() }.filter { context.settings.isShownOnHome($0.widget) }
     }
 }
 
@@ -222,19 +225,27 @@ struct HomeCard<Content: View>: View {
 }
 
 private struct EmptyHome: View {
+    /// Every Home widget is turned off (or its module is): point to Settings → Home.
+    let nothingChosen: Bool
+    let openSettings: () -> Void
+
     var body: some View {
         VStack(spacing: 8.ui) {
             GlancyGlyph()
                 .fill(Theme.tertiary)
                 .frame(width: 22.ui, height: 11.ui)
-            Text(tr("All quiet"))
+            Text(tr(nothingChosen ? "Home is empty" : "All quiet"))
                 .font(Theme.font(.l, .semibold))
                 .foregroundStyle(Theme.secondary)
-            Text(tr("Your next meeting, live sessions and what is playing will show up here."))
+            Text(tr(nothingChosen ? "No widget is turned on for Home." : "Your next meeting, live sessions and what is playing will show up here."))
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.tertiary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 280.ui)
+            if nothingChosen {
+                NotchTextButton(tr("Choose widgets"), action: openSettings)
+                    .padding(.top, 2.ui)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, 6.ui)

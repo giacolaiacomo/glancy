@@ -16,6 +16,12 @@ enum SettingsCatalog {
         return "\(open) · \(lang) · \(tr(GeneralSection.sizeName(s.size)))"
     }
 
+    /// Settings → Home's tile: how many widgets are on.
+    @MainActor static func homeSummary(_ s: AppSettings) -> String {
+        let on = HomeWidget.allCases.filter { s.isShownOnHome($0) && s.isEnabled($0.module) }.count
+        return L10n.tr("%d widgets on", on)
+    }
+
     /// One line for a module's tile.
     static func summary(_ id: ModuleID, _ context: SurfaceContext) -> String {
         switch id {

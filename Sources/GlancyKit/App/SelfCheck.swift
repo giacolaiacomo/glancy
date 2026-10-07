@@ -51,7 +51,7 @@ public enum SelfCheck {
                 m.visibilityChanged(.expanded(tab.module))
                 m.visibilityChanged(.collapsed)
             }
-            _ = m.homeCard()
+            _ = m.homeWidgets()
         }
         let agents = set.modules.compactMap { $0 as? AgentsModule }.first
         let sawSessions = await waitUntil(3) { (agents?.model.sessions.count ?? 0) >= 2 }

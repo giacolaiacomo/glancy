@@ -254,7 +254,7 @@ struct SettingsPageTests {
             let s = try String(contentsOf: f, encoding: .utf8)
             for m in pattern.matches(in: s, range: NSRange(s.startIndex..., in: s)) {
                 let key = String(s[Range(m.range(at: 1), in: s)!])
-                if L10n.tr(key) == key, !["Bluetooth", "Volume", "%d / %d / %d min", "%d min", "HUD", "Timer"].contains(key) { missing.append(key) }
+                if L10n.tr(key) == key, !["Bluetooth", "Volume", "%d / %d / %d min", "%d min", "HUD", "Timer", "Home"].contains(key) { missing.append(key) }
             }
         }
         #expect(missing.isEmpty, "untranslated: \(missing)")

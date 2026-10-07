@@ -63,7 +63,7 @@ public final class UsageLimitsStore {
     public private(set) var codex: UsageReading?
     public private(set) var claudeStatus = ClaudeUsageStatus.unknown
     public private(set) var fetching = false
-    /// The clock the countdowns read: moved once a minute, only while the Agents tab is on screen.
+    /// The clock the countdowns read: moved once a minute, only while the Agents tab or Home is on screen.
     public private(set) var clock = Date.now
     public private(set) var breakdown: UsageBreakdown?
     public private(set) var readingLogs = false
@@ -194,10 +194,11 @@ public final class UsageLimitsStore {
     func visibilityChanged(_ v: SurfaceVisibility) {
         visibility = v
         if v == .hidden, fetching { fetcher?.cancel() }   // going to sleep: let the child go
-        if v == .expanded(.agents) {
+        if ticksClock {
             clock = now()
             tick()
-            refresh(.panelOpened)
+            // Only the Agents tab runs /usage on opening; Home shows the last reading with its age.
+            if v == .expanded(.agents) { refresh(.panelOpened) }
         } else {
             clockTask?.cancel(); clockTask = nil
             if breakdown != nil || readingLogs {
@@ -300,8 +301,13 @@ public final class UsageLimitsStore {
 
     // MARK: Clock (visible only)
 
-    /// Moves `clock` at each minute boundary while the Agents tab is on screen. One wait at a time;
-    /// cancelled the moment the tab goes.
+    /// The countdowns are on screen: the Agents tab, or Home with a reading to show.
+    var ticksClock: Bool {
+        visibility == .expanded(.agents) || (visibility == .expanded(nil) && !readings.isEmpty)
+    }
+
+    /// Moves `clock` at each minute boundary while the Agents tab (or Home's card) is on screen. One
+    /// wait at a time; cancelled the moment the page goes.
     private func tick() {
         clockTask?.cancel()
         let t = now()
@@ -309,7 +315,7 @@ public final class UsageLimitsStore {
         let wait = max(1, next - t.timeIntervalSinceReferenceDate)
         clockTask = Task { [weak self] in
             try? await Delay.sleep(for: .seconds(wait + 0.05))
-            guard !Task.isCancelled, let self, self.visibility == .expanded(.agents) else { return }
+            guard !Task.isCancelled, let self, self.ticksClock else { return }
             self.clock = self.now()
             self.updateWing()
             self.tick()

@@ -97,6 +97,34 @@ enum Render {
         }
         shot("05-expanded-home", live) { $0.expand(tab: nil) }
         shot("05-expanded-home-empty", context(false, [])) { $0.expand(tab: nil) }
+        // Home, configured (Settings → Home): 1, 2, 3 and 4 widgets, the media tile beside two,
+        // every widget off; at the normal size and the largest. Early: the demo track and the
+        // sessions are fresh only for the first couple of minutes.
+        do {
+            let all = HomeWidget.allCases
+            let sets: [(String, [HomeWidget])] = [("1", [.agents]), ("2", [.agents, .limits]), ("3", [.agents, .limits, .calendar]),
+                                                  ("4", [.agents, .limits, .calendar, .timer, .notes, .shelf, .control, .power]),
+                                                  ("media", [.agents, .limits, .media]), ("none", [])]
+            for size in [UISize.normal, .extraLarge] {
+                UIScale.shared.set(requested: size, effective: size)
+                settings.size = size
+                for (name, on) in sets {
+                    for w in all { settings.setShownOnHome(w, on.contains(w)) }
+                    shot("16-home-\(size.rawValue)-\(name)", live, geometry: builtInGeometry(uiScale: size.factor),
+                         crop: size == .normal ? Render.standardCrop : CGSize(width: 1080, height: 340)) { $0.expand(tab: nil) }
+                }
+                settings.resetHome()
+                settings.moveOnHome(.timer, by: -2)
+                settings.setShownOnHome(.power, false)
+                settings.navigation.go(.home, animated: false)
+                shot("16-home-\(size.rawValue)-settings", live, geometry: builtInGeometry(uiScale: size.factor),
+                     crop: size == .normal ? Render.standardCrop : CGSize(width: 1080, height: 340)) { $0.expand(tab: nil); $0.toggleSettings() }
+                settings.navigation.go(.index, animated: false)
+                settings.resetHome()
+            }
+            UIScale.shared.set(requested: .normal, effective: .normal)
+            settings.size = .normal
+        }
         for (i, tab) in live.stripTabs.enumerated() {
             shot("06-tab-\(i + 1)-\(tab.module.rawValue)", live) { $0.expand(tab: tab.module) }
         }
@@ -351,6 +379,11 @@ enum Render {
                 case .column, .columnNoSessions, .limitsPage, .whereItWent:
                     agents.visibilityChanged(.expanded(.agents))
                     shot("\(prefix)-\(state.rawValue)", ctx) { $0.expand(tab: .agents) }
+                    if state == .column {
+                        // Home with the sessions and the limits card.
+                        agents.visibilityChanged(.expanded(nil))
+                        shot("\(prefix)-home", ctx) { $0.expand(tab: nil) }
+                    }
                 case .alertPeek, .usedUpWing:
                     agents.visibilityChanged(.collapsed)
                     shot("\(prefix)-\(state.rawValue)", ctx)
@@ -365,7 +398,7 @@ enum Render {
                                                          .fullDiskAccess: .denied]
         settings.permissions.probe = .fixed(fixed)
         settings.permissions.apply(fixed)
-        let routes: [(String, SettingsRoute)] = [("index", .index), ("general", .general), ("modules", .modules),
+        let routes: [(String, SettingsRoute)] = [("index", .index), ("general", .general), ("home", .home), ("modules", .modules),
                                                  ("permissions", .permissions)]
             + live.modules.map(\.id).filter { $0 != .notifications }.map { ("module-\($0.rawValue)", .module($0)) }
         live.updates = AppUpdates.sample(available: nil)

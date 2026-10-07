@@ -22,6 +22,14 @@ public final class AppSettings {
     public var disabledModules: Set<ModuleID> {
         didSet { save(disabledModules.map(\.rawValue).sorted(), Key.disabledModules) }
     }
+    /// Settings → Home: the widgets in the user's order (every widget once).
+    public private(set) var homeOrder: [HomeWidget] {
+        didSet { save(homeOrder.map(\.rawValue), Key.homeOrder) }
+    }
+    /// Settings → Home: the widgets turned off.
+    public private(set) var homeHidden: Set<HomeWidget> {
+        didSet { save(homeHidden.map(\.rawValue).sorted(), Key.homeHidden) }
+    }
 
     /// The settings page's place (index or a section). Not persisted.
     @ObservationIgnored public let navigation = SettingsNavigation()
@@ -39,6 +47,8 @@ public final class AppSettings {
         static let disabledModules = "disabledModules"
         static let optedIn = "optedInModules"
         static let onboarded = "onboardingShown"
+        static let homeOrder = "homeWidgetOrder"
+        static let homeHidden = "homeWidgetsHidden"
     }
 
     /// Opt-in modules (a large permission): off until the user turns them on, existing settings included.
@@ -55,7 +65,31 @@ public final class AppSettings {
         let off = defaults.stringArray(forKey: Key.disabledModules) ?? []
         let optedIn = Set((defaults.stringArray(forKey: Key.optedIn) ?? []).compactMap(ModuleID.init))
         disabledModules = Set(off.compactMap(ModuleID.init)).union(Self.defaultDisabled.subtracting(optedIn))
+        homeOrder = HomeLayout.normalized((defaults.stringArray(forKey: Key.homeOrder) ?? []).compactMap(HomeWidget.init))
+        homeHidden = Set((defaults.stringArray(forKey: Key.homeHidden) ?? []).compactMap(HomeWidget.init))
         L10n.apply(language)
+    }
+
+    // MARK: Home widgets
+
+    public func isShownOnHome(_ w: HomeWidget) -> Bool { !homeHidden.contains(w) }
+
+    public func setShownOnHome(_ w: HomeWidget, _ on: Bool) {
+        if on { homeHidden.remove(w) } else { homeHidden.insert(w) }
+    }
+
+    /// Moves a widget one place up (-1) or down (+1) in Home's order.
+    public func moveOnHome(_ w: HomeWidget, by step: Int) {
+        guard let i = homeOrder.firstIndex(of: w) else { return }
+        let j = i + step
+        guard homeOrder.indices.contains(j) else { return }
+        homeOrder.swapAt(i, j)
+    }
+
+    /// Back to today's Home: every widget on, the default order.
+    public func resetHome() {
+        homeOrder = HomeWidget.defaultOrder
+        homeHidden = []
     }
 
     public func isEnabled(_ module: ModuleID) -> Bool {

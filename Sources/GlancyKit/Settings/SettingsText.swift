@@ -4,6 +4,40 @@
 // Batteria, HUD, Notifiche; "notch" stays "notch".
 
 let settingsItalian: [String: String] = [
+    // The window: menu, sidebar, General
+    "Settings…": "Impostazioni…",
+    "Search": "Cerca",
+    "No results": "Nessun risultato",
+    "Text, symbols and the panel, on every display": "Testo, simboli e pannello, su ogni schermo",
+    "Language and startup": "Lingua e avvio",
+    "Glancy starts with your Mac": "Glancy si avvia con il Mac",
+    "Widgets": "Widget",
+    "%@ is off": "%@ è spento",
+    "Open %@ settings": "Apri le impostazioni di %@",
+    // Search words for module pages (their own tables load with the module)
+    "Drop targets": "Destinazioni di rilascio",
+    "Finished downloads": "Download completati",
+    "Quick note": "Nota rapida",
+    "Voice notes": "Note vocali",
+
+    // About
+    "About": "Info",
+    "Updates": "Aggiornamenti",
+    "Version": "Versione",
+    "Version %@": "Versione %@",
+    "Your MacBook's notch, put to work.": "La notch del tuo MacBook, al lavoro.",
+    "Links": "Link",
+    "Source code": "Codice sorgente",
+    "Release notes": "Note di rilascio",
+    "Report an issue": "Segnala un problema",
+    "Crash reports": "Arresti anomali",
+    "When Glancy quits unexpectedly it keeps a short summary on this Mac. Nothing is sent anywhere.":
+        "Quando Glancy si chiude inaspettatamente ne tiene un breve riepilogo su questo Mac. Non viene inviato nulla.",
+    "Looking…": "Cerco…",
+    "No crashes recorded": "Nessun arresto anomalo registrato",
+    "%d more": "Altri %d",
+    "Open Folder": "Apri cartella",
+
     // Home (Settings → Home and the empty page)
     "Home is empty": "La Home è vuota",
     "No widget is turned on for Home.": "Nessun widget è acceso per la Home.",
@@ -70,7 +104,11 @@ let settingsItalian: [String: String] = [
 
     // Permissions
     "Welcome to Glancy": "Benvenuto in Glancy",
-    "Allow only what you need.": "Consenti solo ciò che ti serve.",
+    "Allow only what you need. Every module works without its permission; it just does less.":
+        "Consenti solo ciò che ti serve. Ogni modulo funziona anche senza il suo permesso, solo fa meno cose.",
+    "Nothing to allow: no module needs a permission.": "Niente da consentire: nessun modulo chiede permessi.",
+    "Not allowed": "Non consentito",
+    "Reading your notifications needs Full Disk Access": "Per leggere le notifiche serve l'Accesso completo al disco",
     "Done": "Fine",
     "Accessibility": "Accessibilità",
     "Bluetooth": "Bluetooth",

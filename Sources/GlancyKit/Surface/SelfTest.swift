@@ -28,7 +28,10 @@ extension SurfaceManager {
             self.open(s); await pause(0.12); log("open +120ms")
             await pause(0.8); log("open settled")
             s.model.select(tab: self.contextForTest.tabs.first?.module); await pause(0.4); log("first tab")
-            s.model.toggleSettings(); await pause(0.4); log("settings")
+            // Settings: the window, built off-screen and released (leaks.sh looks at what it leaves).
+            let settings = SettingsWindowController.show(.general, context: self.contextForTest, mode: .offscreen)
+            await pause(0.4); log("settings")
+            settings.close()
             self.close(s); await pause(0.12); log("close +120ms")
             await pause(0.9); log("close settled")
             s.model.setHovering(false); await pause(0.8); log("leave settled")
@@ -42,12 +45,14 @@ extension SurfaceManager {
         }
     }
 
-    /// `--tour [home|tabs|all|<module>] [rounds]` (scripts/footprint.sh --tour): after `delay`
-    /// seconds, opens the panel on Home, then (tabs, all) every tab, then (all) every settings page,
-    /// and closes it, `rounds` times — the views a user builds by hand, so the footprint after
-    /// collapse can be compared with idle. `<module>` opens that tab and stays (inspection). Logs
-    /// the footprint and the malloc bytes in use after each step; a panel closed by the pointer
-    /// mid-way is reported as "interrupted".
+    /// `--tour [home|tabs|all|settings|<module>] [rounds]` (scripts/footprint.sh --tour,
+    /// scripts/ram-lab.sh): after `delay` seconds, opens the panel on Home, then (tabs, all) every
+    /// tab, and closes it; then (all, settings) opens the Settings window, walks every page and
+    /// closes it; `rounds` times — the views a user builds by hand, so the footprint after closing
+    /// can be compared with idle. `<module>` opens that tab and stays (inspection). Logs the
+    /// footprint and the malloc bytes in use after each step; a panel closed by the pointer mid-way
+    /// is reported as "interrupted". The window is off every display in the lab, never drawn in the
+    /// app (it would take the user's focus).
     func runTour(after delay: Double, scope: String, rounds: Int = 1) {
         Task { @MainActor in
             try? await Delay.sleep(for: .seconds(delay))
@@ -74,27 +79,28 @@ extension SurfaceManager {
             }
             for round in 1...max(1, rounds) {
                 if round > 1 { await pause(3) }
-                self.open(s); await pause(); step("home")
-                if scope != "home" {
-                    for tab in self.contextForTest.tabs {
-                        s.model.select(tab: tab.module); await pause(); step("tab \(tab.module.rawValue)")
+                if scope != "settings" {
+                    self.open(s); await pause(); step("home")
+                    if scope != "home" {
+                        for tab in self.contextForTest.tabs {
+                            s.model.select(tab: tab.module); await pause(); step("tab \(tab.module.rawValue)")
+                        }
+                        s.model.select(tab: nil); await pause()
                     }
-                    s.model.select(tab: nil); await pause()
+                    self.close(s)
+                    await pause(1); log("closed \(round)")
                 }
-                if scope == "all" {
-                    let nav = self.contextForTest.settings.navigation
-                    s.model.toggleSettings()
-                    var routes: [SettingsRoute] = [.index, .general, .modules, .permissions]
-                    routes += self.contextForTest.modules.map { .module($0.id) }
-                    for r in routes {
-                        nav.go(r, animated: false); await pause(0.5)
-                        if case let .module(id) = r { step("settings \(id.rawValue)") } else { step("settings \(r)") }
+                if scope == "all" || scope == "settings" {
+                    let context = self.contextForTest
+                    let window = SettingsWindowController.show(.general, context: context, mode: Lab.isActive ? .lab : .offscreen)
+                    await pause(0.8); log("settings window")
+                    for r in SettingsSidebar.routes(registered: Set(context.modules.map(\.id))) {
+                        context.settings.navigation.go(r); await pause(0.5)
+                        if case let .module(id) = r { log("settings \(id.rawValue)") } else { log("settings \(r)") }
                     }
-                    nav.go(.index, animated: false)
-                    s.model.toggleSettings()
+                    window.close()
+                    await pause(1); log("settings closed \(round)")
                 }
-                self.close(s)
-                await pause(1); log("closed \(round)")
             }
             await pause(5); log("closed +5s")
             print(interrupted ? "tour: done (interrupted)" : "tour: done")

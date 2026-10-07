@@ -322,16 +322,16 @@ struct WorkspacesSettings: View {
     var body: some View {
         let _ = tick
         let list = module.workspaces.workspaces
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsGroupTitle(WindowsText.t("Workspaces"))
-                .padding(.top, 8.ui)
+                .padding(.top, 8)
             SettingsNote(list.isEmpty
                          ? WindowsText.t("None saved yet: use Workspaces on the Windows tab, or “Save workspace” in the command bar.")
                          : WindowsText.t("Restoring opens apps that are not running; minimised and hidden windows are left alone. Undo puts everything back."))
             ForEach(list) { w in
                 let id = "windows.workspace.\(w.id.uuidString)"
-                SettingsRow(w.name, note: WorkspaceCardText.detail(w), minHeight: 26.ui) {
-                    HStack(spacing: 6.ui) {
+                SettingsRow(w.name, note: WorkspaceCardText.detail(w), minHeight: 26) {
+                    HStack(spacing: 8) {
                         HotkeyField(id: id, hotkey: w.hotkey, conflict: conflict(id, w.hotkey)) { new in
                             module.workspaces.update(w.id) { $0.hotkey = new }
                             tick += 1
@@ -341,21 +341,21 @@ struct WorkspacesSettings: View {
                             module.model.deleteWorkspace(w.id)
                             tick += 1
                         } label: {
-                            Image(systemName: "trash").font(.system(size: 10.ui, weight: .medium)).foregroundStyle(Theme.tertiary)
-                                .frame(width: 20.ui, height: 20.ui).contentShape(Rectangle())
+                            Image(systemName: "trash").font(.system(size: 12, weight: .medium)).foregroundStyle(SettingsStyle.secondary)
+                                .frame(width: 22, height: 22).contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                         .help(WindowsText.t("Delete"))
                     }
                 }
                 SettingsRow(WindowsText.t("Apply when this display setup connects"),
-                            note: WorkspaceCardText.setup(w), minHeight: 22.ui) {
+                            note: WorkspaceCardText.setup(w)) {
                     NotchSwitch(isOn: Binding(get: { w.applyOnConnect }, set: { on in
                         module.workspaces.update(w.id) { $0.applyOnConnect = on }
                         tick += 1
                     }))
                 }
-                .padding(.leading, 12.ui)
+                .padding(.leading, 16)
             }
         }
     }

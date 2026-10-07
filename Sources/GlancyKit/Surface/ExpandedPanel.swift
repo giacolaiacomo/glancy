@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The expanded panel: tab icons in the band left of the notch, the gear right of it, and the
-/// selected page below. Built when the panel opens and destroyed when it closes.
+/// The expanded panel: tab icons in the band left of the notch, the gear (the Settings window)
+/// right of it, and the selected page below. Built when the panel opens and destroyed when it closes.
 struct ExpandedPanel: View {
     let model: SurfaceModel
     let context: SurfaceContext
@@ -30,10 +30,7 @@ struct ExpandedPanel: View {
     }
 
     @ViewBuilder private var page: some View {
-        if model.showingSettings {
-            ScrollView(.vertical, showsIndicators: false) { SettingsPage(context: context) }
-                .transition(.blurFade)
-        } else if let id = model.selectedTab, let tab = context.tabs.first(where: { $0.module == id }) {
+        if let id = model.selectedTab, let tab = context.tabs.first(where: { $0.module == id }) {
             tab.content()
                 .id(id)
                 .transition(.blurFade)
@@ -70,8 +67,9 @@ private struct TabBand: View {
         // Home + tabs split in two; the gear always closes the right side.
         let leftCount = TabBandLayout.leftCount(items: items.count)
         let left = Array(items.prefix(leftCount)), right = Array(items.dropFirst(leftCount))
-        let gear = Item(id: "gear", symbol: "gearshape", title: tr("Settings"), selected: model.showingSettings) {
-            model.toggleSettings()
+        // Settings is a window of its own: the gear opens it and the panel closes.
+        let gear = Item(id: "gear", symbol: "gearshape", title: tr("Settings"), selected: false) {
+            SurfaceRoute.openSettings?(nil)
         }
         GeometryReader { geo in
             let slot = TabBandLayout.slot(width: geo.size.width, notchWidth: notchWidth, inset: inset, items: items.count)
@@ -103,10 +101,10 @@ private struct TabBand: View {
 
     private var allItems: [Item] {
         var list = [Item(id: "home", symbol: "house", title: tr("Home"),
-                         selected: !model.showingSettings && model.selectedTab == nil) { model.select(tab: nil) }]
+                         selected: model.selectedTab == nil) { model.select(tab: nil) }]
         for tab in context.stripTabs {
             list.append(Item(id: tab.module.rawValue, symbol: tab.symbol, title: tr(SurfaceContext.name(tab.module)),
-                             selected: !model.showingSettings && model.selectedTab == tab.module) {
+                             selected: model.selectedTab == tab.module) {
                 model.select(tab: tab.module)
             })
         }

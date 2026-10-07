@@ -122,7 +122,8 @@ public enum Lab {
         }
     }
 
-    /// `GLANCY_LAB_SCOPE`: home, tabs, all (default) or a module id (open that tab and hold).
+    /// `GLANCY_LAB_SCOPE`: home, tabs, settings (the Settings window only), all (default) or a module
+    /// id (open that tab and hold).
     static var scope: String { ProcessInfo.processInfo.environment["GLANCY_LAB_SCOPE"] ?? "all" }
 
     static var rounds: Int {

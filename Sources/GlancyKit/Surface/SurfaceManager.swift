@@ -240,13 +240,11 @@ public final class SurfaceManager {
         target.expand(tab: tab)
     }
 
-    /// Opens the panel (or keeps it open) on Settings, at the index or a section.
+    /// The gear, ⌘, and the command bar: the panel closes and the Settings window opens on a page
+    /// (nil = the page it was on), or comes forward.
     func openSettings(_ route: SettingsRoute?) {
-        let target = surfaces.values.first { $0.model.expanded }
-        if target == nil { open(tab: nil) }
-        guard let surface = target ?? surfaces.values.first(where: { $0.model.expanded }) else { return }
-        context.settings.navigation.go(route ?? .index, animated: false)
-        if !surface.model.showingSettings { surface.model.toggleSettings() }
+        closeAll()
+        SettingsWindowController.show(route, context: context, mode: presents ? (Lab.isActive ? .lab : .app) : .offscreen)
     }
 
     func close(_ surface: SurfaceController) { surface.collapse() }

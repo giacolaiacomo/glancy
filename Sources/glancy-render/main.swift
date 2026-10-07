@@ -4,8 +4,9 @@ import SwiftUI
 
 // Renders every surface state to PNG at 2×, off-screen, over a real-looking menu-bar strip, using
 // the real modules from Modules.swift plus the demo ones. SPEC §5. Usage:
-//   glancy-render [out-dir] [--it] [--demo] [--only name,name…]
+//   glancy-render [out-dir] [--it] [--demo] [--only name,name…] [--settings]
 // --only renders just the shots whose name contains one of the given parts.
+// --settings renders only the Settings window: every page, English and Italian, light and dark.
 // --demo replaces every module's data with made-up content (DemoData): no real sessions, calendar,
 // music, clipboard, shelf, devices or windows. Use it for anything published.
 
@@ -72,6 +73,23 @@ enum Render {
             print("wrote \(file.lastPathComponent)  state=\(model.state) shape=\(Int(l.size.width))×\(Int(l.size.height)) wings=\(Int(l.wingLeft))/\(Int(l.wingRight))")
         }
 
+        // The Settings window (its own shots: a window, not the notch). Permission statuses are fixed
+        // (a mix of every state) so nothing is asked of macOS.
+        let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,
+                                                         .notifications: .notDetermined, .automation: .notDetermined,
+                                                         .fullDiskAccess: .denied]
+        settings.permissions.probe = .fixed(fixed)
+        settings.permissions.apply(fixed)
+        if args.contains("--settings") {
+            for language in [AppLanguage.en, .it] {
+                settings.language = language
+                settingsWindowShots(live, settings: settings, out: out, only: only, suffix: language == .it ? "-it" : "")
+            }
+            settings.language = .en
+            for m in modules { m.stop() }
+            return
+        }
+
         shot("01-idle", quiet)
         shot("01-idle-dark", quiet, dark: true)
         shot("02-activity", live)
@@ -113,13 +131,6 @@ enum Render {
                     shot("16-home-\(size.rawValue)-\(name)", live, geometry: builtInGeometry(uiScale: size.factor),
                          crop: size == .normal ? Render.standardCrop : CGSize(width: 1080, height: 340)) { $0.expand(tab: nil) }
                 }
-                settings.resetHome()
-                settings.moveOnHome(.timer, by: -2)
-                settings.setShownOnHome(.power, false)
-                settings.navigation.go(.home, animated: false)
-                shot("16-home-\(size.rawValue)-settings", live, geometry: builtInGeometry(uiScale: size.factor),
-                     crop: size == .normal ? Render.standardCrop : CGSize(width: 1080, height: 340)) { $0.expand(tab: nil); $0.toggleSettings() }
-                settings.navigation.go(.index, animated: false)
                 settings.resetHome()
             }
             UIScale.shared.set(requested: .normal, effective: .normal)
@@ -164,13 +175,6 @@ enum Render {
                     }
                     shot("17-home-idle-\(size.rawValue)-\(name)", ctx, geometry: geo, crop: crop) { $0.expand(tab: nil) }
                 }
-                settings.resetHome()
-                settings.setHomeMode(.power, .always)
-                settings.setHomeMode(.media, .whenNeeded)
-                settings.setShownOnHome(.shelf, false)
-                settings.navigation.go(.home, animated: false)
-                shot("17-home-idle-\(size.rawValue)-settings", rest, geometry: geo, crop: crop) { $0.expand(tab: nil); $0.toggleSettings() }
-                settings.navigation.go(.index, animated: false)
                 settings.resetHome()
             }
             UIScale.shared.set(requested: .normal, effective: .normal)
@@ -445,32 +449,11 @@ enum Render {
                 agents.stop()
             }
         }
-        // Settings: the index, every section, and the first-run welcome. Permission statuses are
-        // fixed (a mix of every state) so nothing is asked of macOS.
-        let fixed: [PermissionKind: PermissionStatus] = [.calendar: .granted, .accessibility: .notDetermined, .bluetooth: .denied,
-                                                         .notifications: .notDetermined, .automation: .notDetermined,
-                                                         .fullDiskAccess: .denied]
-        settings.permissions.probe = .fixed(fixed)
-        settings.permissions.apply(fixed)
-        let routes: [(String, SettingsRoute)] = [("index", .index), ("general", .general), ("home", .home), ("modules", .modules),
-                                                 ("permissions", .permissions)]
-            + live.modules.map(\.id).filter { $0 != .notifications }.map { ("module-\($0.rawValue)", .module($0)) }
-        live.updates = AppUpdates.sample(available: nil)
-        for (name, route) in routes {
-            settings.navigation.go(route, animated: false)
-            shot(name == "index" ? "07-settings" : "07-settings-\(name)", live) { $0.expand(tab: nil); $0.toggleSettings() }
-        }
-        // A quiet check found an update: the dot on the gear, "Update to" in the index and General.
+        // Settings: the window, every page (see settingsWindowShots); then Home with an update found.
+        settingsWindowShots(live, settings: settings, out: out, only: only, suffix: suffix)
         live.updates = AppUpdates.sample(available: "0.3.0")
-        for (name, route) in [("index", SettingsRoute.index), ("general", .general)] {
-            settings.navigation.go(route, animated: false)
-            shot("07-settings-\(name)-update", live) { $0.expand(tab: nil); $0.toggleSettings() }
-        }
         shot("07-home-update", live) { $0.expand(tab: nil) }
         live.updates = nil
-        settings.navigation.showWelcome()
-        shot("07-settings-welcome", live) { $0.expand(tab: nil); $0.toggleSettings() }
-        settings.navigation.go(.index, animated: false)
         // The opt-in pill on a display without a notch (menu bar 24 pt).
         let external = ScreenInfo(uuid: "external", frame: CGRect(x: 0, y: 0, width: 1512, height: 982),
                                   visibleFrame: CGRect(x: 0, y: 0, width: 1512, height: 958), safeTop: 0,
@@ -499,9 +482,6 @@ enum Render {
                     monitorModule.prepareForRender(.cpu)
                     shot(name("monitor"), live, geometry: g, crop: wide) { $0.expand(tab: .monitor) }
                 }
-                settings.navigation.go(.general, animated: false)
-                shot(name("settings-general"), live, geometry: g, crop: wide) { $0.expand(tab: nil); $0.toggleSettings() }
-                settings.navigation.go(.index, animated: false)
                 // Agents: the wings, the tab, the waiting drop-down.
                 let sizeAgents = AgentsModule.renderSample()
                 seedSizeLimits(sizeAgents)
@@ -534,18 +514,6 @@ enum Render {
                 }
             }
         }
-        // Extra large chosen on a display it does not fit (a 13" at "More Space" off, 1024 pt wide
-        // visible, a short one): Large in use, and Settings says so.
-        let small = ScreenInfo(uuid: "small", frame: CGRect(x: 0, y: 0, width: 1024, height: 640),
-                               visibleFrame: CGRect(x: 0, y: 0, width: 1024, height: 300), safeTop: 0,
-                               auxLeft: nil, auxRight: nil, isBuiltin: false, scale: 2)
-        let fitted = UISize.extraLarge.fitting([small])
-        UIScale.shared.set(requested: .extraLarge, effective: fitted)
-        settings.size = .extraLarge
-        settings.navigation.go(.general, animated: false)
-        shot("14-size-limited-settings-general", live, geometry: NotchGeometry.pill(for: small, menuBarHeight: 24, uiScale: fitted.factor),
-             crop: wide) { $0.expand(tab: nil); $0.toggleSettings() }
-        settings.navigation.go(.index, animated: false)
         UIScale.shared.set(requested: .normal, effective: .normal)
         settings.size = .normal
         for m in modules { m.stop() }
@@ -794,4 +762,79 @@ func seedSizeLimits(_ agents: AgentsModule) {
     } else {
         agents.seedLimitsSample()
     }
+}
+
+/// The Settings window, page by page, light and dark (`20-settings-<page>-<light|dark>[-it].png`): every
+/// sidebar page; the first-run welcome; About with an update found and crash reports; General when
+/// the chosen size doesn't fit a display; a module turned off; Home with a module off and modes
+/// changed. Off-screen: the window is never ordered in.
+@MainActor
+func settingsWindowShots(_ context: SurfaceContext, settings: AppSettings, out: URL, only: [String]?, suffix: String) {
+    func shot(_ name: String, _ route: SettingsRoute, welcome: Bool = false, size: NSSize = SettingsWindowController.defaultSize,
+              crashes: [(date: String, exception: String)] = []) {
+        for dark in [false, true] {
+            let file = "20-settings-\(name)-\(dark ? "dark" : "light")\(suffix).png"
+            if let only, !only.contains(where: { file.contains($0) }) { continue }
+            guard let rep = SettingsWindowController.snapshot(route, context: context, welcome: welcome, dark: dark, size: size,
+                                                              crashes: crashes, icon: renderIcon()) else {
+                print("failed \(file)"); continue
+            }
+            try? rep.representation(using: .png, properties: [:])?.write(to: out.appendingPathComponent(file))
+            print("wrote \(file)")
+        }
+    }
+    let registered = Set(context.modules.map(\.id))
+    for route in SettingsSidebar.routes(registered: registered) {
+        switch route {
+        case .module(let id): shot("module-\(id.rawValue)", route)
+        default: shot("\(route)", route)
+        }
+    }
+    shot("welcome", .permissions, welcome: true)
+    shot("general-min", .general, size: SettingsWindowController.minimumSize)
+    // Found an update; three crashes on this Mac.
+    context.updates = AppUpdates.sample(available: "0.5.0")
+    shot("about-update", .about, crashes: [("2026-10-06 00:12:06", "Glancy 0.4.0 (4000) · EXC_BREAKPOINT (SIGTRAP)"),
+                                           ("2026-10-02 18:40:51", "Glancy 0.3.9 (3900) · EXC_BAD_ACCESS (SIGSEGV)"),
+                                           ("2026-09-28 09:03:14", "Glancy 0.3.9 (3900) · EXC_CRASH (SIGABRT)")])
+    context.updates = AppUpdates.sample(available: nil)
+    shot("about-current", .about)
+    context.updates = nil
+    // Extra large chosen on a display it doesn't fit: Large in use, and General says so.
+    UIScale.shared.set(requested: .extraLarge, effective: .large)
+    settings.size = .extraLarge
+    shot("general-limited", .general)
+    UIScale.shared.set(requested: .normal, effective: .normal)
+    settings.size = .normal
+    // Clipboard off: its page dimmed, its sidebar row grey, its Home widget pointing to it.
+    if registered.contains(.clipboard) {
+        settings.setEnabled(.clipboard, false)
+        shot("module-clipboard-off", .module(.clipboard))
+        settings.setEnabled(.clipboard, true)
+    }
+    if registered.contains(.timer) {
+        settings.setEnabled(.timer, false)
+        settings.setHomeMode(.power, .always)
+        settings.moveOnHome(.notes, by: -2)
+        shot("home-changed", .home)
+        settings.resetHome()
+        settings.setEnabled(.timer, true)
+    }
+    SettingsWindowController.closeCurrent()
+}
+
+/// Glancy's icon for About: the repository's docs/icon.png (found from the working directory or
+/// the tool's own path, .build/<config>/glancy-render), else none (the app's own).
+@MainActor
+func renderIcon() -> NSImage? {
+    let starts = [URL(fileURLWithPath: FileManager.default.currentDirectoryPath),
+                  URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent()]
+    for start in starts {
+        var dir = start
+        for _ in 0..<6 {
+            if let image = NSImage(contentsOf: dir.appendingPathComponent("docs/icon.png")) { return image }
+            dir = dir.deletingLastPathComponent()
+        }
+    }
+    return nil
 }

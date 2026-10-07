@@ -8,6 +8,9 @@ Sources/GlancyKit/Control/ControlViews.swift:ProgressView\(\)
 # Windows preview overlay: built on the first preview, destroyed when the preview fades.
 Sources/GlancyKit/Windows/PreviewOverlay.swift:NSPanel\(
 Sources/GlancyKit/Windows/PreviewOverlay.swift:NSHostingView\(
+# Settings window: built when the user opens Settings (gear, ⌘,, command bar, first-run
+# welcome), its sidebar and page hosting controllers released when it closes (SettingsWindow.swift).
+Sources/GlancyKit/Settings/SettingsWindow.swift:NSHostingController\(
 # Shelf: Share button / context menu, Quick Look on Space — user actions.
 Sources/GlancyKit/Shelf/ShelfActions.swift:NSSharingServicePicker\(
 Sources/GlancyKit/Shelf/ShelfSupport.swift:QLPreviewPanel\.shared\(

@@ -6,7 +6,7 @@ import Testing
 
 // Lot I: the shortcut recorder's key logic, conflicts, the permission center's change reporting,
 // module settings that became editable (HUD keys, clipboard hotkey, Pomodoro lengths), the
-// settings navigation and the first-run flag.
+// settings navigation and the first-run flag. The Settings window itself: SettingsWindowTests.
 
 private func defaults() -> (UserDefaults, () -> Void) {
     let suite = "ai.glancy.tests.\(UUID().uuidString)"
@@ -208,10 +208,12 @@ struct ModuleSettingsTests {
 struct SettingsPageTests {
     @Test func navigationAndWelcome() {
         let nav = SettingsNavigation()
-        #expect(nav.route == .index && !nav.welcome)
+        #expect(nav.route == .general && !nav.welcome)
         nav.showWelcome()
         #expect(nav.route == .permissions && nav.welcome)
-        nav.go(.module(.calendar), animated: false)
+        nav.go(.permissions)                       // staying on Permissions keeps the welcome
+        #expect(nav.welcome)
+        nav.go(.module(.calendar))
         #expect(nav.route == .module(.calendar) && !nav.welcome)
     }
 
@@ -254,7 +256,7 @@ struct SettingsPageTests {
             let s = try String(contentsOf: f, encoding: .utf8)
             for m in pattern.matches(in: s, range: NSRange(s.startIndex..., in: s)) {
                 let key = String(s[Range(m.range(at: 1), in: s)!])
-                if L10n.tr(key) == key, !["Bluetooth", "Volume", "%d / %d / %d min", "%d min", "HUD", "Timer", "Home"].contains(key) { missing.append(key) }
+                if L10n.tr(key) == key, !["Bluetooth", "Volume", "%d / %d / %d min", "%d min", "HUD", "Timer", "Home", "Notch", "Pomodoro"].contains(key) { missing.append(key) }
             }
         }
         #expect(missing.isEmpty, "untranslated: \(missing)")

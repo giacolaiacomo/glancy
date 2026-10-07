@@ -1,16 +1,31 @@
 import SwiftUI
 
 // Small controls drawn in SwiftUI, sized for the 12 pt panel and the black surface. They render
-// identically on screen and in `glancy-render` (no AppKit-backed controls).
+// identically on screen and in `glancy-render` (no AppKit-backed controls). In the Settings window
+// (`settingsChrome == .window`) the same controls are the system's: switch, segmented control or
+// pop-up menu, push button, toggle button.
 
 /// An on/off switch.
 public struct NotchSwitch: View {
     @Binding var isOn: Bool
     var enabled = true
+    @Environment(\.settingsChrome) private var chrome
 
     public init(isOn: Binding<Bool>, enabled: Bool = true) { _isOn = isOn; self.enabled = enabled }
 
     public var body: some View {
+        if chrome == .window {
+            Toggle("", isOn: $isOn)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .labelsHidden()
+                .disabled(!enabled)
+        } else {
+            notch
+        }
+    }
+
+    private var notch: some View {
         Button { isOn.toggle() } label: {
             ZStack(alignment: isOn ? .trailing : .leading) {
                 Capsule().fill(isOn ? Theme.done.opacity(0.9) : Color.white.opacity(0.16))
@@ -32,12 +47,42 @@ public struct NotchSwitch: View {
 public struct NotchSegments<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(Value, String)]
+    /// In the Settings window: always a pop-up menu (several pickers side by side).
+    let windowMenu: Bool
+    @Environment(\.settingsChrome) private var chrome
 
-    public init(selection: Binding<Value>, options: [(Value, String)]) {
-        _selection = selection; self.options = options
+    public init(selection: Binding<Value>, options: [(Value, String)], windowMenu: Bool = false) {
+        _selection = selection; self.options = options; self.windowMenu = windowMenu
     }
 
     public var body: some View {
+        if chrome == .window {
+            window
+        } else {
+            notch
+        }
+    }
+
+    /// A few short choices read best side by side; longer lists become a pop-up menu.
+    static func prefersSegments(_ labels: [String]) -> Bool {
+        labels.count <= 3 && labels.reduce(0) { $0 + $1.count } <= 26
+    }
+
+    @ViewBuilder private var window: some View {
+        let picker = Picker("", selection: $selection) {
+            ForEach(options.indices, id: \.self) { i in
+                Text(verbatim: options[i].1).tag(options[i].0)
+            }
+        }
+        .labelsHidden()
+        if !windowMenu, Self.prefersSegments(options.map(\.1)) {
+            picker.pickerStyle(.segmented).fixedSize()
+        } else {
+            picker.pickerStyle(.menu).fixedSize()
+        }
+    }
+
+    private var notch: some View {
         HStack(spacing: 2.ui) {
             ForEach(options.indices, id: \.self) { i in
                 let (value, label) = options[i]
@@ -67,11 +112,24 @@ public struct NotchChip: View {
     let on: Bool
     let action: () -> Void
 
+    @Environment(\.settingsChrome) private var chrome
+
     public init(symbol: String, title: String, on: Bool, action: @escaping () -> Void) {
         self.symbol = symbol; self.title = title; self.on = on; self.action = action
     }
 
     public var body: some View {
+        if chrome == .window {
+            Toggle(isOn: Binding(get: { on }, set: { _ in action() })) {
+                Label(title, systemImage: symbol)
+            }
+            .toggleStyle(.button)
+        } else {
+            notch
+        }
+    }
+
+    private var notch: some View {
         Button(action: action) {
             HStack(spacing: 4.ui) {
                 Image(systemName: symbol).font(.system(size: 10.ui, weight: .semibold))
@@ -93,10 +151,19 @@ public struct NotchTextButton: View {
     let title: String
     let action: () -> Void
     @State private var hover = false
+    @Environment(\.settingsChrome) private var chrome
 
     public init(_ title: String, action: @escaping () -> Void) { self.title = title; self.action = action }
 
     public var body: some View {
+        if chrome == .window {
+            Button(action: action) { Text(verbatim: title) }
+        } else {
+            notch
+        }
+    }
+
+    private var notch: some View {
         Button(action: action) {
             Text(title)
                 .font(Theme.font(.s, .medium))

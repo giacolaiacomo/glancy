@@ -1,7 +1,23 @@
 import SwiftUI
 
-// Home's widgets: what each one is, the user's choice and order (Settings → Home, kept in
-// `AppSettings`), and how the ones with something to show share the page (pure, tested).
+// Home's widgets: what each one is, the user's choice, mode and order (Settings → Home, kept in
+// `AppSettings`), and how the cards share the page (pure, tested).
+
+/// When a widget's card is on Home.
+public enum HomeWidgetMode: String, CaseIterable, Codable, Sendable {
+    /// Even at rest: with nothing going on the card shows its idle state (the last track and
+    /// Play, quick timers, the battery…).
+    case always
+    /// Only while the module has something (playing, a timer running, a meeting coming up…).
+    case whenNeeded
+
+    var title: String {
+        switch self {
+        case .always: "Always"
+        case .whenNeeded: "Only when needed"
+        }
+    }
+}
 
 /// A card Home can show. Most modules have one; Agents has two (the sessions and the plan limits).
 public enum HomeWidget: String, CaseIterable, Codable, Sendable {
@@ -31,6 +47,16 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
     /// limits right after the sessions.
     public static let defaultOrder: [HomeWidget] = [.agents, .limits, .calendar, .media, .timer, .notes, .shelf, .control, .power]
 
+    /// Always for what is worth a look at rest (sessions, plan limits, the next meeting, the last
+    /// track and Play, quick timers); Only when needed for the rest, which says nothing useful
+    /// at rest (the battery at a normal level, an empty shelf, Keep awake off, no pinned note).
+    public var defaultMode: HomeWidgetMode {
+        switch self {
+        case .agents, .limits, .calendar, .media, .timer: .always
+        case .notes, .shelf, .control, .power: .whenNeeded
+        }
+    }
+
     /// Media is a tall tile on the right; every other card is a wide row.
     var isTile: Bool { self == .media }
 
@@ -48,11 +74,11 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// When the card is there.
+    /// When the card is there in Only when needed.
     var when: String {
         switch self {
         case .agents: "While a session is live"
-        case .limits: "Claude Code and Codex usage, with resets"
+        case .limits: "When a limit is nearly used up"
         case .calendar: "When a meeting is coming up"
         case .media: "While something is playing"
         case .timer: "While a timer runs"
@@ -60,6 +86,21 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
         case .shelf: "When files are on the shelf"
         case .control: "While Keep awake is on"
         case .power: "Charging, low battery, headphones"
+        }
+    }
+
+    /// What the card shows at rest in Always.
+    var idle: String {
+        switch self {
+        case .agents: "At rest: no live sessions"
+        case .limits: "At rest: the last readings, with resets"
+        case .calendar: "At rest: nothing else today"
+        case .media: "At rest: the last track, with Play"
+        case .timer: "At rest: quick timers"
+        case .notes: "At rest: the latest note"
+        case .shelf: "At rest: a place to drop files"
+        case .control: "At rest: a switch to turn it on"
+        case .power: "At rest: the battery level"
         }
     }
 
@@ -78,8 +119,11 @@ public struct HomeWidgetCard {
     public let view: AnyView
     /// How urgent it is now (0 = the user's order decides); nil = the module's live priority.
     public var priority: Int?
-    public init(_ widget: HomeWidget, _ view: AnyView, priority: Int? = nil) {
-        self.widget = widget; self.view = view; self.priority = priority
+    /// The widget's idle state (Always, nothing going on): it only fills the places the cards
+    /// with something leave free.
+    public var idle: Bool
+    public init(_ widget: HomeWidget, _ view: AnyView, priority: Int? = nil, idle: Bool = false) {
+        self.widget = widget; self.view = view; self.priority = priority; self.idle = idle
     }
 }
 
@@ -95,12 +139,16 @@ enum HomeLayout {
     /// Without the media tile four cards fit (two columns of two); with it, two beside it.
     static func capacity(withTile: Bool) -> Int { withTile ? 3 : 4 }
 
-    /// The cards that make it: the most urgent first (a waiting agent, a meeting starting), then
-    /// the user's order; shown in the user's order.
-    static func pick(_ available: [HomeWidget], order: [HomeWidget], priority: (HomeWidget) -> Int) -> [HomeWidget] {
+    /// The cards that make it: the ones with something first, the most urgent of them first (a
+    /// waiting agent, a meeting starting) then in the user's order; the idle ones (Always, at
+    /// rest) fill the places left, in the user's order. Shown in the user's order.
+    static func pick(_ available: [HomeWidget], idle: Set<HomeWidget> = [], order: [HomeWidget],
+                     priority: (HomeWidget) -> Int) -> [HomeWidget] {
         func index(_ w: HomeWidget) -> Int { order.firstIndex(of: w) ?? order.count }
         let ranked = available.sorted { a, b in
-            let pa = priority(a), pb = priority(b)
+            let ia = idle.contains(a), ib = idle.contains(b)
+            if ia != ib { return !ia }
+            let pa = ia ? 0 : priority(a), pb = ib ? 0 : priority(b)
             return pa != pb ? pa > pb : index(a) < index(b)
         }
         var chosen: [HomeWidget] = []

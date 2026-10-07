@@ -33,6 +33,10 @@ public protocol GlancyModule: AnyObject {
     /// Every card this module offers Home now (Settings → Home picks among them). By default its
     /// `homeCard()`, as the module's own widget.
     func homeWidgets() -> [HomeWidgetCard]
+    /// A widget's idle state, for Always when `homeWidgets()` has no card for it: something
+    /// useful at rest (the last track, quick timers, the battery…). nil = nothing worth showing
+    /// even then. Built from what the module already knows: no reads, timers or polling of its own.
+    func homeIdleCard(_ widget: HomeWidget) -> AnyView?
     /// Fixed actions this module offers to the command bar (filtered there by title/keywords).
     /// Built on demand when the bar opens; never cached across opens.
     func commands() -> [GlancyCommand]
@@ -49,6 +53,7 @@ public extension GlancyModule {
         guard let w = HomeWidget(module: id), let card = homeCard() else { return [] }
         return [HomeWidgetCard(w, card)]
     }
+    func homeIdleCard(_ widget: HomeWidget) -> AnyView? { nil }
     func commands() -> [GlancyCommand] { [] }
     func results(for query: String) -> [GlancyCommand] { [] }
 }

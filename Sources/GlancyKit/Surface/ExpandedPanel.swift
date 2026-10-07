@@ -183,7 +183,8 @@ struct HomePage: View {
     var body: some View {
         let settings = context.settings
         let cards = HomePage.available(context)
-        let shown = HomeLayout.pick(cards.map(\.widget), order: settings.homeOrder) { w in
+        let shown = HomeLayout.pick(cards.map(\.widget), idle: Set(cards.filter(\.idle).map(\.widget)),
+                                    order: settings.homeOrder) { w in
             cards.first { $0.widget == w }?.priority ?? context.hub.priority(of: w.module)
         }
         let arrangement = HomeLayout.arrange(shown)
@@ -207,9 +208,17 @@ struct HomePage: View {
         }
     }
 
-    /// The cards of the widgets turned on in Settings → Home whose module is on and has something.
+    /// The cards of the widgets turned on in Settings → Home whose module is on: the ones with
+    /// something, and for the others set to Always their idle state.
     static func available(_ context: SurfaceContext) -> [HomeWidgetCard] {
-        context.enabledModules.flatMap { $0.homeWidgets() }.filter { context.settings.isShownOnHome($0.widget) }
+        let settings = context.settings
+        return context.enabledModules.flatMap { m -> [HomeWidgetCard] in
+            let live = m.homeWidgets().filter { settings.isShownOnHome($0.widget) }
+            let idle = HomeWidget.allCases.filter { w in
+                w.module == m.id && settings.isShownOnHome(w) && settings.homeMode(w) == .always && !live.contains { $0.widget == w }
+            }.compactMap { w in m.homeIdleCard(w).map { HomeWidgetCard(w, $0, idle: true) } }
+            return live + idle
+        }
     }
 }
 

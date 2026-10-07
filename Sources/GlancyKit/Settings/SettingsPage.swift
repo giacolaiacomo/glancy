@@ -241,7 +241,7 @@ struct HomeSection: View {
         let per = (order.count + 2) / 3
         VStack(alignment: .leading, spacing: 4.ui) {
             SettingsHeader(context: context, title: tr("Home")) {
-                if settings.homeOrder != HomeWidget.defaultOrder || !settings.homeHidden.isEmpty {
+                if settings.homeIsCustomized {
                     NotchTextButton(tr("Reset")) { withAnimation(Theme.peek) { settings.resetHome() } }
                 }
             }

@@ -30,6 +30,11 @@ public final class AppSettings {
     public private(set) var homeHidden: Set<HomeWidget> {
         didSet { save(homeHidden.map(\.rawValue).sorted(), Key.homeHidden) }
     }
+    /// Settings → Home: the widgets whose Always / Only when needed the user chose; the others
+    /// follow `HomeWidget.defaultMode` (a save from before the choice existed has none).
+    public private(set) var homeModes: [HomeWidget: HomeWidgetMode] {
+        didSet { save(Dictionary(uniqueKeysWithValues: homeModes.map { ($0.key.rawValue, $0.value.rawValue) }), Key.homeModes) }
+    }
 
     /// The settings page's place (index or a section). Not persisted.
     @ObservationIgnored public let navigation = SettingsNavigation()
@@ -49,6 +54,7 @@ public final class AppSettings {
         static let onboarded = "onboardingShown"
         static let homeOrder = "homeWidgetOrder"
         static let homeHidden = "homeWidgetsHidden"
+        static let homeModes = "homeWidgetModes"
     }
 
     /// Opt-in modules (a large permission): off until the user turns them on, existing settings included.
@@ -67,6 +73,10 @@ public final class AppSettings {
         disabledModules = Set(off.compactMap(ModuleID.init)).union(Self.defaultDisabled.subtracting(optedIn))
         homeOrder = HomeLayout.normalized((defaults.stringArray(forKey: Key.homeOrder) ?? []).compactMap(HomeWidget.init))
         homeHidden = Set((defaults.stringArray(forKey: Key.homeHidden) ?? []).compactMap(HomeWidget.init))
+        let modes = (defaults.dictionary(forKey: Key.homeModes) as? [String: String]) ?? [:]
+        homeModes = Dictionary(uniqueKeysWithValues: modes.compactMap { k, v in
+            HomeWidget(rawValue: k).flatMap { w in HomeWidgetMode(rawValue: v).map { (w, $0) } }
+        })
         L10n.apply(language)
     }
 
@@ -78,6 +88,13 @@ public final class AppSettings {
         if on { homeHidden.remove(w) } else { homeHidden.insert(w) }
     }
 
+    /// Always (shown at rest too) or Only when needed (only when it has something).
+    public func homeMode(_ w: HomeWidget) -> HomeWidgetMode { homeModes[w] ?? w.defaultMode }
+
+    public func setHomeMode(_ w: HomeWidget, _ mode: HomeWidgetMode) {
+        homeModes[w] = mode
+    }
+
     /// Moves a widget one place up (-1) or down (+1) in Home's order.
     public func moveOnHome(_ w: HomeWidget, by step: Int) {
         guard let i = homeOrder.firstIndex(of: w) else { return }
@@ -86,10 +103,16 @@ public final class AppSettings {
         homeOrder.swapAt(i, j)
     }
 
-    /// Back to today's Home: every widget on, the default order.
+    /// Back to the default Home: every widget on, the default order and modes.
     public func resetHome() {
         homeOrder = HomeWidget.defaultOrder
         homeHidden = []
+        homeModes = [:]
+    }
+
+    /// Anything in Settings → Home differs from the defaults (Reset is offered).
+    public var homeIsCustomized: Bool {
+        homeOrder != HomeWidget.defaultOrder || !homeHidden.isEmpty || homeModes.contains { $0.value != $0.key.defaultMode }
     }
 
     public func isEnabled(_ module: ModuleID) -> Bool {

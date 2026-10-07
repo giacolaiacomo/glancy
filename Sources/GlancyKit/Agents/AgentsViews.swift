@@ -180,44 +180,70 @@ private struct PeekClickTarget: NSViewRepresentable {
 
 // MARK: Board (Agents tab)
 
-struct AgentsBoard: View {
+/// The sessions board: the header across the whole width, the rows below and, beside them, an
+/// optional side column (the plan limits). Without sessions the side column stays and the rows'
+/// place shows the empty state.
+struct AgentsBoard<Side: View>: View {
     let model: AgentsModel
+    /// Rows narrowed for a side column: the tool column goes (it stays in the tooltip, and a
+    /// waiting row names its tool before the prompt).
+    var compact = false
+    @ViewBuilder var side: Side
 
     var body: some View {
         let rows = model.sessions
-        if rows.isEmpty {
-            AgentsEmptyState(loaded: model.loaded)
-        } else {
-            VStack(alignment: .leading, spacing: 6.ui) {
+        VStack(alignment: .leading, spacing: 6.ui) {
+            if !rows.isEmpty {
                 AgentsBoardHeader(rows: rows, model: model)
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 1.ui) {
-                        ForEach(Array(rows.enumerated()), id: \.element.rowID) { i, s in
-                            if i > 0, AgentsBoard.group(rows[i - 1].state) != AgentsBoard.group(s.state) {
-                                Rectangle().fill(Theme.hairline).frame(height: 1.ui).padding(.horizontal, 8.ui).padding(.vertical, 2.ui)
-                            }
-                            AgentRow(session: s, pulsing: model.pulse,
-                                     note: model.jumpNote?.rowID == s.rowID ? model.jumpNote?.text : nil,
-                                     tiling: model.tilingAvailability) {
-                                // ⌥-click: jump and tile into the focused cell.
-                                if NSEvent.modifierFlags.contains(.option) {
-                                    model.jumpAndTile(rowID: s.rowID)
-                                } else {
-                                    model.jump(to: s.rowID)
-                                }
-                            }
+            }
+            HStack(alignment: .top, spacing: 10.ui) {
+                Group {
+                    if rows.isEmpty {
+                        AgentsEmptyState(loaded: model.loaded, compact: compact)
+                    } else {
+                        list(rows)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                side
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func list(_ rows: [AgentSession]) -> some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVStack(spacing: 1.ui) {
+                ForEach(Array(rows.enumerated()), id: \.element.rowID) { i, s in
+                    if i > 0, AgentsBoardGroup.of(rows[i - 1].state) != AgentsBoardGroup.of(s.state) {
+                        Rectangle().fill(Theme.hairline).frame(height: 1.ui).padding(.horizontal, 8.ui).padding(.vertical, 2.ui)
+                    }
+                    AgentRow(session: s, pulsing: model.pulse,
+                             note: model.jumpNote?.rowID == s.rowID ? model.jumpNote?.text : nil,
+                             tiling: model.tilingAvailability, compact: compact) {
+                        // ⌥-click: jump and tile into the focused cell.
+                        if NSEvent.modifierFlags.contains(.option) {
+                            model.jumpAndTile(rowID: s.rowID)
+                        } else {
+                            model.jump(to: s.rowID)
                         }
                     }
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 }
 
-extension AgentsBoard {
+extension AgentsBoard where Side == EmptyView {
+    init(model: AgentsModel) {
+        self.init(model: model, compact: false) { EmptyView() }
+    }
+}
+
+enum AgentsBoardGroup {
     /// Attention groups on the board: needs you, working, the rest (separated by a hairline).
-    static func group(_ s: AgentState) -> Int {
+    static func of(_ s: AgentState) -> Int {
         switch s {
         case .waiting: 0
         case .working: 1
@@ -321,6 +347,8 @@ struct AgentRow: View {
     let pulsing: Bool
     let note: String?
     var tiling: AgentsTilingAvailability = .unavailable
+    /// Beside the limits column: no tool column, a narrower label.
+    var compact = false
     let action: () -> Void
     @State private var hover = false
 
@@ -340,7 +368,7 @@ struct AgentRow: View {
                     .font(Theme.font(.m, .semibold))
                     .foregroundStyle(session.isLive && session.state != .idle ? Theme.primary : Theme.secondary)
                     .lineLimit(1).truncationMode(.middle)
-                    .frame(width: 108.ui, alignment: .leading)
+                    .frame(width: (compact ? 92 : 108).ui, alignment: .leading)
                 Text(AgentsText.state(session.state))
                     .font(Theme.font(.s, .medium))
                     .foregroundStyle(stateColor)
@@ -349,13 +377,15 @@ struct AgentRow: View {
                 AgentElapsed(session: session)
                     .frame(width: 46.ui, alignment: .trailing)
                     .padding(.trailing, 10.ui)
-                Text(toolText)
-                    .font(Theme.font(.s).monospaced())
-                    .foregroundStyle(Theme.tertiary)
-                    .lineLimit(1).truncationMode(.tail)
-                    .frame(width: 78.ui, alignment: .leading)
-                    .padding(.trailing, 8.ui)
-                Text(AgentRow.text(session))
+                if !compact {
+                    Text(toolText)
+                        .font(Theme.font(.s).monospaced())
+                        .foregroundStyle(Theme.tertiary)
+                        .lineLimit(1).truncationMode(.tail)
+                        .frame(width: 78.ui, alignment: .leading)
+                        .padding(.trailing, 8.ui)
+                }
+                Text(compact ? AgentRow.compactText(session) : AgentRow.text(session))
                     .font(Theme.font(.s))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1).truncationMode(.tail)
@@ -377,6 +407,13 @@ struct AgentRow: View {
     static func text(_ s: AgentSession) -> String {
         if s.state != .working, s.state != .waiting, let m = s.lastMessage { return m }
         return s.lastPrompt ?? s.title ?? ""
+    }
+
+    /// The compact row's last words: a waiting row names the tool it asks for first.
+    static func compactText(_ s: AgentSession) -> String {
+        let text = Self.text(s)
+        guard s.state == .waiting, let tool = s.waitingTool else { return text }
+        return text.isEmpty ? tool : "\(tool) · \(text)"
     }
 
     private var toolText: String {
@@ -442,6 +479,8 @@ struct AgentElapsed: View {
 
 private struct AgentsEmptyState: View {
     let loaded: Bool
+    /// Beside the limits column: the line wraps in the narrower room.
+    var compact = false
 
     var body: some View {
         VStack(spacing: 6.ui) {
@@ -454,6 +493,9 @@ private struct AgentsEmptyState: View {
             Text(AgentsText.t("Claude Code, Codex and OpenCode sessions appear here as soon as they run."))
                 .font(Theme.font(.s))
                 .foregroundStyle(Theme.tertiary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: compact ? 260.ui : nil)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(loaded ? 1 : 0)

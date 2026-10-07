@@ -4,7 +4,8 @@ import SwiftUI
 
 // Renders every surface state to PNG at 2×, off-screen, over a real-looking menu-bar strip, using
 // the real modules from Modules.swift plus the demo ones. SPEC §5. Usage:
-//   glancy-render [out-dir] [--it] [--demo]
+//   glancy-render [out-dir] [--it] [--demo] [--only name,name…]
+// --only renders just the shots whose name contains one of the given parts.
 // --demo replaces every module's data with made-up content (DemoData): no real sessions, calendar,
 // music, clipboard, shelf, devices or windows. Use it for anything published.
 
@@ -19,7 +20,7 @@ enum Render {
 
     static func run() {
         let args = CommandLine.arguments.dropFirst()
-        let out = URL(fileURLWithPath: args.first(where: { !$0.hasPrefix("--") }) ?? "render-out")
+        let out = URL(fileURLWithPath: args.first.flatMap { $0.hasPrefix("--") ? nil : $0 } ?? "render-out")
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
@@ -54,8 +55,12 @@ enum Render {
         let media = modules.compactMap { $0 as? DemoModule }.first { $0.id == .media }
         let suffix = settings.language == .it ? "-it" : ""
 
+        let only = args.firstIndex(of: "--only").flatMap { i in
+            args.index(after: i) < args.endIndex ? args[args.index(after: i)].split(separator: ",").map(String.init) : nil
+        }
         func shot(_ name: String, _ ctx: SurfaceContext, dark: Bool = false, geometry: NotchGeometry = geometry,
                   menus: MenuBarClearance? = nil, crop: CGSize = Render.standardCrop, _ setup: (SurfaceModel) -> Void = { _ in }) {
+            if let only, !only.contains(where: { name.contains($0) }) { return }
             Render.crop = crop
             defer { Render.crop = Render.standardCrop }
             let model = SurfaceModel(geometry: geometry)
@@ -317,7 +322,7 @@ enum Render {
             shot("13-agents-sources-peek", ctx)
             agents.stop()
         }
-        // Plan limits (Agents tab): the strip under the sessions, the Limits page, "Where it went",
+        // Plan limits (Agents tab): the column beside the sessions (and without any), the Limits page, "Where it went",
         // the 90% drop-down and the used-up wing. Made-up readings (no CLI run, nothing read).
         // `--limits-real <dir>`: the same with the owner's real readings (AgentsModule.realLimitsSnapshot:
         // read-only, one /usage at most, cached in <dir>); files named 15-limits-real-*.
@@ -327,17 +332,23 @@ enum Render {
                 real = AgentsModule.realLimitsSnapshot(scratch: URL(fileURLWithPath: CommandLine.arguments[i + 1]))
                 print(real!.log, terminator: "")
             }
+            // `--limits-cache <file>`: the readings the app last saved (its limits.json), read-only;
+            // nothing is run, no log is scanned ("Where it went" is skipped).
+            if let i = CommandLine.arguments.firstIndex(of: "--limits-cache"), i + 1 < CommandLine.arguments.count {
+                let c = UsageLimitsStore.readCache(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+                real = (c.claude, c.codex, nil, "")
+            }
             let prefix = real == nil ? "15-limits" : "15-limits-real"
             for state in AgentsModule.LimitsRenderState.allCases {
-                if real != nil, state == .alertPeek || state == .usedUpWing { continue }
-                let agents = state == .alertPeek || state == .usedUpWing ? AgentsModule.renderEmpty() : AgentsModule.renderSample()
+                if let real, state == .alertPeek || state == .usedUpWing || (state == .whereItWent && real.breakdown == nil) { continue }
+                let agents = [.alertPeek, .usedUpWing, .columnNoSessions].contains(state) ? AgentsModule.renderEmpty() : AgentsModule.renderSample()
                 if let real { agents.seedLimits(claude: real.claude, codex: real.codex, breakdown: real.breakdown) } else { agents.seedLimitsSample() }
                 let hub = ActivityHub()
                 agents.start(hub: hub)
                 let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [agents])
                 agents.prepareLimitsForRender(state)
                 switch state {
-                case .strip, .limitsPage, .whereItWent:
+                case .column, .columnNoSessions, .limitsPage, .whereItWent:
                     agents.visibilityChanged(.expanded(.agents))
                     shot("\(prefix)-\(state.rawValue)", ctx) { $0.expand(tab: .agents) }
                 case .alertPeek, .usedUpWing:
@@ -406,6 +417,7 @@ enum Render {
                 settings.navigation.go(.index, animated: false)
                 // Agents: the wings, the tab, the waiting drop-down.
                 let sizeAgents = AgentsModule.renderSample()
+                sizeAgents.seedLimitsSample()
                 let hub = ActivityHub()
                 sizeAgents.start(hub: hub)
                 let ctx = SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: [sizeAgents])
@@ -416,6 +428,15 @@ enum Render {
                 sizeAgents.prepareForRender(.waitingPeek)
                 shot(name("peek"), ctx, geometry: g, crop: wide)
                 sizeAgents.stop()
+                // No session: the empty board beside the limits.
+                let noSessions = AgentsModule.renderEmpty()
+                noSessions.seedLimitsSample()
+                let hub2 = ActivityHub()
+                noSessions.start(hub: hub2)
+                noSessions.visibilityChanged(.expanded(.agents))
+                shot(name("agents-nosessions"), SurfaceContext(hub: hub2, settings: settings, launchAtLogin: launch, modules: [noSessions]),
+                     geometry: g, crop: wide) { $0.expand(tab: .agents) }
+                noSessions.stop()
             }
             // Every other tab at the largest size, on the notch: nothing clipped or overlapping.
             if size == .extraLarge {

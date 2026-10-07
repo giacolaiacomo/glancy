@@ -9,7 +9,7 @@ public final class AgentsModule: GlancyModule {
 
     public let id = ModuleID.agents
     public let model = AgentsModel()
-    /// Claude Code and Codex plan limits (the strip and pages in the tab, alerts).
+    /// Claude Code and Codex plan limits (the column and pages in the tab, the Home card, alerts).
     public let limits: UsageLimitsStore
     /// The page the tab opens on (the renderer; otherwise the sessions).
     var tabPage: AgentsTabPage = .sessions
@@ -229,7 +229,11 @@ extension AgentsModule {
     }
 
     /// A module with no source and no session (renderer: the limits' own wing and drop-down).
-    public static func renderEmpty() -> AgentsModule { AgentsModule(sources: []) }
+    public static func renderEmpty() -> AgentsModule {
+        let m = AgentsModule(sources: [])
+        m.model.ingest([], rebuild: true)   // loaded, with nothing: the empty board
+        return m
+    }
 
     func seedSample(now: Date) {
         func e(_ ago: Double, _ k: AgentEvent.Kind, _ sid: String, _ folder: String, _ agent: AgentKind, _ host: AgentHost,
@@ -272,7 +276,7 @@ extension AgentsModule {
 extension AgentsModule {
     /// What the renderer can show of the plan limits.
     public enum LimitsRenderState: String, CaseIterable, Sendable {
-        case strip, limitsPage, whereItWent, alertPeek, usedUpWing
+        case column, columnNoSessions, limitsPage, whereItWent, alertPeek, usedUpWing
     }
 
     /// Made-up readings (Burny's demo data) and breakdown. Alerts off unless asked: a demo shot
@@ -292,7 +296,7 @@ extension AgentsModule {
     /// Prepares a limits state; call after `start`.
     public func prepareLimitsForRender(_ state: LimitsRenderState, now: Date = .now) {
         switch state {
-        case .strip: tabPage = .sessions
+        case .column, .columnNoSessions: tabPage = .sessions
         case .limitsPage: tabPage = .limits
         case .whereItWent: tabPage = .whereItWent
         case .alertPeek:

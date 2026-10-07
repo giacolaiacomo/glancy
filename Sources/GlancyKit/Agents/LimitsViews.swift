@@ -1,8 +1,8 @@
 import SwiftUI
 
-// Plan limits in the Agents tab: a one-row strip under the sessions (bars, %, the even-pace tick,
-// the reset countdown, a flame when on pace to run out), a Limits page and a "Where it went" page
-// behind it; plus the alert drop-down and the used-up wing. Theme only, nothing animates.
+// Plan limits in the Agents tab: a column beside the sessions (bars, %, the even-pace tick, the
+// reset countdown, a flame when on pace to run out), a Limits page and a "Where it went" page
+// behind it; the Home card; the alert drop-down and the used-up wing. Theme only, nothing animates.
 
 extension UsageService {
     var tint: Color { agent.tint }
@@ -46,7 +46,7 @@ public enum AgentsTabPage: String, Sendable, CaseIterable {
     case sessions, limits, whereItWent
 }
 
-/// The Agents tab: the sessions board with the limits strip under it, or a limits page.
+/// The Agents tab: the sessions board with the limits column beside it, or a limits page.
 struct AgentsTab: View {
     let model: AgentsModel
     let limits: UsageLimitsStore
@@ -55,11 +55,13 @@ struct AgentsTab: View {
     var body: some View {
         switch page {
         case .sessions:
-            VStack(spacing: 4.ui) {
+            let groups = LimitsLayout.columnGroups(limits, now: limits.clock)
+            if groups.isEmpty {
                 AgentsBoard(model: model)
-                    .frame(maxHeight: .infinity)
-                if limits.claudeEnabled || limits.codexEnabled {
-                    LimitsStrip(limits: limits) { page = .limits }
+            } else {
+                AgentsBoard(model: model, compact: true) {
+                    LimitsColumn(groups: groups, now: limits.clock) { page = .limits }
+                        .frame(width: LimitsColumn.width)
                 }
             }
         case .limits, .whereItWent:
@@ -68,106 +70,125 @@ struct AgentsTab: View {
     }
 }
 
-// MARK: Strip
+// MARK: Column
 
-struct LimitsStrip: View {
-    let limits: UsageLimitsStore
+/// The limits beside the sessions: per service its glyph, then a row per limit (label, reset
+/// countdown, flame, %, the bar with the even-pace tick). The whole column opens the Limits page.
+struct LimitsColumn: View {
+    let groups: [LimitsColumnGroup]
+    let now: Date
     let open: () -> Void
     @State private var hover = false
 
+    /// About 36% of the page: the sessions keep the rest.
+    static var width: CGFloat { 222.ui }
+
     var body: some View {
-        let now = limits.clock
         Button(action: open) {
-            // One row; every limit gets the same width, whichever service it belongs to.
-            HStack(spacing: 10.ui) {
+            // Three Claude rows and two Codex rows fit the 128 pt beside the sessions at every size.
+            VStack(alignment: .leading, spacing: 8.ui) {
                 ForEach(groups, id: \.service) { g in
-                    Image(systemName: g.service.symbol)
-                        .font(.system(size: 9.ui, weight: .bold))
-                        .foregroundStyle(g.service.tint)
-                        .frame(width: 12.ui)
-                        .padding(.leading, g.service == groups.first?.service ? 0 : 6.ui)
-                        .help(g.service.name)
-                    if let r = g.reading, !r.limits.isEmpty {
-                        ForEach(r.limits) { l in
-                            LimitCell(limit: l, service: g.service, now: now, showsReset: !r.sharesWeekReset(l))
-                                .opacity(r.isStale(at: now) ? 0.45 : 1)
-                        }
-                    } else {
-                        Text(g.note)
-                            .font(Theme.font(.xs))
-                            .foregroundStyle(Theme.tertiary)
-                            .lineLimit(1)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    LimitsColumnGroupView(group: g, now: now)
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 8.ui, weight: .bold))
-                    .foregroundStyle(hover ? Theme.secondary : Theme.tertiary)
             }
-            .padding(.horizontal, 8.ui)
-            .frame(height: 30.ui)
-            .background(RoundedRectangle(cornerRadius: 8.ui, style: .continuous).fill(hover ? Theme.card : Color.white.opacity(0.035)))
+            .padding(.leading, 8.ui)
+            .padding(.trailing, 10.ui)
+            .padding(.vertical, 6.ui)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 10.ui, style: .continuous)
+                .fill(hover ? Color.white.opacity(0.09) : Color.white.opacity(0.045)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
-        .help(LimitsText.t("The tick on each bar shows where you'd be at an even pace."))
-    }
-
-    private struct Group { let service: UsageService; let reading: UsageReading?; let note: String }
-
-    private var groups: [Group] {
-        var out: [Group] = []
-        if limits.claudeEnabled { out.append(Group(service: .claude, reading: limits.claude, note: LimitsPage.claudeNote(limits))) }
-        if limits.codexEnabled {
-            out.append(Group(service: .codex, reading: limits.codex, note: LimitsText.t("Updates when you use Codex.")))
-        }
-        return out
+        .help(LimitsText.t("Plan limits: open for the details and where they went.") + "\n"
+              + LimitsText.t("The tick on each bar shows where you'd be at an even pace."))
     }
 }
 
-/// One limit in the strip: "5h · 2h18 ………… 42%" over a thin bar.
+private struct LimitsColumnGroupView: View {
+    let group: LimitsColumnGroup
+    let now: Date
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6.ui) {
+            Image(systemName: group.service.symbol)
+                .font(.system(size: 9.ui, weight: .bold))
+                .foregroundStyle(group.service.tint)
+                .frame(width: 12.ui, height: 13.ui)
+                .help([group.service.name, group.plan, group.ago].compactMap { $0 }.joined(separator: " · "))
+            switch group.body {
+            case .limits(let rows):
+                VStack(alignment: .leading, spacing: 4.ui) {
+                    ForEach(Array(rows.enumerated()), id: \.element.limit.id) { i, row in
+                        LimitCell(limit: row.limit, service: group.service, now: now, showsReset: row.showsReset,
+                                  percent: row.percent, ago: i == 0 ? group.ago : nil, spacing: 2.ui)
+                    }
+                }
+                .opacity(group.stale ? 0.5 : 1)
+            case .note(let text):
+                Text(verbatim: [group.ago, text].compactMap { $0 }.joined(separator: " · "))
+                    .font(Theme.font(.xs))
+                    .foregroundStyle(Theme.tertiary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+/// One limit: "5h · 2h18 ………… 42%" over a thin bar (the column, the Home card).
 struct LimitCell: View {
     let limit: UsageLimit
     let service: UsageService
     let now: Date
     /// A model's bucket resetting with the all-models week shows no countdown of its own.
     var showsReset = true
+    /// The % to show; nil = not known any more (an old reading reset since): "–", no bar.
+    var percent: Double?? = .none
+    /// An old reading's age, in place of the countdown.
+    var ago: String? = nil
+    /// Between the text and the bar.
+    var spacing: CGFloat = 3.ui
 
     var body: some View {
-        let p = limit.effective(at: now)
-        let eta = limit.runsOutAt(now: now)
-        VStack(alignment: .leading, spacing: 3.ui) {
+        let p: Double? = percent ?? limit.effective(at: now)
+        let eta = p == nil ? nil : limit.runsOutAt(now: now)
+        VStack(alignment: .leading, spacing: spacing) {
             HStack(spacing: 3.ui) {
                 Text(LimitsText.short(limit.kind))
                     .foregroundStyle(Theme.secondary)
                     .lineLimit(1)
-                if showsReset, let c = LimitsText.compactUntil(limit.resetsAt, now: now) {
+                if let ago {
+                    Text("· \(ago)").foregroundStyle(Theme.waiting).lineLimit(1).layoutPriority(1)
+                } else if showsReset, p != nil, let c = LimitsText.compactUntil(limit.resetsAt, now: now) {
                     Text("· \(c)").foregroundStyle(Theme.tertiary).lineLimit(1).fixedSize().layoutPriority(1)
                 }
                 Spacer(minLength: 2.ui)
                 if eta != nil {
                     Image(systemName: "flame.fill").font(.system(size: 8.ui)).foregroundStyle(Theme.waiting)
                 }
-                Text("\(Int(p.rounded()))%")
+                Text(p.map { "\(Int($0.rounded()))%" } ?? "–")
                     .font(Theme.font(.xs, .semibold).monospacedDigit())
-                    .foregroundStyle(eta != nil ? Theme.waiting : p >= 75 ? limitColor(p, service) : Theme.primary)
+                    .foregroundStyle(p == nil ? Theme.tertiary : eta != nil ? Theme.waiting : p! >= 75 ? limitColor(p!, service) : Theme.primary)
                     .fixedSize()
                     .layoutPriority(2)
             }
             .font(Theme.font(.xs, .medium).monospacedDigit())
-            LimitBar(percent: p, pace: limit.pace(at: now), color: limitColor(p, service), height: 3.ui)
+            LimitBar(percent: p ?? 0, pace: p == nil ? nil : limit.pace(at: now), color: limitColor(p ?? 0, service), height: 3.ui)
         }
         .frame(maxWidth: .infinity)
         .help(tooltip(p: p, eta: eta))
     }
 
-    private func tooltip(p: Double, eta: Date?) -> String {
-        var lines = ["\(service.name) · \(LimitsText.label(limit.kind)): \(Int(p.rounded()))%"]
+    private func tooltip(p: Double?, eta: Date?) -> String {
+        var lines = ["\(service.name) · \(LimitsText.label(limit.kind)): " + (p.map { "\(Int($0.rounded()))%" } ?? LimitsText.t("Reset"))]
+        if let ago { lines.append(LimitsText.t("Last read") + " " + ago) }
         let reset = LimitsText.resetLine(limit.resetsAt, now: now)
-        if !reset.isEmpty { lines.append(reset) }
+        if p != nil, !reset.isEmpty { lines.append(reset) }
         if let eta { lines.append(LimitsText.runsOut(limit, eta: eta, now: now)) }
-        else if let b = limit.dailyBudget(at: now) { lines.append(LimitsText.dailyBudget(b)) }
+        else if p != nil, let b = limit.dailyBudget(at: now) { lines.append(LimitsText.dailyBudget(b)) }
         return lines.joined(separator: "\n")
     }
 }

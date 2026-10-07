@@ -31,6 +31,8 @@ enum LimitsText {
         "No data yet: use it once and it will show up here.": "Nessun dato: usalo una volta e comparirà qui.",
         "Updates when you use Codex.": "Si aggiorna quando usi Codex.",
         "The tick on each bar shows where you'd be at an even pace.": "La tacca sulla barra indica dove saresti a ritmo costante.",
+        "Plan limits: open for the details and where they went.": "Limiti del piano: apri per i dettagli e per vedere dove sono finiti.",
+        "Last read": "Ultima lettura",
         "Reading local logs…": "Leggo i log locali…",
         "No usage in this window.": "Nessun utilizzo in questa finestra.",
         "Temporary folders": "Cartelle temporanee",

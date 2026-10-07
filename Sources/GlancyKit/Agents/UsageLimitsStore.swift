@@ -318,10 +318,17 @@ public final class UsageLimitsStore {
 
     // MARK: Cache (~/Library/Caches/Glancy/limits.json)
 
-    private struct Cache: Codable {
+    fileprivate struct Cache: Codable {
         var version = 1
         var claude: UsageReading?
         var codex: UsageReading?
+    }
+
+    /// The readings in a cache file, read-only (the renderer's "real" shots from the app's own cache).
+    public nonisolated static func readCache(_ url: URL) -> (claude: UsageReading?, codex: UsageReading?) {
+        guard let data = try? Data(contentsOf: url), let c = try? JSONDecoder.iso.decode(Cache.self, from: data),
+              c.version == 1 else { return (nil, nil) }
+        return (c.claude?.service == .claude ? c.claude : nil, c.codex?.service == .codex ? c.codex : nil)
     }
 
     private func loadCache() {

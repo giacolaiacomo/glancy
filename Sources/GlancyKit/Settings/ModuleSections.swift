@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// What the index says about each section, and which modules have one.
+/// What the Settings window says about each module (purpose, a one-line state for the sidebar's
+/// tooltip, tint, search words), and which modules have settings of their own.
 @MainActor
 enum SettingsCatalog {
     static func hasSection(_ id: ModuleID) -> Bool {
@@ -16,13 +17,47 @@ enum SettingsCatalog {
         return "\(open) · \(lang) · \(tr(GeneralSection.sizeName(s.size)))"
     }
 
+    /// The colour of a module's icon in the sidebar and on its page. A module not listed (a new
+    /// one) is gray: lookups, not switches, so a new ModuleID needs nothing here.
+    static func tint(_ id: ModuleID) -> Color {
+        Color(nsColor: tints[id] ?? .systemGray)
+    }
+
+    private static let tints: [ModuleID: NSColor] = [
+        .agents: .systemPurple, .calendar: .systemRed, .media: .systemPink, .timer: .systemOrange,
+        .notes: .systemYellow, .shelf: .systemTeal, .clipboard: .systemIndigo, .windows: .systemBlue,
+        .control: .systemCyan, .monitor: .systemGreen, .notifications: .systemRed, .hud: .systemGray,
+        .power: .systemGreen, .command: .darkGray,
+    ]
+
+    /// Row names the sidebar's search finds a module by (its name and purpose always match).
+    static func keywords(_ id: ModuleID) -> [String] {
+        keywordTable[id]?() ?? []
+    }
+
+    private static let keywordTable: [ModuleID: @MainActor () -> [String]] = [
+        .agents: { ["Claude Code", "Codex", "OpenCode", LimitsText.t("Plan limits")] },
+        .calendar: { [CalL10n.focusSwitch, CalL10n.endWarning, CalL10n.joinShortcut, CalL10n.calendarsTitle] },
+        .media: { [tr("Source in use"), tr("Lyrics")] },
+        .hud: { [tr("Volume"), tr("Brightness"), tr("Keyboard backlight"), tr("Mute microphone")] },
+        .power: { [tr("Battery in the notch"), tr("Low battery peek"), tr("Headphones peek"), tr("Full charge peek")] },
+        .timer: { [tr("Focus"), tr("Short break"), tr("Long break"), "Pomodoro"] },
+        .shelf: { [tr("Drop targets"), tr("Finished downloads")] },
+        .clipboard: { [tr("Pause history"), tr("Paste after choosing"), tr("Excluded apps"), tr("Shortcut")] },
+        .windows: { [tr("Shortcuts"), WindowsText.t("Auto-arrange"), WindowsText.t("Workspaces")] },
+        .notes: { [tr("Quick note"), tr("Voice notes")] },
+        .command: { [tr("Shortcut"), CommandText.t("Calculator"), CommandText.t("Web search")] },
+        .control: { [ControlText.t("Keep awake by default"), ControlText.t("Tiles")] },
+        .monitor: { [MonitorText.t("Sparklines"), MonitorText.t("Refresh")] },
+    ]
+
     /// Settings → Home's tile: how many widgets are on.
     @MainActor static func homeSummary(_ s: AppSettings) -> String {
         let on = HomeWidget.allCases.filter { s.isShownOnHome($0) && s.isEnabled($0.module) }.count
         return L10n.tr("%d widgets on", on)
     }
 
-    /// One line for a module's tile.
+    /// One line for a module's state (the sidebar row's tooltip).
     static func summary(_ id: ModuleID, _ context: SurfaceContext) -> String {
         switch id {
         case .calendar:
@@ -81,7 +116,7 @@ enum SettingsCatalog {
         }
     }
 
-    /// One line under each module in Settings → Modules.
+    /// One line under the module's name on its page.
     static func purpose(_ id: ModuleID) -> String {
         switch id {
         case .agents: AgentsText.t("Claude Code, Codex, OpenCode sessions")
@@ -103,22 +138,60 @@ enum SettingsCatalog {
     }
 }
 
-/// A module's own settings, under a header with its on/off switch.
+/// A module's page: its on/off switch with what it does, then its own settings.
 struct ModuleSection: View {
     let context: SurfaceContext
     let id: ModuleID
 
+    /// The page's switch: reads the setting, turns the module on or off through the app.
+    static func enabled(_ id: ModuleID, _ context: SurfaceContext) -> Binding<Bool> {
+        Binding(get: { context.settings.isEnabled(id) }, set: { context.setModuleEnabled(id, $0) })
+    }
+
     var body: some View {
         let on = context.settings.isEnabled(id)
-        VStack(alignment: .leading, spacing: 4.ui) {
-            SettingsHeader(context: context, title: tr(SurfaceContext.name(id))) {
-                if context.modules.contains(where: { $0.id == id }) {
-                    NotchSwitch(isOn: Binding(get: { on }, set: { context.setModuleEnabled(id, $0) }))
-                        .help(on ? tr("Turn off") : tr("Turn on"))
+        VStack(alignment: .leading, spacing: 22) {
+            SettingsBox {
+                HStack(spacing: 12) {
+                    SettingsIcon(symbol: SurfaceContext.symbol(id), tint: SettingsCatalog.tint(id), size: 32, dimmed: !on)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: tr(SurfaceContext.name(id)))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(SettingsStyle.primary)
+                        Text(verbatim: tr(SettingsCatalog.purpose(id)))
+                            .font(SettingsStyle.font(.s))
+                            .foregroundStyle(SettingsStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if context.modules.contains(where: { $0.id == id }) {
+                        NotchSwitch(isOn: Self.enabled(id, context))
+                            .help(on ? tr("Turn off") : tr("Turn on"))
+                            .accessibilityLabel(tr(SurfaceContext.name(id)))
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+            if SettingsCatalog.hasSection(id) {
+                SettingsBox {
+                    VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) { content }
+                }
+                .opacity(on ? 1 : 0.5)
+            } else if on, let (permission, text) = Self.permission(id) {
+                // No settings of its own, but a permission it can't work without.
+                let status = context.settings.permissions.status(permission)
+                if status == .notDetermined || status == .denied {
+                    SettingsBox { PermissionLine(context: context, permission: permission, text: text) }
                 }
             }
-            content
-                .opacity(on ? 1 : 0.5)
+        }
+    }
+
+    /// The permission a module without its own section needs, with the line that asks for it.
+    private static func permission(_ id: ModuleID) -> (PermissionKind, String)? {
+        switch id {
+        case .notifications: (.fullDiskAccess, tr("Reading your notifications needs Full Disk Access"))
+        default: nil
         }
     }
 
@@ -153,13 +226,21 @@ private struct PermissionLine: View {
         let center = context.settings.permissions
         let status = center.status(permission)
         if status == .notDetermined || status == .denied {
-            HStack(spacing: 6.ui) {
-                Circle().fill(Theme.waiting).frame(width: 6.ui, height: 6.ui)
-                Text(verbatim: text).font(Theme.font(.xs)).foregroundStyle(Theme.secondary).lineLimit(1)
-                Spacer(minLength: 6.ui)
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SettingsStyle.waiting)
+                Text(verbatim: text)
+                    .font(SettingsStyle.font(.s))
+                    .foregroundStyle(SettingsStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 NotchTextButton(status == .denied ? tr("Open Settings") : tr("Allow…")) { center.request(permission) }
+                    .fixedSize()
             }
-            .frame(minHeight: 24.ui)
+            .padding(.vertical, 6)
+            .frame(minHeight: 22)
+            .settingsRow()
         }
     }
 }
@@ -173,7 +254,7 @@ private struct CalendarSection: View {
     var body: some View {
         let settings = module.settings
         let calendars = settings.availableCalendars
-        VStack(alignment: .leading, spacing: 5.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             MeetingSettingsView(module: module, context: context)
             PermissionLine(context: context, permission: .calendar, text: tr("Glancy can't read your calendars yet"))
             if calendars.isEmpty {
@@ -181,21 +262,23 @@ private struct CalendarSection: View {
             } else {
                 let accounts = Dictionary(grouping: calendars, by: \.source)
                 ForEach(accounts.keys.sorted(), id: \.self) { account in
-                    HStack(alignment: .top, spacing: 8.ui) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(verbatim: account.isEmpty ? tr("Other") : account)
-                            .font(Theme.font(.s))
-                            .foregroundStyle(Theme.tertiary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(width: 120.ui, height: 22.ui, alignment: .leading)
-                        FlowLayout(spacing: 4.ui) {
+                            .font(SettingsStyle.font(.m))
+                            .foregroundStyle(SettingsStyle.primary)
+                            .lineLimit(2)
+                            .frame(width: 130, alignment: .leading)
+                        FlowLayout(spacing: 6) {
                             ForEach(accounts[account] ?? []) { cal in
                                 CalendarChip(info: cal, on: settings.isSelected(cal.id)) {
                                     settings.setSelected(cal.id, !settings.isSelected(cal.id))
                                 }
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .padding(.vertical, 6)
+                    .settingsRow()
                 }
                 SettingsNote(tr("New calendars join automatically while every calendar is on."))
             }
@@ -210,23 +293,24 @@ private struct CalendarChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5.ui) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(on ? info.color.color : .clear)
-                    .overlay(Circle().strokeBorder(info.color.color, lineWidth: 1.5.ui))
-                    .frame(width: 8.ui, height: 8.ui)
+                    .overlay(Circle().strokeBorder(info.color.color, lineWidth: 1.5))
+                    .frame(width: 9, height: 9)
                 Text(verbatim: info.title)
-                    .font(Theme.font(.s, on ? .medium : .regular))
-                    .foregroundStyle(on ? Theme.primary : Theme.tertiary)
+                    .font(SettingsStyle.font(.s, on ? .medium : .regular))
+                    .foregroundStyle(on ? SettingsStyle.primary : SettingsStyle.secondary)
                     .lineLimit(1)
             }
-            .padding(.horizontal, 8.ui)
-            .frame(height: 22.ui)
-            .background(Capsule().fill(on ? Color.white.opacity(0.12) : .clear))
-            .overlay(Capsule().strokeBorder(on ? .clear : Theme.hairline, lineWidth: 1.ui))
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .background(Capsule().fill(on ? info.color.color.opacity(0.16) : .clear))
+            .overlay(Capsule().strokeBorder(on ? info.color.color.opacity(0.35) : SettingsStyle.hairline, lineWidth: 1))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .help(info.title)
     }
 }
 
@@ -247,35 +331,39 @@ private struct HUDSection: View {
     var body: some View {
         @Bindable var settings = module.settings
         let _ = tick
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             PermissionLine(context: context, permission: .accessibility, text: tr("Needs Accessibility to take over the keys"))
             SettingsRow(tr("Show in the notch"), note: tr("Replaces the system HUD for the keys below")) {
                 NotchSwitch(isOn: $settings.enabled)
             }
-            SettingsRow(tr("Keys")) {
-                HStack(spacing: 4.ui) {
+            // The three keys under the label: side by side they would squeeze the note.
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: tr("Keys")).font(SettingsStyle.font(.m)).foregroundStyle(SettingsStyle.primary)
+                    Text(verbatim: tr("Keys left out keep the system HUD. ⌥⇧ still steps by quarters."))
+                        .font(SettingsStyle.font(.xs)).foregroundStyle(SettingsStyle.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                FlowLayout(spacing: 6) {
                     ForEach(Self.kinds, id: \.0) { kind, title, symbol in
                         NotchChip(symbol: symbol, title: tr(title), on: settings.handles(kind)) {
                             settings.set(kind, !settings.handles(kind))
                         }
                     }
                 }
-                .opacity(settings.enabled ? 1 : 0.4)
                 .disabled(!settings.enabled)
             }
-            SettingsNote(tr("Keys left out keep the system HUD. ⌥⇧ still steps by quarters."))
-            HStack(alignment: .top, spacing: 22.ui) {
-                SettingsRow(tr("Mute microphone shortcut"), note: tr("Mutes or unmutes the default microphone")) {
-                    HotkeyField(id: "hud.mic", hotkey: settings.micHotkey, conflict: conflict(settings.micHotkey)) { h in
-                        module.setMicHotkey(h)
-                        tick += 1
-                    }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+            .settingsRow()
+            SettingsRow(tr("Mute microphone shortcut"), note: tr("Mutes or unmutes the default microphone")) {
+                HotkeyField(id: "hud.mic", hotkey: settings.micHotkey, conflict: conflict(settings.micHotkey)) { h in
+                    module.setMicHotkey(h)
+                    tick += 1
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                SettingsRow(tr("Microphone and camera in use"), note: tr("A red dot in the notch while an app records")) {
-                    NotchSwitch(isOn: $settings.showInUse)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            SettingsRow(tr("Microphone and camera in use"), note: tr("A red dot in the notch while an app records")) {
+                NotchSwitch(isOn: $settings.showInUse)
             }
         }
         .onAppear { system = HotkeyConflict.systemHotkeys() }
@@ -296,15 +384,15 @@ private struct PowerSection: View {
 
     var body: some View {
         @Bindable var settings = module.settings
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsRow(tr("Battery in the notch"), note: tr("Plugging in, unplugging, Low Power Mode")) {
                 NotchSwitch(isOn: $settings.batteryActivities)
             }
             SettingsRow(tr("Low battery peek"), note: tr("On battery, once per discharge")) {
-                HStack(spacing: 6.ui) {
-                    NotchSegments(selection: $settings.lowFirst, options: [30, 25, 20, 15].map { ($0, "\($0)%") })
-                    NotchSegments(selection: $settings.lowSecond, options: [15, 10, 5].map { ($0, "\($0)%") })
-                        .opacity(settings.lowAlerts ? 1 : 0.4)
+                HStack(spacing: 8) {
+                    NotchSegments(selection: $settings.lowFirst, options: [30, 25, 20, 15].map { ($0, "\($0)%") }, windowMenu: true)
+                    NotchSegments(selection: $settings.lowSecond, options: [15, 10, 5].map { ($0, "\($0)%") }, windowMenu: true)
+                        .disabled(!settings.lowAlerts)
                     NotchSwitch(isOn: $settings.lowAlerts)
                 }
             }
@@ -343,11 +431,11 @@ private struct MediaSection: View {
 
     var body: some View {
         let source = module.model.source
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsRow(tr("Source in use"), note: note(source)) {
                 Text(verbatim: Self.sourceTitle(source))
-                    .font(Theme.font(.s, .medium))
-                    .foregroundStyle(source == .scripts ? Theme.waiting : Theme.secondary)
+                    .font(SettingsStyle.font(.m))
+                    .foregroundStyle(source == .scripts ? SettingsStyle.waiting : SettingsStyle.secondary)
             }
             if source == .scripts {
                 PermissionLine(context: context, permission: .automation, text: tr("Controls need Automation for Music or Spotify"))
@@ -373,15 +461,16 @@ private struct TimerSection: View {
     @State private var lengths = Pomodoro.lengths
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
+            SettingsGroupTitle(tr("Pomodoro"))
             SettingsRow(tr("Focus")) { stepper(\.focus) }
             SettingsRow(tr("Short break")) { stepper(\.shortBreak) }
             SettingsRow(tr("Long break"), note: tr("After the fourth focus round")) { stepper(\.longBreak) }
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 SettingsNote(tr("A round already running keeps its length."))
-                Spacer()
                 if lengths != PomodoroLengths() {
                     NotchTextButton(tr("Reset")) { set(PomodoroLengths()) }
+                        .controlSize(.small)
                 }
             }
             TimerMoreSettingsView(module: module)
@@ -413,48 +502,38 @@ private struct ClipboardSection: View {
     var body: some View {
         @Bindable var settings = module.model.settings
         let _ = tick
-        VStack(alignment: .leading, spacing: 4.ui) {
-            HStack(alignment: .top, spacing: 22.ui) {
-                VStack(alignment: .leading, spacing: 4.ui) {
-                    SettingsRow(tr("Pause history"), note: settings.paused ? tr("Nothing is being recorded") : nil) {
-                        NotchSwitch(isOn: $settings.paused)
-                    }
-                    SettingsRow(tr("Paste after choosing"), note: tr("Presses ⌘V in the app underneath")) {
-                        NotchSwitch(isOn: Binding(get: { settings.pasteAfterChoosing },
-                                                  set: { settings.pasteAfterChoosing = $0; module.pasteSettingChanged($0) }))
-                    }
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
+            SettingsRow(tr("Shortcut"), note: tr("Opens the list with the keyboard")) {
+                HotkeyField(id: "clipboard", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
+                    module.setHotkey(h)
+                    tick += 1
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4.ui) {
-                    SettingsRow(tr("Shortcut"), note: tr("Opens the list with the keyboard")) {
-                        HotkeyField(id: "clipboard", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
-                            module.setHotkey(h)
-                            tick += 1
-                        }
-                    }
-                    SettingsRow(tr("History"), note: L10n.tr("%d items, up to 60", module.model.items.count)) {
-                        ConfirmButton(title: tr("Clear"), question: tr("Pinned too?"), confirm: tr("Clear"),
-                                      enabled: !module.model.items.isEmpty) { module.model.clearAll() }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            SettingsRow(tr("Paste after choosing"), note: tr("Presses ⌘V in the app underneath")) {
+                NotchSwitch(isOn: Binding(get: { settings.pasteAfterChoosing },
+                                          set: { settings.pasteAfterChoosing = $0; module.pasteSettingChanged($0) }))
             }
             if settings.pasteAfterChoosing {
                 PermissionLine(context: context, permission: .accessibility, text: tr("Pasting needs Accessibility"))
             }
-            VStack(alignment: .leading, spacing: 3.ui) {
-                SettingsGroupTitle(tr("Excluded apps"))
-                if settings.excluded.isEmpty {
-                    SettingsNote(tr("None. Right-click an item in the list to never record from its app. Password managers are always skipped."))
-                } else {
-                    FlowLayout(spacing: 4.ui) {
-                        ForEach(settings.excluded.sorted { $0.value < $1.value }, id: \.key) { bundleID, name in
-                            ExcludedChip(name: name) { module.model.include(bundleID: bundleID) }
-                        }
+            SettingsRow(tr("Pause history"), note: settings.paused ? tr("Nothing is being recorded") : nil) {
+                NotchSwitch(isOn: $settings.paused)
+            }
+            SettingsRow(tr("History"), note: L10n.tr("%d items, up to 60", module.model.items.count)) {
+                ConfirmButton(title: tr("Clear"), question: tr("Pinned too?"), confirm: tr("Clear"),
+                              enabled: !module.model.items.isEmpty) { module.model.clearAll() }
+            }
+            SettingsGroupTitle(tr("Excluded apps"))
+            if settings.excluded.isEmpty {
+                SettingsNote(tr("None. Right-click an item in the list to never record from its app. Password managers are always skipped."))
+            } else {
+                FlowLayout(spacing: 6) {
+                    ForEach(settings.excluded.sorted { $0.value < $1.value }, id: \.key) { bundleID, name in
+                        ExcludedChip(name: name) { module.model.include(bundleID: bundleID) }
                     }
                 }
+                .padding(.vertical, 4)
             }
-            .padding(.top, 2.ui)
         }
         .onAppear { system = HotkeyConflict.systemHotkeys() }
     }
@@ -470,18 +549,18 @@ private struct ExcludedChip: View {
     let name: String
     let remove: () -> Void
     var body: some View {
-        HStack(spacing: 4.ui) {
-            Text(verbatim: name).font(Theme.font(.s)).foregroundStyle(Theme.primary).lineLimit(1)
+        HStack(spacing: 4) {
+            Text(verbatim: name).font(SettingsStyle.font(.s)).foregroundStyle(SettingsStyle.primary).lineLimit(1)
             Button(action: remove) {
-                Image(systemName: "xmark").font(.system(size: 8.ui, weight: .bold)).foregroundStyle(Theme.tertiary)
-                    .frame(width: 14.ui, height: 14.ui).contentShape(Rectangle())
+                Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundStyle(SettingsStyle.faint)
+                    .frame(width: 16, height: 16).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(tr("Record from this app again"))
         }
-        .padding(.leading, 8.ui).padding(.trailing, 4.ui)
-        .frame(height: 22.ui)
-        .background(Capsule().fill(Theme.card))
+        .padding(.leading, 10).padding(.trailing, 4)
+        .frame(height: 24)
+        .background(Capsule().fill(SettingsStyle.card))
     }
 }
 
@@ -558,7 +637,7 @@ private struct WindowsSection: View {
         let all = GlancyHotkeys.bindings(context)
         let failed = Set((Self.actions + Self.arrangeActions).map { hotkeys[keyPath: $0.key] }
             .filter { module.failedHotkeys.contains($0.description) })
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             PermissionLine(context: context, permission: .accessibility, text: tr("Moving windows needs Accessibility"))
             SettingsRow(tr("Shortcuts"), note: tr("Halves cycle ½ → ⅔ → ⅓ on repeat")) {
                 NotchSwitch(isOn: Binding(get: { hotkeys.enabled }, set: { on in
@@ -570,11 +649,9 @@ private struct WindowsSection: View {
                                            hotkeys.undo.description))
                 grid(Self.actions, hotkeys: hotkeys, all: all, failed: failed)
                 SettingsGroupTitle(WindowsText.t("More shortcuts"))
-                    .padding(.top, 8.ui)
                 SettingsNote(WindowsText.t("Arrange the display under the pointer with a fixed strategy · ⇧ = only the front app"))
                 grid(Self.arrangeActions, hotkeys: hotkeys, all: all, failed: failed)
             }
-            .opacity(hotkeys.enabled ? 1 : 0.4)
             .disabled(!hotkeys.enabled)
             WorkspacesSettings(module: module) { id, key in
                 HotkeyConflict.find(HotkeyBinding(id: id, title: "", hotkey: key), among: GlancyHotkeys.bindings(context),
@@ -584,19 +661,19 @@ private struct WindowsSection: View {
         .onAppear { system = HotkeyConflict.systemHotkeys() }
     }
 
+    /// One row per action (the window is narrower than the notch's two columns).
+    @ViewBuilder
     private func grid(_ actions: [Action], hotkeys: WindowsHotkeys, all: [HotkeyBinding], failed: Set<Hotkey>) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 22.ui), GridItem(.flexible())], alignment: .leading, spacing: 2.ui) {
-            ForEach(actions, id: \.id) { a in
-                let key = hotkeys[keyPath: a.key]
-                SettingsRow(tr(a.title), minHeight: 24.ui) {
-                    HotkeyField(id: a.id, hotkey: key,
-                                conflict: HotkeyConflict.find(HotkeyBinding(id: a.id, title: tr(a.title), hotkey: key),
-                                                              among: all, system: system, failed: failed)) { new in
-                        var h = module.hotkeys
-                        h[keyPath: a.key] = new
-                        module.setHotkeys(h)
-                        tick += 1
-                    }
+        ForEach(actions, id: \.id) { a in
+            let key = hotkeys[keyPath: a.key]
+            SettingsRow(tr(a.title)) {
+                HotkeyField(id: a.id, hotkey: key,
+                            conflict: HotkeyConflict.find(HotkeyBinding(id: a.id, title: tr(a.title), hotkey: key),
+                                                          among: all, system: system, failed: failed)) { new in
+                    var h = module.hotkeys
+                    h[keyPath: a.key] = new
+                    module.setHotkeys(h)
+                    tick += 1
                 }
             }
         }

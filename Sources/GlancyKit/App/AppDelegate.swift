@@ -37,15 +37,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let manager = SurfaceManager(context: context)
         self.manager = manager
         manager.start()
+        // ⌘, while Glancy is active (its window, or the panel holding the keyboard): Settings.
+        SettingsMenu.install { SurfaceRoute.openSettings?(nil) }
         startUpdates(defaults: .standard)
         startPermissions()
         // Glancy crashed since the last launch? One look, a few seconds in, off main.
         if !demo { CrashReports.checkAtLaunch(hub: hub) }
         if CommandLine.arguments.contains("--selftest") { manager.runSelfTest() }
         if let i = CommandLine.arguments.firstIndex(of: "--tour") {
-            // `--tour [home|tabs|all|<module>] [rounds]`: see SurfaceManager.runTour (diagnostics).
+            // `--tour [home|tabs|settings|all|<module>] [rounds]`: see SurfaceManager.runTour (diagnostics).
             let rest = CommandLine.arguments.dropFirst(i + 1)
-            let scope = rest.first.flatMap { ["home", "tabs", "all"].contains($0) || ModuleID(rawValue: $0) != nil ? $0 : nil }
+            let scope = rest.first.flatMap { ["home", "tabs", "settings", "all"].contains($0) || ModuleID(rawValue: $0) != nil ? $0 : nil }
             let rounds = rest.dropFirst(scope == nil ? 0 : 1).first.flatMap { Int($0) } ?? 1
             manager.runTour(after: 3, scope: scope ?? "all", rounds: rounds)
         }
@@ -112,6 +114,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             labSuites?()
         }
         guard let context else { return }
+        SettingsWindowController.closeCurrent()
         welcomeTask?.cancel()
         updatesTask?.cancel()
         context.settings.permissions.stop()
@@ -165,14 +168,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         context?.modules.first { running.contains($0.id) && $0 is T } as? T
     }
 
-    /// First launch: the notch opens once on the welcome checklist (Settings → Permissions).
+    /// First launch: the Settings window opens once on the welcome checklist (Permissions).
     private func showWelcome() {
-        guard let context, let manager else { return }
-        context.settings.navigation.showWelcome()
-        manager.open(tab: nil)
-        // The manager's surfaces (same module); the open one switches to the settings page.
-        guard let surface = manager.surfacesForTest.first(where: { $0.model.expanded }) else { return }
-        if !surface.model.showingSettings { surface.model.toggleSettings() }
+        guard let context else { return }
+        SettingsWindowController.show(context: context, welcome: true)
         context.settings.markOnboarded()
     }
 

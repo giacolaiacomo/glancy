@@ -152,38 +152,62 @@ struct HotkeyField: View {
     let conflict: HotkeyConflict?
     let onChange: (Hotkey) -> Void
     @State private var hover = false
+    @Environment(\.settingsChrome) private var chrome
 
     var body: some View {
         let recorder = HotkeyRecorder.shared
         let recording = recorder.recording == id
-        VStack(alignment: .trailing, spacing: 1.ui) {
+        VStack(alignment: .trailing, spacing: chrome == .window ? 3 : 1.ui) {
             Button {
                 if recording { recorder.end() } else { recorder.begin(id, commit: onChange) }
             } label: {
-                Text(verbatim: label(recording: recording))
-                    .font(Theme.font(.s, recording ? .regular : .medium).monospacedDigit())
-                    .foregroundStyle(recording ? Theme.secondary : hotkey.modifiers == 0 ? Theme.tertiary : Theme.primary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 8.ui)
-                    .frame(minWidth: 64.ui)
-                    .frame(height: 20.ui)
-                    .background(Capsule().fill(recording || hover ? Color.white.opacity(0.12) : Theme.card))
-                    .overlay(Capsule().strokeBorder(recording ? Theme.secondary : conflict != nil ? Theme.waiting.opacity(0.7) : .clear,
-                                                    lineWidth: 1.ui))
-                    .contentShape(Capsule())
+                if chrome == .window { windowField(recording: recording) } else { notchField(recording: recording) }
             }
             .buttonStyle(.plain)
             .onHover { hover = $0 }
             .help(tr("Click, then press the new shortcut. Esc cancels, ⌫ clears."))
             if let note = note(recording: recording, refused: recorder.refused) {
                 Text(verbatim: note)
-                    .font(.system(size: 9.5.ui))
-                    .foregroundStyle(recording ? Theme.tertiary : Theme.waiting)
+                    .font(chrome == .window ? SettingsStyle.font(.xs) : .system(size: 9.5.ui))
+                    .foregroundStyle(recording ? (chrome == .window ? SettingsStyle.tertiary : Theme.tertiary)
+                                     : (chrome == .window ? SettingsStyle.waiting : Theme.waiting))
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
         }
         .onDisappear { recorder.cancel(id) }
+    }
+
+    private func notchField(recording: Bool) -> some View {
+        Text(verbatim: label(recording: recording))
+            .font(Theme.font(.s, recording ? .regular : .medium).monospacedDigit())
+            .foregroundStyle(recording ? Theme.secondary : hotkey.modifiers == 0 ? Theme.tertiary : Theme.primary)
+            .lineLimit(1)
+            .padding(.horizontal, 8.ui)
+            .frame(minWidth: 64.ui)
+            .frame(height: 20.ui)
+            .background(Capsule().fill(recording || hover ? Color.white.opacity(0.12) : Theme.card))
+            .overlay(Capsule().strokeBorder(recording ? Theme.secondary : conflict != nil ? Theme.waiting.opacity(0.7) : .clear,
+                                            lineWidth: 1.ui))
+            .contentShape(Capsule())
+    }
+
+    /// A recorder field like a text field: the focus ring while it listens.
+    private func windowField(recording: Bool) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        return Text(verbatim: label(recording: recording))
+            .font(.system(size: 12, weight: recording ? .regular : .medium).monospacedDigit())
+            .foregroundStyle(recording ? SettingsStyle.secondary : hotkey.modifiers == 0 ? SettingsStyle.faint : SettingsStyle.primary)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(minWidth: 88)
+            .frame(height: 22)
+            .background(shape.fill(Color(nsColor: .controlBackgroundColor)))
+            .overlay(shape.strokeBorder(recording ? Color.accentColor
+                                        : conflict != nil ? SettingsStyle.waiting
+                                        : hover ? Color.primary.opacity(0.25) : Color.primary.opacity(0.14),
+                                        lineWidth: recording ? 2 : 1))
+            .contentShape(shape)
     }
 
     private func label(recording: Bool) -> String {

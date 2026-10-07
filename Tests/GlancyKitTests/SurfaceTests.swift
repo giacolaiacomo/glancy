@@ -263,16 +263,16 @@ struct ModelTests {
         #expect(r.frame.height == 36)           // never a big transparent window left behind
     }
 
-    @Test func settingsAndTabsReportVisibility() {
+    @Test func tabsReportVisibility() {
         let (m, _) = make()
         m.expand(tab: nil)
         #expect(m.visibility == .expanded(nil))
         m.select(tab: .agents)
         #expect(m.visibility == .expanded(.agents))
-        m.toggleSettings()
-        #expect(m.showingSettings && m.visibility == .expanded(nil))
-        m.select(tab: .agents)
-        #expect(!m.showingSettings)
+        m.select(tab: nil)
+        #expect(m.visibility == .expanded(nil))
+        m.collapse()
+        #expect(m.visibility == .collapsed)
     }
 
     @Test func wingsAppearWithActivityAndRetract() {

@@ -80,41 +80,51 @@ enum PermissionRows {
 struct PermissionsSection: View {
     let context: SurfaceContext
     let welcome: Bool
+    /// The welcome's Done: closes the window.
+    var done: () -> Void = {}
 
     var body: some View {
         let center = context.settings.permissions
         let rows = PermissionRows.visible(context)
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: 18) {
             if welcome {
-                HStack(spacing: 8.ui) {
-                    GlancyGlyph()
-                        .fill(Theme.secondary)
-                        .frame(width: 18.ui, height: 9.ui)
-                    Text(verbatim: tr("Welcome to Glancy"))
-                        .font(Theme.font(.xl, .semibold))
-                        .foregroundStyle(Theme.primary)
-                        .lineLimit(1)
-                        .layoutPriority(1)
-                    Text(verbatim: tr("Allow only what you need."))
-                        .font(Theme.font(.s))
-                        .foregroundStyle(Theme.tertiary)
-                        .lineLimit(1)
-                    Spacer(minLength: 6.ui)
-                    NotchTextButton(tr("Done")) { context.settings.navigation.go(.index) }
+                HStack(spacing: 14) {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(Color.black)
+                        .overlay(GlancyGlyph().fill(Color.white).frame(width: 24, height: 12).offset(y: -3))
+                        .frame(width: 44, height: 44)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(verbatim: tr("Welcome to Glancy"))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(SettingsStyle.primary)
+                        Text(verbatim: tr("Allow only what you need. Every module works without its permission; it just does less."))
+                            .font(SettingsStyle.font(.m))
+                            .foregroundStyle(SettingsStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .frame(height: 24.ui)
-            } else {
-                SettingsHeader(context: context, title: tr("Permissions"))
+                .padding(.horizontal, 4)
             }
-            VStack(spacing: 0) {
-                ForEach(rows, id: \.self) { p in
-                    PermissionRow(permission: p, status: center.status(p), asking: center.asking == p) {
-                        center.request(p)
+            SettingsSection(nil, footer: welcome ? nil : tr("Every module works without its permission; it just does less.")) {
+                VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
+                    if rows.isEmpty {
+                        SettingsNote(tr("Nothing to allow: no module needs a permission."))
+                    }
+                    ForEach(rows, id: \.self) { p in
+                        PermissionRow(permission: p, status: center.status(p), asking: center.asking == p) {
+                            center.request(p)
+                        }
                     }
                 }
             }
-            if !welcome {
-                SettingsNote(tr("Every module works without its permission; it just does less."))
+            if welcome {
+                HStack {
+                    Spacer()
+                    Button(tr("Done"), action: done)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         }
     }
@@ -127,55 +137,56 @@ private struct PermissionRow: View {
     let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 8.ui) {
-            Circle()
-                .fill(dot)
-                .frame(width: 6.ui, height: 6.ui)
-            Image(systemName: PermissionRows.symbol(permission))
-                .font(.system(size: 11.ui, weight: .medium))
-                .foregroundStyle(Theme.secondary)
-                .frame(width: 16.ui)
-            Text(verbatim: PermissionRows.title(permission))
-                .font(Theme.font(.m, .medium))
-                .foregroundStyle(Theme.primary)
-                .lineLimit(1)
-                .frame(width: 112.ui, alignment: .leading)
-            Text(verbatim: PermissionRows.purpose(permission))
-                .font(Theme.font(.s))
-                .foregroundStyle(Theme.tertiary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 6.ui)
+        HStack(spacing: 12) {
+            SettingsIcon(symbol: PermissionRows.symbol(permission), tint: Self.tint(permission), size: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: PermissionRows.title(permission))
+                    .font(SettingsStyle.font(.m))
+                    .foregroundStyle(SettingsStyle.primary)
+                Text(verbatim: PermissionRows.purpose(permission))
+                    .font(SettingsStyle.font(.xs))
+                    .foregroundStyle(SettingsStyle.tertiary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
             control
+                .fixedSize()
         }
-        .frame(height: 26.ui)
+        .padding(.vertical, 6)
+        .settingsRow()
     }
 
-    private var dot: Color {
-        switch status {
-        case .granted: Theme.done
-        case .denied: Theme.failed
-        case .notDetermined: Theme.waiting
-        case .unavailable: Theme.idle
+    static func tint(_ p: PermissionKind) -> Color {
+        switch p {
+        case .calendar, .notifications: Color(nsColor: .systemRed)
+        case .accessibility, .bluetooth, .fullDiskAccess: Color(nsColor: .systemBlue)
+        case .microphone: Color(nsColor: .systemOrange)
+        case .camera: Color(nsColor: .systemGreen)
+        case .automation, .speech: Color(nsColor: .systemGray)
         }
     }
 
     @ViewBuilder private var control: some View {
         if asking {
-            Text(verbatim: tr("Waiting…")).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
+            Text(verbatim: tr("Waiting…")).font(SettingsStyle.font(.s)).foregroundStyle(SettingsStyle.secondary)
         } else {
             switch status {
             case .granted:
-                Text(verbatim: tr("Allowed")).font(Theme.font(.xs, .medium)).foregroundStyle(Theme.done.opacity(0.9))
+                Label(tr("Allowed"), systemImage: "checkmark.circle.fill")
+                    .font(SettingsStyle.font(.s, .medium))
+                    .foregroundStyle(SettingsStyle.done)
             case .notDetermined:
-                NotchTextButton(tr("Allow…"), action: action)
+                Button(tr("Allow…"), action: action)
             case .denied:
-                NotchTextButton(tr("Open Settings"), action: action)
+                HStack(spacing: 8) {
+                    Text(verbatim: tr("Not allowed")).font(SettingsStyle.font(.s)).foregroundStyle(SettingsStyle.failed)
+                    Button(tr("Open Settings"), action: action)
+                }
             case .unavailable:
                 if permission == .bluetooth || permission == .notifications {
-                    Text(verbatim: tr("Unavailable")).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
+                    Text(verbatim: tr("Unavailable")).font(SettingsStyle.font(.s)).foregroundStyle(SettingsStyle.secondary)
                 } else {
-                    NotchTextButton(tr("Open Settings"), action: action)
+                    Button(tr("Open Settings"), action: action)
                 }
             }
         }

@@ -14,7 +14,7 @@ struct NotesSettingsSection: View {
         let _ = tick
         let settings = module.model.settings
         let folder = module.model.store.directory
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsRow(L10n.tr("Quick note"), note: L10n.tr("Opens the tab with the cursor in a note")) {
                 HotkeyField(id: "notes.quick", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
                     module.setHotkey(h)
@@ -29,14 +29,14 @@ struct NotesSettingsSection: View {
                 }
             }
             SettingsNote(L10n.tr("Saved as you type. \"- [ ] \" makes a box you can tick; pin a note to see it on Home."))
-            SettingsGroupTitle(L10n.tr("Voice notes")).padding(.top, 8.ui)
+            SettingsGroupTitle(L10n.tr("Voice notes")).padding(.top, 8)
             SettingsRow(L10n.tr("Voice note"), note: L10n.tr("Starts and stops a recording from anywhere")) {
                 HotkeyField(id: "notes.voice", hotkey: settings.voiceHotkey, conflict: voiceConflict(settings.voiceHotkey)) { h in
                     module.setVoiceHotkey(h)
                     tick += 1
                 }
             }
-            SettingsRow(L10n.tr("Transcribe"), note: transcribeNote, noteColor: speech == .denied || !onDevice ? Theme.waiting : Theme.tertiary) {
+            SettingsRow(L10n.tr("Transcribe"), note: transcribeNote, noteColor: speech == .denied || !onDevice ? SettingsStyle.waiting : SettingsStyle.tertiary) {
                 NotchSwitch(isOn: Binding(get: { settings.transcribe }, set: { settings.transcribe = $0; tick += 1 }),
                             enabled: speech != .denied && onDevice)
             }

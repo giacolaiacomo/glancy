@@ -33,41 +33,30 @@ struct MeetingSettingsView: View {
     var body: some View {
         @Bindable var settings = module.settings
         let _ = tick
-        VStack(alignment: .leading, spacing: 4.ui) {
-            HStack(alignment: .top, spacing: 22.ui) {
-                // Label and note over the choice: the three options need the column's width.
-                VStack(alignment: .leading, spacing: 4.ui) {
-                    VStack(alignment: .leading, spacing: 1.ui) {
-                        Text(verbatim: CalL10n.focusSwitch).font(Theme.font(.m)).foregroundStyle(Theme.primary).lineLimit(1)
-                        Text(verbatim: CalL10n.focusNote).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary).lineLimit(1)
-                    }
-                    NotchSegments(selection: Binding(get: { settings.focusDuringMeetings ? settings.focusTrigger : nil },
-                                                     set: { v in
-                                                         if let v { settings.focusTrigger = v }
-                                                         settings.focusDuringMeetings = v != nil
-                                                     }),
-                                  options: [(nil, CalL10n.off), (.calls, CalL10n.withLink), (.busy, CalL10n.anyBusy)])
-                }
-                .padding(.top, 3.ui)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 4.ui) {
-                    SettingsRow(CalL10n.endWarning, note: CalL10n.endWarningNote) {
-                        NotchSegments(selection: $settings.endWarningMinutes,
-                                      options: MeetingEndLogic.warningChoices.map { ($0, $0 == 0 ? CalL10n.off : "\($0)′") })
-                    }
-                    SettingsRow(CalL10n.joinShortcut, note: CalL10n.joinShortcutNote) {
-                        HotkeyField(id: "calendar.join", hotkey: settings.joinHotkey, conflict: conflict(settings.joinHotkey)) { h in
-                            settings.joinHotkey = h
-                            tick += 1
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
+            SettingsRow(CalL10n.focusSwitch, note: CalL10n.focusNote) {
+                NotchSegments(selection: Binding(get: { settings.focusDuringMeetings ? settings.focusTrigger : nil },
+                                                 set: { v in
+                                                     if let v { settings.focusTrigger = v }
+                                                     settings.focusDuringMeetings = v != nil
+                                                 }),
+                              options: [(nil, CalL10n.off), (.calls, CalL10n.withLink), (.busy, CalL10n.anyBusy)])
             }
             if settings.focusDuringMeetings, let focus = module.focus {
                 FocusSetupCard(focus: focus)
+                    .padding(.bottom, 6)
             }
-            SettingsGroupTitle(CalL10n.calendarsTitle).padding(.top, 8.ui)
+            SettingsRow(CalL10n.endWarning, note: CalL10n.endWarningNote) {
+                NotchSegments(selection: $settings.endWarningMinutes,
+                              options: MeetingEndLogic.warningChoices.map { ($0, $0 == 0 ? CalL10n.off : "\($0)′") })
+            }
+            SettingsRow(CalL10n.joinShortcut, note: CalL10n.joinShortcutNote) {
+                HotkeyField(id: "calendar.join", hotkey: settings.joinHotkey, conflict: conflict(settings.joinHotkey)) { h in
+                    settings.joinHotkey = h
+                    tick += 1
+                }
+            }
+            SettingsGroupTitle(CalL10n.calendarsTitle).padding(.top, 8)
         }
         .onAppear { system = HotkeyConflict.systemHotkeys() }
     }
@@ -87,13 +76,14 @@ struct FocusSetupCard: View {
     var body: some View {
         Group {
             if focus.setup == .ready && !focus.lastRunFailed {
-                HStack(spacing: 6.ui) {
-                    Circle().fill(Theme.done).frame(width: 6.ui, height: 6.ui)
-                    Text(verbatim: FocusText.ready).font(Theme.font(.xs)).foregroundStyle(Theme.secondary)
-                    Spacer(minLength: 6.ui)
+                HStack(spacing: 6) {
+                    Circle().fill(SettingsStyle.done).frame(width: 6, height: 6)
+                    Text(verbatim: FocusText.ready).font(SettingsStyle.font(.xs)).foregroundStyle(SettingsStyle.secondary)
+                    Spacer(minLength: 6)
                     NotchTextButton(FocusText.checkAgain) { focus.checkSetup() }
                 }
-                .frame(minHeight: 24.ui)
+                .frame(minHeight: 24)
+                .padding(.vertical, 2)
             } else {
                 card
             }
@@ -102,46 +92,46 @@ struct FocusSetupCard: View {
     }
 
     private var card: some View {
-        VStack(alignment: .leading, spacing: 5.ui) {
-            HStack(spacing: 6.ui) {
-                Image(systemName: "moon.fill").font(.system(size: 10.ui, weight: .semibold)).foregroundStyle(Theme.waiting)
-                Text(verbatim: FocusText.setupTitle).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
-                Text(verbatim: status).font(Theme.font(.xs)).foregroundStyle(statusColor).lineLimit(1)
-                Spacer(minLength: 6.ui)
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: "moon.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(SettingsStyle.waiting)
+                Text(verbatim: FocusText.setupTitle).font(SettingsStyle.font(.s, .semibold)).foregroundStyle(SettingsStyle.primary).lineLimit(1)
+                Text(verbatim: status).font(SettingsStyle.font(.xs)).foregroundStyle(statusColor).lineLimit(1)
+                Spacer(minLength: 6)
                 NotchTextButton(FocusText.newShortcut) { FocusController.openShortcutsEditor() }
                 NotchTextButton(FocusText.checkAgain) { focus.checkSetup() }
             }
             step(1, FocusController.onShortcut, FocusText.onAction)
             step(2, FocusController.offShortcut, FocusText.offAction)
-            Text(verbatim: FocusText.setupBody).font(Theme.font(.xs)).foregroundStyle(Theme.tertiary)
+            Text(verbatim: FocusText.setupBody).font(SettingsStyle.font(.xs)).foregroundStyle(SettingsStyle.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 10.ui).padding(.vertical, 8.ui)
-        .background(RoundedRectangle(cornerRadius: 10.ui, style: .continuous).fill(Theme.card))
-        .overlay(RoundedRectangle(cornerRadius: 10.ui, style: .continuous).strokeBorder(Theme.waiting.opacity(0.25), lineWidth: 1.ui))
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(SettingsStyle.waiting.opacity(0.06)))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(SettingsStyle.waiting.opacity(0.3), lineWidth: 1))
     }
 
     private func step(_ n: Int, _ name: String, _ action: String) -> some View {
-        HStack(spacing: 8.ui) {
-            Text(verbatim: "\(n)").font(Theme.font(.xs, .bold)).foregroundStyle(.black)
-                .frame(width: 15.ui, height: 15.ui).background(Circle().fill(Theme.secondary))
+        HStack(spacing: 8) {
+            Text(verbatim: "\(n)").font(SettingsStyle.font(.xs, .bold)).foregroundStyle(.white)
+                .frame(width: 16, height: 16).background(Circle().fill(Color.accentColor))
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(name, forType: .string)
                 copied = name
             } label: {
-                HStack(spacing: 4.ui) {
-                    Text(verbatim: name).font(Theme.font(.s, .semibold)).foregroundStyle(Theme.primary)
-                    Image(systemName: copied == name ? "checkmark" : "doc.on.doc").font(.system(size: 8.ui, weight: .semibold))
-                        .foregroundStyle(Theme.tertiary)
+                HStack(spacing: 4) {
+                    Text(verbatim: name).font(SettingsStyle.font(.s, .semibold)).foregroundStyle(SettingsStyle.primary)
+                    Image(systemName: copied == name ? "checkmark" : "doc.on.doc").font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(SettingsStyle.tertiary)
                 }
-                .padding(.horizontal, 7.ui).frame(height: 18.ui)
-                .background(Capsule().fill(Color.white.opacity(0.08)))
+                .padding(.horizontal, 7).frame(height: 18)
+                .background(Capsule().fill(SettingsStyle.card))
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .help(copied == name ? FocusText.copied : name)
-            Text(verbatim: action).font(Theme.font(.xs)).foregroundStyle(Theme.secondary).lineLimit(1)
+            Text(verbatim: action).font(SettingsStyle.font(.xs)).foregroundStyle(SettingsStyle.secondary).lineLimit(1)
         }
     }
 
@@ -157,9 +147,9 @@ struct FocusSetupCard: View {
 
     private var statusColor: Color {
         switch focus.setup {
-        case .ready: Theme.done
-        case .unknown, .checking: Theme.tertiary
-        default: Theme.waiting
+        case .ready: SettingsStyle.done
+        case .unknown, .checking: SettingsStyle.tertiary
+        default: SettingsStyle.waiting
         }
     }
 }
@@ -170,7 +160,7 @@ struct TimerMoreSettingsView: View {
 
     var body: some View {
         @Bindable var settings = module.settings
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsRow(L10n.tr("Start the next phase automatically"), note: L10n.tr("Otherwise each phase waits for Start")) {
                 NotchSwitch(isOn: $settings.autoStartNext)
             }
@@ -178,9 +168,8 @@ struct TimerMoreSettingsView: View {
                 SettingsRow(L10n.tr("Focus during focus rounds"), note: L10n.tr("Uses the Glancy Focus shortcuts")) {
                     NotchSwitch(isOn: $settings.focusDuringWork)
                 }
-                if settings.focusDuringWork, let focus = module.focus { FocusSetupCard(focus: focus) }
+                if settings.focusDuringWork, let focus = module.focus { FocusSetupCard(focus: focus).padding(.vertical, 6) }
             }
         }
-        .padding(.top, 4.ui)
     }
 }

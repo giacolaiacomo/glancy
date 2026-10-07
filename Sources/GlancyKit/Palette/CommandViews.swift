@@ -264,33 +264,28 @@ struct CommandSection: View {
         @Bindable var settings = module.model.settings
         let _ = tick
         let history = module.model.history
-        HStack(alignment: .top, spacing: 22.ui) {
-            VStack(alignment: .leading, spacing: 4.ui) {
-                SettingsRow(tr("Shortcut"), note: CommandText.t("Opens the bar from anywhere")) {
-                    HotkeyField(id: "command", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
-                        module.setHotkey(h)
-                        tick += 1
-                    }
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
+            SettingsRow(tr("Shortcut"), note: CommandText.t("Opens the bar from anywhere")) {
+                HotkeyField(id: "command", hotkey: settings.hotkey, conflict: conflict(settings.hotkey)) { h in
+                    module.setHotkey(h)
+                    tick += 1
                 }
-                SettingsRow(CommandText.t("History"), note: historyNote(history)) {
-                    ConfirmButton(title: CommandText.t("Clear"), question: CommandText.t("Clear history?"), confirm: CommandText.t("Clear"),
-                                  enabled: !history.store.entries.isEmpty || !history.isLoaded) {
-                        history.clear()
-                        tick += 1
-                    }
+            }
+            SettingsRow(CommandText.t("History"), note: historyNote(history)) {
+                ConfirmButton(title: CommandText.t("Clear"), question: CommandText.t("Clear history?"), confirm: CommandText.t("Clear"),
+                              enabled: !history.store.entries.isEmpty || !history.isLoaded) {
+                    history.clear()
+                    tick += 1
                 }
-                SettingsNote(CommandText.t("Esc clears, then closes"))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2.ui) {
-                SettingsGroupTitle(CommandText.t("Results"))
-                toggle(CommandText.t("Applications"), CommandText.t("Launch and reveal apps"), $settings.apps)
-                toggle(CommandText.t("Calculator"), CommandText.t("Arithmetic, %, hex and binary"), $settings.calculator)
-                toggle(CommandText.t("Units"), CommandText.t("Length, weight, temperature, data, time…"), $settings.units)
-                toggle(CommandText.t("Exchange rates"), CommandText.t("Fetched from the ECB only when you type a currency"), $settings.currency)
-                toggle(CommandText.t("Web search"), CommandText.t("Last row: search Google in your browser"), $settings.webSearch)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            SettingsNote(CommandText.t("Esc clears, then closes"))
+            SettingsGroupTitle(CommandText.t("Results"))
+                .padding(.top, 8)
+            toggle(CommandText.t("Applications"), CommandText.t("Launch and reveal apps"), $settings.apps)
+            toggle(CommandText.t("Calculator"), CommandText.t("Arithmetic, %, hex and binary"), $settings.calculator)
+            toggle(CommandText.t("Units"), CommandText.t("Length, weight, temperature, data, time…"), $settings.units)
+            toggle(CommandText.t("Exchange rates"), CommandText.t("Fetched from the ECB only when you type a currency"), $settings.currency)
+            toggle(CommandText.t("Web search"), CommandText.t("Last row: search Google in your browser"), $settings.webSearch)
         }
         .onAppear {
             system = HotkeyConflict.systemHotkeys()
@@ -300,7 +295,7 @@ struct CommandSection: View {
     }
 
     private func toggle(_ title: String, _ note: String, _ on: Binding<Bool>) -> some View {
-        SettingsRow(title, note: note, minHeight: 24.ui) { NotchSwitch(isOn: on) }
+        SettingsRow(title, note: note) { NotchSwitch(isOn: on) }
     }
 
     private func historyNote(_ h: PaletteHistory) -> String {

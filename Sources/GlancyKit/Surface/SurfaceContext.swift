@@ -89,9 +89,9 @@ public protocol SurfaceContextAware: AnyObject {
     func attach(_ context: SurfaceContext)
 }
 
-/// Routes into the panel that only the surface can take. Wired by `SurfaceManager`; nil before.
+/// Routes that only the surface can take. Wired by `SurfaceManager`; nil before.
 @MainActor
 public enum SurfaceRoute {
-    /// Opens the panel on Settings (nil = the index, or a section).
+    /// Closes the panel and opens the Settings window on a page (nil = the page it was on).
     public static var openSettings: ((SettingsRoute?) -> Void)?
 }

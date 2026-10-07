@@ -211,7 +211,7 @@ final class SurfaceController: SurfaceModelDelegate {
     }
 
     private func swipe(_ step: Int) {
-        guard model.expanded, !model.showingSettings else { return }
+        guard model.expanded else { return }
         let seq = context.tabSequence
         let i = seq.firstIndex(where: { $0 == model.selectedTab }) ?? 0
         let next = min(max(i + step, 0), seq.count - 1)

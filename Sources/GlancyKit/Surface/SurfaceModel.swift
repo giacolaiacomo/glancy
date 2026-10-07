@@ -24,9 +24,8 @@ public final class SurfaceModel {
     public private(set) var expanded = false
     /// Paused: screen asleep, locked, or a fullscreen space owns this display.
     public private(set) var hidden = false
-    /// The tab on screen while expanded; nil = Home.
+    /// The tab on screen while expanded; nil = Home. (Settings has its own window.)
     public var selectedTab: ModuleID?
-    public var showingSettings = false
 
     /// Measured ideal widths of the top activity's wing content.
     public private(set) var wingContent: (left: CGFloat, right: CGFloat) = (0, 0)
@@ -67,7 +66,7 @@ public final class SurfaceModel {
     }
 
     public var visibility: SurfaceVisibility {
-        hidden ? .hidden : expanded ? .expanded(showingSettings ? nil : selectedTab) : .collapsed
+        hidden ? .hidden : expanded ? .expanded(selectedTab) : .collapsed
     }
 
     // MARK: Inputs
@@ -81,7 +80,6 @@ public final class SurfaceModel {
         guard !expanded, !hidden else { return }
         transition(Theme.open) {
             selectedTab = tab
-            showingSettings = false
             expanded = true
         }
     }
@@ -93,7 +91,6 @@ public final class SurfaceModel {
         delegate?.surfaceWillCollapse(self)
         transition(Theme.close) {
             expanded = false
-            showingSettings = false
         }
     }
 
@@ -138,16 +135,10 @@ public final class SurfaceModel {
     }
 
     public func select(tab: ModuleID?) {
-        guard selectedTab != tab || showingSettings else { return }
+        guard selectedTab != tab else { return }
         withMaybeAnimation(Theme.peek) {
             selectedTab = tab
-            showingSettings = false
         }
-        delegate?.surfaceStateDidChange(self)
-    }
-
-    public func toggleSettings() {
-        withMaybeAnimation(Theme.peek) { showingSettings.toggle() }
         delegate?.surfaceStateDidChange(self)
     }
 

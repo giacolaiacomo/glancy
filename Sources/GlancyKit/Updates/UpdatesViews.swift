@@ -5,30 +5,20 @@ import SwiftUI
 struct UpdateButton: View {
     let updates: AppUpdates
     let version: String
-    @State private var hover = false
 
     var body: some View {
         Button { updates.install() } label: {
-            HStack(spacing: 4.ui) {
-                Image(systemName: "arrow.down.circle.fill").font(.system(size: 10.ui, weight: .semibold))
-                Text(verbatim: L10n.tr("Update to %@", version)).font(Theme.font(.s, .semibold))
-            }
-            .foregroundStyle(Color.black)
-            .padding(.horizontal, 9.ui)
-            .frame(height: 22.ui)
-            .background(Capsule().fill(Theme.done.opacity(hover ? 1 : 0.9)))
-            .contentShape(Capsule())
+            Label(L10n.tr("Update to %@", version), systemImage: "arrow.down.circle.fill")
         }
-        .buttonStyle(.plain)
-        .onHover { hover = $0 }
+        .buttonStyle(.borderedProminent)
         .help(L10n.tr("Install Update %@", version))
     }
 }
 
-/// Settings → General: the switch, the version, "Check now" or "Update to X.Y.Z".
+/// Settings → About → Updates: the switch, then "Check now" with the last check, or the update
+/// that was found.
 struct UpdatesSettingsRows: View {
     let updates: AppUpdates?
-    let version: String
 
     var body: some View {
         if let updates {
@@ -36,24 +26,22 @@ struct UpdatesSettingsRows: View {
             SettingsRow(L10n.tr("Check for updates automatically"), note: L10n.tr("At launch, then at most once a day")) {
                 NotchSwitch(isOn: $updates.automatic, enabled: updates.isSupported)
             }
-            SettingsRow(L10n.tr("Version %@", version), note: note(updates),
-                        noteColor: updates.available != nil ? Theme.done : Theme.tertiary) {
-                if let v = updates.available {
+            if let v = updates.available {
+                SettingsRow(L10n.tr("Version %@ is available", v), note: lastCheck(updates)) {
                     UpdateButton(updates: updates, version: v)
-                } else {
+                }
+            } else {
+                SettingsRow(updates.isSupported ? lastCheck(updates) : L10n.tr("Updates come with the installed app")) {
                     NotchTextButton(L10n.tr("Check now")) { updates.checkNow() }
-                        .opacity(updates.isSupported ? 1 : 0.4)
                         .disabled(!updates.isSupported)
                 }
             }
         } else {
-            SettingsRow(L10n.tr("Version %@", version), note: L10n.tr("Updates come with the installed app")) { EmptyView() }
+            SettingsRow(L10n.tr("Updates come with the installed app")) { EmptyView() }
         }
     }
 
-    private func note(_ updates: AppUpdates) -> String {
-        if let v = updates.available { return L10n.tr("Version %@ is available", v) }
-        guard updates.isSupported else { return L10n.tr("Updates come with the installed app") }
+    private func lastCheck(_ updates: AppUpdates) -> String {
         guard let last = updates.lastCheck else { return L10n.tr("Not checked yet") }
         let f = RelativeDateTimeFormatter()
         f.locale = L10n.locale

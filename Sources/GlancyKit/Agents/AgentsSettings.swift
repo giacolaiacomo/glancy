@@ -12,11 +12,11 @@ struct AgentsSettingsSection: View {
 
     var body: some View {
         let _ = tick
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             ForEach(module.availableSources, id: \.self) { kind in
                 let status = module.sourceStatus(kind)
                 SettingsRow(kind.name, note: status.line, noteColor: color(status.level)) {
-                    HStack(spacing: 8.ui) {
+                    HStack(spacing: 8) {
                         if kind == .opencode, module.isSourceEnabled(kind), let installer = module.openCodeInstaller {
                             pluginButton(installer)
                         }
@@ -36,7 +36,6 @@ struct AgentsSettingsSection: View {
             }
             SettingsNote(AgentsText.t("Read-only: Glancy never writes to Claude Code or Codex files. A session goes idle after 30 min without events; sessions silent for 12 h are dropped."))
             LimitsSettings(module: module, limits: module.limits)
-                .padding(.top, 6.ui)
         }
     }
 
@@ -71,9 +70,9 @@ struct AgentsSettingsSection: View {
 
     private func color(_ level: AgentSourceStatus.Level) -> Color {
         switch level {
-        case .ok: Theme.tertiary
-        case .off: Theme.tertiary
-        case .missing: Theme.waiting
+        case .ok: SettingsStyle.tertiary
+        case .off: SettingsStyle.tertiary
+        case .missing: SettingsStyle.waiting
         }
     }
 }
@@ -100,12 +99,12 @@ struct LimitsSettings: View {
     @Bindable var limits: UsageLimitsStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsGroupTitle(LimitsText.t("Plan limits"))
-            SettingsRow(LimitsText.t("Claude Code limits"), note: claudeNote.text, noteColor: claudeNote.warn ? Theme.waiting : Theme.tertiary) {
+            SettingsRow(LimitsText.t("Claude Code limits"), note: claudeNote.text, noteColor: claudeNote.warn ? SettingsStyle.waiting : SettingsStyle.tertiary) {
                 NotchSwitch(isOn: $limits.claudeEnabled)
             }
-            SettingsRow(LimitsText.t("Codex limits"), note: codexNote.text, noteColor: codexNote.warn ? Theme.waiting : Theme.tertiary) {
+            SettingsRow(LimitsText.t("Codex limits"), note: codexNote.text, noteColor: codexNote.warn ? SettingsStyle.waiting : SettingsStyle.tertiary) {
                 NotchSwitch(isOn: $limits.codexEnabled)
             }
             SettingsRow(LimitsText.t("Limit alerts"),

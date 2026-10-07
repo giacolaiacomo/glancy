@@ -245,8 +245,8 @@ struct HomeSection: View {
                     NotchTextButton(tr("Reset")) { withAnimation(Theme.peek) { settings.resetHome() } }
                 }
             }
-            SettingsNote(tr("A card shows only when it has something; if they don't all fit, the most urgent go first."))
-            HStack(alignment: .top, spacing: 16.ui) {
+            SettingsNote(tr("Always: shown even at rest. Only when needed: just when it has something. Up to 4 cards fit (3 with Media): the ones with something first, the most urgent first, then this order."))
+            HStack(alignment: .top, spacing: 10.ui) {
                 ForEach(0..<3, id: \.self) { c in
                     column(Array(order.dropFirst(c * per).prefix(per)), offset: c * per, count: order.count)
                 }
@@ -276,11 +276,11 @@ private struct HomeWidgetRow: View {
         let moduleOn = settings.isEnabled(widget.module)
         let on = settings.isShownOnHome(widget) && moduleOn
         let note = moduleOn ? tr(widget.when) : L10n.tr("%@ is off in Modules", tr(SurfaceContext.name(widget.module)))
-        HStack(spacing: 6.ui) {
+        HStack(spacing: 4.ui) {
             Text(verbatim: "\(position)")
                 .font(Theme.font(.xs, .semibold).monospacedDigit())
                 .foregroundStyle(Theme.tertiary)
-                .frame(width: 10.ui, alignment: .trailing)
+                .frame(width: 9.ui, alignment: .trailing)
             Image(systemName: widget.symbol)
                 .font(.system(size: 11.ui, weight: .medium))
                 .foregroundStyle(on ? Theme.primary : Theme.tertiary)
@@ -289,15 +289,21 @@ private struct HomeWidgetRow: View {
                 Text(verbatim: tr(widget.title))
                     .font(Theme.font(.m))
                     .foregroundStyle(on ? Theme.primary : Theme.secondary)
-                // When the card shows lives in the tooltip; a module that is off says so here.
-                if !moduleOn {
+                    .help(tr(widget.title) + " · " + note)
+                // Always / Only when needed under the title (a click switches); a module that is
+                // off says so here instead.
+                if moduleOn {
+                    ModeChip(widget: widget, mode: settings.homeMode(widget), dimmed: !on) {
+                        settings.setHomeMode(widget, $0)
+                    }
+                } else {
                     Text(verbatim: note)
                         .font(Theme.font(.xs))
                         .foregroundStyle(Theme.waiting)
                 }
             }
             .lineLimit(1)
-            .help(tr(widget.title) + " · " + note)
+            .layoutPriority(1)
             Spacer(minLength: 2.ui)
             HStack(spacing: 0) {
                 arrow("chevron.up", enabled: position > 1, help: tr("Move up")) { settings.moveOnHome(widget, by: -1) }
@@ -308,12 +314,38 @@ private struct HomeWidgetRow: View {
         .frame(height: 30.ui)
     }
 
+    private struct ModeChip: View {
+        let widget: HomeWidget
+        let mode: HomeWidgetMode
+        let dimmed: Bool
+        let set: (HomeWidgetMode) -> Void
+        @State private var hover = false
+
+        var body: some View {
+            let next: HomeWidgetMode = mode == .always ? .whenNeeded : .always
+            let help = tr(HomeWidgetMode.always.title) + ": " + tr(widget.idle) + "\n"
+                + tr(HomeWidgetMode.whenNeeded.title) + ": " + tr(widget.when)
+            Button { withAnimation(Theme.peek) { set(next) } } label: {
+                Text(verbatim: tr(mode.title))
+                    .font(Theme.font(.xs, .medium))
+                    .underline(hover, color: Theme.tertiary)
+                    .foregroundStyle(dimmed ? Theme.tertiary : hover || mode == .always ? Theme.secondary : Theme.tertiary)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hover = $0 }
+            .help(help)
+            .accessibilityLabel("\(tr(widget.title)), \(tr(mode.title))")
+            .accessibilityHint(tr(next.title))
+        }
+    }
+
     private func arrow(_ symbol: String, enabled: Bool, help: String, _ action: @escaping () -> Void) -> some View {
         Button { withAnimation(Theme.peek) { action() } } label: {
             Image(systemName: symbol)
                 .font(.system(size: 9.ui, weight: .bold))
                 .foregroundStyle(enabled ? Theme.secondary : Theme.tertiary.opacity(0.4))
-                .frame(width: 15.ui, height: 20.ui)
+                .frame(width: 13.ui, height: 20.ui)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

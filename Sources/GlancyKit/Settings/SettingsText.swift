@@ -12,8 +12,8 @@ let settingsItalian: [String: String] = [
     "Move down": "Sposta giù",
     "%@ is off in Modules": "%@ è spento in Moduli",
     "%d widgets on": "%d widget accesi",
-    "A card shows only when it has something; if they don't all fit, the most urgent go first.":
-        "Una scheda compare solo quando ha qualcosa; se non entrano tutte, passano prima le più urgenti.",
+    "Always: shown even at rest. Only when needed: just when it has something. Up to 4 cards fit (3 with Media): the ones with something first, the most urgent first, then this order.":
+        "Sempre: visibile anche a riposo. Solo quando serve: solo quando ha qualcosa. Entrano fino a 4 schede (3 con Media): prima quelle con qualcosa, le più urgenti per prime, poi quest'ordine.",
     "Limits": "Limiti",
     "Sessions": "Sessioni",
     "Battery": "Batteria",

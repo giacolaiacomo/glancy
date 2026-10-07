@@ -32,6 +32,31 @@ public enum DemoData {
         return set
     }
 
+    /// The same made-up Mac at rest, for Home's idle cards: no session, no meeting left, nothing
+    /// playing (the last track remembered), no timer, an empty shelf, Keep awake off, nothing
+    /// pinned, the battery at a normal level; calm plan limits. `active` puts a few back on
+    /// (a timer running, Keep awake on) for the mixed shots.
+    public static func idleModules(root: URL, now: Date = .now, active: Bool = false) -> [any GlancyModule] {
+        let set = IsolatedModules.make(root: root)
+        set.power.fixed = .init(battery: PowerState(hasBattery: true, percent: 76, onAC: false, isCharging: false, minutesToEmpty: 312),
+                                devices: [])
+        let art = root.appendingPathComponent("media/artwork.png")
+        if let png = artwork() { try? png.write(to: art) }
+        set.media.prepareIdleForRender(LastTrack(title: "Golden Hour Drive", artist: "Paper Lanterns", bundleID: "com.apple.Music"),
+                                       artwork: art)
+        if active { seedTimer(root: root, now: now) }
+        set.modules.compactMap { $0 as? AgentsModule }.first?.seedLimitsCalm(now: now)
+        return set.modules
+    }
+
+    /// After `start`: the sample notes unpinned; with `active`, Keep awake on.
+    @MainActor public static func settleIdle(_ modules: [any GlancyModule], active: Bool) {
+        for m in modules {
+            (m as? NotesModule)?.unpinForRender()
+            if active { (m as? ControlModule)?.prepareForRender(.awake) }
+        }
+    }
+
     // MARK: Agents: four sessions, one waiting for permission
 
     static func writeAgentsLog(to url: URL, now: Date) {

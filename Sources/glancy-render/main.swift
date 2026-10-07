@@ -125,6 +125,58 @@ enum Render {
             UIScale.shared.set(requested: .normal, effective: .normal)
             settings.size = .normal
         }
+        // Home at rest (Always / Only when needed): the made-up Mac with nothing going on. The
+        // defaults; every idle card (in sets that fit); a mix of cards with something and idle
+        // ones; Settings → Home with a few modes changed. Normal size and the largest.
+        if only?.contains(where: { "17-home-idle".contains($0) || $0.contains("17-home") }) ?? true {
+            func idleContext(active: Bool) -> (SurfaceContext, () -> Void) {
+                let root = FileManager.default.temporaryDirectory.appendingPathComponent("glancy-idle-\(UUID().uuidString)")
+                let mods = DemoData.idleModules(root: root, active: active)
+                let hub = ActivityHub()
+                for m in mods { m.start(hub: hub) }
+                DemoData.settleIdle(mods, active: active)
+                return (SurfaceContext(hub: hub, settings: settings, launchAtLogin: launch, modules: mods),
+                        { for m in mods { m.stop() }; try? FileManager.default.removeItem(at: root) })
+            }
+            let (rest, stopRest) = idleContext(active: false)
+            let (mixed, stopMixed) = idleContext(active: true)
+            let all = HomeWidget.allCases
+            // (name, context, widgets on (nil = all), every mode Always?)
+            let sets: [(String, SurfaceContext, [HomeWidget]?, Bool)] = [
+                ("defaults", rest, nil, false),
+                ("sessions-limits-meeting-timer", rest, [.agents, .limits, .calendar, .timer], true),
+                ("notes-shelf-awake-battery", rest, [.notes, .shelf, .control, .power], true),
+                ("media-notes-battery", rest, [.media, .notes, .power], true),
+                ("media-only", rest, [.media], true),
+                ("mixed-defaults", mixed, nil, false),
+                ("mixed-all-always", mixed, nil, true),
+            ]
+            for size in [UISize.normal, .extraLarge] {
+                UIScale.shared.set(requested: size, effective: size)
+                settings.size = size
+                let geo = builtInGeometry(uiScale: size.factor)
+                let crop = size == .normal ? Render.standardCrop : CGSize(width: 1080, height: 340)
+                for (name, ctx, on, always) in sets {
+                    settings.resetHome()
+                    for w in all {
+                        settings.setShownOnHome(w, on?.contains(w) ?? true)
+                        if always { settings.setHomeMode(w, .always) }
+                    }
+                    shot("17-home-idle-\(size.rawValue)-\(name)", ctx, geometry: geo, crop: crop) { $0.expand(tab: nil) }
+                }
+                settings.resetHome()
+                settings.setHomeMode(.power, .always)
+                settings.setHomeMode(.media, .whenNeeded)
+                settings.setShownOnHome(.shelf, false)
+                settings.navigation.go(.home, animated: false)
+                shot("17-home-idle-\(size.rawValue)-settings", rest, geometry: geo, crop: crop) { $0.expand(tab: nil); $0.toggleSettings() }
+                settings.navigation.go(.index, animated: false)
+                settings.resetHome()
+            }
+            UIScale.shared.set(requested: .normal, effective: .normal)
+            settings.size = .normal
+            stopRest(); stopMixed()
+        }
         for (i, tab) in live.stripTabs.enumerated() {
             shot("06-tab-\(i + 1)-\(tab.module.rawValue)", live) { $0.expand(tab: tab.module) }
         }

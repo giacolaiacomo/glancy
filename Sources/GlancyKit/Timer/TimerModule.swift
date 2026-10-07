@@ -308,4 +308,10 @@ public final class TimerModule: GlancyModule {
         guard model.state.isActive else { return nil }
         return AnyView(TimerHomeCard(timer: self, model: model))
     }
+
+    /// At rest (Always): the presets and a Pomodoro, one click each.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        guard widget == .timer, !model.state.isActive else { return nil }
+        return AnyView(TimerIdleCard(timer: self))
+    }
 }

@@ -211,13 +211,37 @@ public final class AgentsModule: GlancyModule {
         let now = limits.clock
         let items = LimitsLayout.homeItems(claude: limits.claudeEnabled ? limits.claude : nil,
                                            codex: limits.codexEnabled ? limits.codex : nil, now: now)
-        if !items.isEmpty {
-            // Nearly used up or on pace to run out: it goes before the calm cards.
-            let hot = items.contains { !$0.stale && ($0.percent >= 90 || $0.limit.runsOutAt(now: now) != nil) }
-            out.append(HomeWidgetCard(.limits, AnyView(LimitsHomeCard(limits: limits) { [weak self] in self?.openLimitsPage() }),
-                                      priority: hot ? 70 : 0))
+        // Nearly used up or on pace to run out: the card has something to say (and goes before
+        // the calm cards). Calm readings are the card's idle state, for Always.
+        if items.contains(where: { !$0.stale && ($0.percent >= 90 || $0.limit.runsOutAt(now: now) != nil) }) {
+            out.append(HomeWidgetCard(.limits, limitsCard(), priority: 70))
         }
         return out
+    }
+
+    /// At rest: no live session (the idle ones counted); the plan limits' last readings, or a
+    /// "no reading yet" that opens the Limits page while a service is on.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        switch widget {
+        case .agents:
+            let resting = model.store.live.count
+            return AnyView(HomeIdleRow(symbol: Self.symbol, caption: AgentsText.t("Agents"), title: AgentsText.t("No live sessions"),
+                                       detail: resting > 0 ? AgentsText.count(resting, .idle) : AgentsText.t("Claude Code and Codex show up here"),
+                                       open: { [weak self] in self?.model.hub?.requestOpen(.agents) }))
+        case .limits:
+            let claude = limits.claudeEnabled ? limits.claude : nil, codex = limits.codexEnabled ? limits.codex : nil
+            if !LimitsLayout.homeItems(claude: claude, codex: codex, now: limits.clock).isEmpty { return limitsCard() }
+            guard limits.claudeEnabled || limits.codexEnabled else { return nil }
+            return AnyView(HomeIdleRow(symbol: "gauge.with.needle", caption: LimitsText.t("Limits"), title: LimitsText.t("No reading yet"),
+                                       detail: LimitsText.t("Open to read the plan limits"),
+                                       open: { [weak self] in self?.openLimitsPage() }))
+        default:
+            return nil
+        }
+    }
+
+    private func limitsCard() -> AnyView {
+        AnyView(LimitsHomeCard(limits: limits) { [weak self] in self?.openLimitsPage() })
     }
 }
 
@@ -314,6 +338,19 @@ extension AgentsModule {
     public func seedLimitsSample(now: Date = .now, alerts: Bool = false) {
         limits.alertsEnabled = alerts
         let s = UsageLimitsStore.sampleReadings(now: now)
+        limits.seed(claude: s.claude, codex: s.codex, breakdown: UsageBreakdown.sample)
+    }
+
+    /// The sample readings with nothing nearly used up (Home's calm, idle limits card).
+    public func seedLimitsCalm(now: Date = .now) {
+        limits.alertsEnabled = false
+        var s = UsageLimitsStore.sampleReadings(now: now)
+        s.claude.limits = s.claude.limits.map { l in
+            var l = l
+            l.recentRate = nil
+            if l.percent >= 90 { l.percent = 40 }   // well under pace: no run-out projected
+            return l
+        }
         limits.seed(claude: s.claude, codex: s.codex, breakdown: UsageBreakdown.sample)
     }
 

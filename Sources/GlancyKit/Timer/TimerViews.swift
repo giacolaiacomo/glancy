@@ -142,6 +142,32 @@ struct TimerHomeCard: View {
     }
 }
 
+/// Home at rest (Always): one click starts a preset, or a Pomodoro. Static: nothing ticks.
+struct TimerIdleCard: View {
+    let timer: TimerModule
+    var body: some View {
+        HStack(spacing: 10.ui) {
+            Image(systemName: "timer")
+                .font(.system(size: 13.ui, weight: .semibold))
+                .foregroundStyle(Theme.secondary)
+                .frame(width: 30.ui, height: 30.ui)
+                .background(Circle().fill(Color.white.opacity(0.07)))
+            VStack(alignment: .leading, spacing: 5.ui) {
+                Caption(text: L10n.tr("Timer"))
+                HStack(spacing: 5.ui) {
+                    ForEach(TimerMachine.presets, id: \.self) { m in
+                        PillButton(title: "\(m)′", width: 38.ui) { timer.start(minutes: m) }
+                            .help(L10n.tr("Timer %d min", m))
+                    }
+                    RoundIcon(symbol: "repeat", help: L10n.tr("Pomodoro")) { timer.startPomodoro() }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
 private struct RoundIcon: View {
     let symbol: String
     let help: String

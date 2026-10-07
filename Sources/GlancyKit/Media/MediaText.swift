@@ -5,6 +5,8 @@ import Foundation
 enum MediaText {
     static let italian: [String: String] = [
         "Nothing playing": "Niente in riproduzione",
+        "Last played": "Ultimo ascolto",
+        "Media": "Media",
         "Play something in Music, Spotify or a browser and it shows up here.":
             "Avvia qualcosa in Musica, Spotify o nel browser e comparirà qui.",
         "Only Music and Spotify for now: the now-playing reader isn't working on this Mac.":

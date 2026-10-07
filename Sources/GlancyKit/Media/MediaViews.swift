@@ -231,6 +231,35 @@ struct MediaHomeTile: View {
     }
 }
 
+/// Home's tile at rest: the last track (its artwork while Glancy has it) and Play, or "Nothing
+/// playing" and Play for whatever player the system has. Static: nothing ticks.
+struct MediaIdleTile: View {
+    let model: MediaModel
+    var body: some View {
+        let last = model.lastTrack
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 10.ui) {
+                ArtworkView(image: last == nil ? nil : model.lastArtwork, size: 44.ui, radius: 8)
+                    .opacity(0.85)
+                VStack(alignment: .leading, spacing: 2.ui) {
+                    HomeCaption(text: L10n.tr(last == nil ? "Media" : "Last played"))
+                    Text(verbatim: last?.title ?? L10n.tr("Nothing playing"))
+                        .font(Theme.font(.l, .semibold)).foregroundStyle(last == nil ? Theme.secondary : Theme.primary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    if let artist = last?.artist {
+                        Text(verbatim: artist).font(Theme.font(.s)).foregroundStyle(Theme.secondary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            Spacer(minLength: 8.ui)
+            MediaButton(symbol: "play.fill", label: L10n.tr("Play"), size: 16.ui, box: 34.ui) { model.playLast() }
+                .background(Circle().fill(Color.white.opacity(0.07)))
+                .frame(maxWidth: .infinity)
+        }
+    }
+}
+
 // MARK: Tab
 
 struct MediaTabView: View {

@@ -10,6 +10,8 @@ enum LimitsText {
 
     private static let italian: [String: String] = [
         "Limits": "Limiti",
+        "No reading yet": "Nessuna lettura per ora",
+        "Open to read the plan limits": "Apri per leggere i limiti del piano",
         "Plan limits": "Limiti del piano",
         "Sessions": "Sessioni",
         "Where it went": "Dove sono finiti",

@@ -330,6 +330,26 @@ public final class CalendarModule: GlancyModule {
         guard model.access == .granted, model.next != nil else { return nil }
         return AnyView(CalendarHomeCard(model: model).environment(\.locale, L10n.locale))
     }
+
+    /// At rest (Always): nothing else today, and whether the coming days are free too; with the
+    /// access off, a way to turn it on. Nothing before the access is asked.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        guard widget == .calendar else { return nil }
+        let open: () -> Void = { [weak self] in self?.hub?.requestOpen(.calendar) }
+        switch model.access {
+        case .notDetermined:
+            return nil
+        case .denied:
+            return AnyView(HomeIdleRow(symbol: "calendar.badge.exclamationmark", caption: CalL10n.calendar, title: CalL10n.noAccess,
+                                       tint: Theme.waiting, open: open) {
+                NotchTextButton(CalL10n.allow) { NSWorkspace.shared.open(CalendarJoin.privacyURL) }
+            })
+        case .granted:
+            let free = CalendarLogic.upcoming(model.events, now: model.now, limit: 1).isEmpty
+            return AnyView(HomeIdleRow(symbol: "calendar", caption: CalL10n.calendar, title: CalL10n.nothingToday,
+                                       detail: free ? CalL10n.nothingAhead : nil, open: open))
+        }
+    }
 }
 
 enum CalendarJoin {

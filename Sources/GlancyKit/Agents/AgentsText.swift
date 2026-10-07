@@ -18,6 +18,8 @@ enum AgentsText {
         "idle": "inattiva",
         "ended": "chiusa",
         "No Claude Code sessions": "Nessuna sessione di Claude Code",
+        "No live sessions": "Nessuna sessione attiva",
+        "Claude Code and Codex show up here": "Claude Code e Codex compaiono qui",
         "Sessions appear here as soon as Claude Code runs.": "Le sessioni compaiono qui appena Claude Code è in esecuzione.",
         "Click to bring its terminal forward.": "Fai clic per portare in primo piano il suo terminale.",
         "Accessibility is off: Glancy can bring the terminal app forward, not the exact window.":

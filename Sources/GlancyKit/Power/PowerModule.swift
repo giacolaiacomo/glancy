@@ -373,6 +373,17 @@ public final class PowerModule: GlancyModule {
         return AnyView(PowerHomeCard(model: model))
     }
 
+    /// At rest (Always): the battery level and what it is doing (time left, on the adapter,
+    /// charged), from the IOKit power-source callbacks already running. A Mac without a battery
+    /// has nothing to show.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        let b = model.battery
+        guard widget == .power, b.hasBattery else { return nil }
+        return AnyView(HomeIdleRow(symbol: PowerLogic.batterySymbol(b.percent, charging: b.isCharging),
+                                   caption: L10n.tr("Battery"), title: "\(b.percent)%", detail: PowerText.status(b),
+                                   open: { [weak self] in self?.hub?.requestOpen(.power) }))
+    }
+
     /// For renders and previews: shows a sample activity / peek without touching any hardware.
     public func showSample(_ event: PowerEvent = .pluggedIn, state: PowerState? = nil) {
         model.battery = state ?? PowerState(hasBattery: true, percent: 80, onAC: true, isCharging: true, minutesToFull: 84)

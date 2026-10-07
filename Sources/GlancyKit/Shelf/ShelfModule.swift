@@ -304,4 +304,13 @@ public final class ShelfModule: GlancyModule, SurfaceDropTarget {
         guard !model.items.isEmpty else { return nil }
         return AnyView(ShelfHomeCard(shelf: self, model: model))
     }
+
+    /// At rest (Always, empty shelf): a place to drop files. A drag onto the panel lands on the
+    /// shelf as anywhere on the notch; a click opens it.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        guard widget == .shelf, model.items.isEmpty else { return nil }
+        return AnyView(HomeIdleRow(symbol: "tray.and.arrow.down", caption: L10n.tr("Shelf"), title: L10n.tr("Drop files here"),
+                                   detail: L10n.tr("They stay until you remove them"),
+                                   open: { [weak self] in self?.openShelfTab() }))
+    }
 }

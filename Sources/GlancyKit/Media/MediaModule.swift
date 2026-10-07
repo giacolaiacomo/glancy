@@ -47,18 +47,22 @@ public final class MediaModule: GlancyModule {
     private var peekShownUntil: Date = .distantPast
     private var unexpectedExits: [Date] = []
     private var iconBundle: String?
+    /// Where the last track is kept across launches; nil (tests, renders, the lab) = this run only.
+    private let lastTrackDefaults: UserDefaults?
 
     public convenience init() {
         // The renderer never sends the user's track anywhere.
         let render = ProcessInfo.processInfo.processName == "glancy-render"
         let lyrics = LyricsController(settings: LyricsSettings(), provider: render ? nil : LRCLIBClient(),
                                       cache: render ? nil : LyricsCache())
-        self.init(stream: AdapterStream(), locate: { MediaAdapter.locate() }, lyrics: lyrics)
+        self.init(stream: AdapterStream(), locate: { MediaAdapter.locate() }, lyrics: lyrics, lastTrack: render ? nil : .standard)
     }
 
     /// Tests: a private pid file and a fake adapter. Without `lyrics`, lookups never leave the Mac.
-    init(stream: AdapterStream, locate: @escaping () -> MediaAdapter?, lyrics: LyricsController? = nil) {
+    init(stream: AdapterStream, locate: @escaping () -> MediaAdapter?, lyrics: LyricsController? = nil,
+         lastTrack: UserDefaults? = nil) {
         self.stream = stream
+        self.lastTrackDefaults = lastTrack
         self.locateAdapter = locate
         let lyrics = lyrics ?? LyricsController(settings: LyricsSettings(defaults: UserDefaults(suiteName: "ai.glancy.media.lyrics.offline")!),
                                                 provider: nil, cache: nil)
@@ -72,6 +76,8 @@ public final class MediaModule: GlancyModule {
         model.onPrevious = { [weak self] in self?.skip(.previous) }
         model.onSeek = { [weak self] in self?.seek(to: $0) }
         model.onOpenApp = { [weak self] in self?.openApp() }
+        model.onPlayLast = { [weak self] in self?.playLast() }
+        model.lastTrack = LastTrack.load(lastTrack)
     }
 
     // MARK: Lifecycle
@@ -302,10 +308,12 @@ public final class MediaModule: GlancyModule {
             artworkTask?.cancel()
             artworkKey = nil
             model.artwork = nil
+            model.lastArtwork = nil
             model.tint = Theme.primary
             updateAppInfo()
             fetchArtwork()
         }
+        if c.changed, let info = session.info { remember(info) }
         if c.cleared {
             artworkTask?.cancel(); peekTask?.cancel()
             artworkKey = nil
@@ -417,8 +425,16 @@ public final class MediaModule: GlancyModule {
         guard started, session.info?.trackKey == key, let decoded else { return }
         artworkKey = key
         model.artwork = NSImage(cgImage: decoded.image, size: NSSize(width: decoded.image.width / 2, height: decoded.image.height / 2))
+        model.lastArtwork = model.artwork
         model.tint = Color(.sRGB, red: decoded.tint.r, green: decoded.tint.g, blue: decoded.tint.b)
         publish()
+    }
+
+    /// The track playing now is the one Home's idle tile offers once it stops.
+    private func remember(_ info: NowPlayingInfo) {
+        guard let track = LastTrack(info), track != model.lastTrack else { return }
+        model.lastTrack = track
+        track.save(lastTrackDefaults)
     }
 
     // MARK: Peek
@@ -457,6 +473,15 @@ public final class MediaModule: GlancyModule {
         model.info = session.info
         lyrics.update(session.info)
         publish(); armLinger(); updateTick()
+    }
+
+    /// Home's idle Play: MediaRemote's play goes to the system's now-playing app (the last one
+    /// used); if it refuses, the last player by AppleScript when it runs. The stream wakes on the
+    /// player's own notifications.
+    func playLast() {
+        guard started, fixturePath == nil else { return }
+        if !MediaRemoteCommands.send(.play), let bundle = model.lastTrack?.bundleID { script(bundle, "play") }
+        trigger()
     }
 
     func skip(_ cmd: MediaRemoteCommands.Command) {
@@ -519,6 +544,13 @@ public final class MediaModule: GlancyModule {
         model.info == nil ? nil : AnyView(MediaHomeTile(model: model))
     }
 
+    /// At rest (Always): the last track with Play, or "Nothing playing" with Play for the
+    /// system's player.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        guard widget == .media, model.info == nil else { return nil }
+        return AnyView(MediaIdleTile(model: model))
+    }
+
     // MARK: Fixture (renderer / review only)
 
     /// `GLANCY_MEDIA_FIXTURE=/path/payload.json`: an adapter `get` payload (optionally with
@@ -534,6 +566,7 @@ public final class MediaModule: GlancyModule {
         if let art, let d = Artwork.decode(art), let key = session.info?.trackKey {
             artworkKey = key
             model.artwork = NSImage(cgImage: d.image, size: NSSize(width: d.image.width / 2, height: d.image.height / 2))
+            model.lastArtwork = model.artwork
             model.tint = Color(.sRGB, red: d.tint.r, green: d.tint.g, blue: d.tint.b)
             publish()
         }

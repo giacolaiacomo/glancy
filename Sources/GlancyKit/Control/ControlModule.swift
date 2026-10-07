@@ -388,6 +388,16 @@ public final class ControlModule: GlancyModule {
         return AnyView(ControlHomeCard(module: self, model: model))
     }
 
+    /// At rest (Always, Keep awake off): its switch, for the length set in Settings → Control.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        guard widget == .control, !model.awake.isOn else { return nil }
+        let length = settings.awakeDefault
+        return AnyView(HomeIdleRow(symbol: "cup.and.saucer", caption: ControlText.t("Keep awake"), title: ControlText.t("Off"),
+                                   detail: ControlText.awakeFor(length)) {
+            NotchSwitch(isOn: Binding(get: { false }, set: { [weak self] on in if on { self?.startAwake(length) } }))
+        })
+    }
+
     // MARK: Renderer
 
     public enum RenderState: String, CaseIterable, Sendable {

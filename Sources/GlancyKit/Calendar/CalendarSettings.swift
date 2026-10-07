@@ -114,6 +114,8 @@ enum CalL10n {
     static func laterCall(_ title: String, _ when: String) -> String { t("next: \(title) \(when)", "prossima: \(title) \(when)") }
     static var noLink: String { t("No meeting link", "Nessun link riunione") }
     static var linkCopied: String { t("Link copied", "Link copiato") }
+    static var calendar: String { t("Calendar", "Calendario") }
+    static var allow: String { t("Allow", "Consenti") }
     static var noAccess: String { t("Calendar access is off", "Accesso al calendario disattivato") }
     static var focusOn: String { t("Focus on", "Full immersion") }
 

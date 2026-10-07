@@ -253,24 +253,43 @@ struct NotesIconButton: View {
 // MARK: Home
 
 /// The pinned note on Home: its title and first lines; checklist boxes can be ticked right here.
+/// At rest (Always, nothing pinned) the latest note, with a Pin that keeps it here.
 struct NotesHomeCard: View {
     let model: NotesModel
     let note: Note
+    /// Not pinned: the latest note, offered with a Pin.
+    var pinned = true
     let open: () -> Void
 
     var body: some View {
+        // As many lines as the card's height lets read whole (a half-height slot takes fewer).
+        let lines = NotesFormat.previewLines(note.text, max: 3)
+        ViewThatFits(in: .vertical) {
+            card(lines)
+            card(Array(lines.prefix(2)))
+            card(Array(lines.prefix(1)))
+            card([])
+        }
+    }
+
+    private func card(_ lines: [NotesFormat.PreviewLine]) -> some View {
         VStack(alignment: .leading, spacing: 3.ui) {
-            Button(action: open) {
-                HStack(spacing: 5.ui) {
-                    Image(systemName: "pin.fill").font(.system(size: 9.ui)).foregroundStyle(Theme.tertiary)
-                    Text(verbatim: note.title ?? L10n.tr("New note"))
-                        .font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
-                    Spacer(minLength: 0)
+            HStack(spacing: 5.ui) {
+                Button(action: open) {
+                    HStack(spacing: 5.ui) {
+                        Image(systemName: pinned ? "pin.fill" : "note.text").font(.system(size: 9.ui)).foregroundStyle(Theme.tertiary)
+                        Text(verbatim: note.title ?? L10n.tr("New note"))
+                            .font(Theme.font(.m, .semibold)).foregroundStyle(Theme.primary).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                if !pinned {
+                    NotesIconButton(symbol: "pin", label: L10n.tr("Pin to Home")) { model.togglePin(note.id) }
+                }
             }
-            .buttonStyle(.plain)
-            ForEach(Array(NotesFormat.previewLines(note.text, max: 3).enumerated()), id: \.offset) { _, line in
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 HStack(spacing: 5.ui) {
                     if let box = line.box {
                         Button { model.toggleCheck(note.id, at: box) } label: {

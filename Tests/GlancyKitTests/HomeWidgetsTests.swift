@@ -198,3 +198,135 @@ private func freshSettings() -> (AppSettings, UserDefaults, String) {
     store.visibilityChanged(.collapsed)
     #expect(!store.ticksClock)
 }
+
+// MARK: Idle states (Always, nothing going on)
+
+/// The made-up Mac at rest, started, with fresh settings.
+@MainActor
+private func restingHome(active: Bool = false) -> (SurfaceContext, [any GlancyModule], () -> Void) {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("glancy-home-idle-\(UUID().uuidString)")
+    let mods = DemoData.idleModules(root: root, active: active)
+    let hub = ActivityHub()
+    for m in mods { m.start(hub: hub) }
+    DemoData.settleIdle(mods, active: false)
+    mods.compactMap { $0 as? CalendarModule }.first?.refresh()   // the access, now rather than on the next run loop
+    let (settings, _, suite) = freshSettings()
+    settings.permissions.probe = .fixed([:])
+    let context = SurfaceContext(hub: hub, settings: settings, launchAtLogin: LaunchAtLogin(), modules: mods)
+    return (context, mods, {
+        for m in mods { m.stop() }
+        try? FileManager.default.removeItem(at: root)
+        UserDefaults().removePersistentDomain(forName: suite)
+    })
+}
+
+@MainActor @Test func atRestTheAlwaysWidgetsShowTheirIdleCards() {
+    let (context, _, done) = restingHome()
+    defer { done() }
+    let s = context.settings
+    // Defaults: only the Always widgets have a card, all idle; the rest stay away.
+    var cards = HomePage.available(context)
+    #expect(Set(cards.map(\.widget)) == [.agents, .limits, .calendar, .media, .timer])
+    #expect(cards.allSatisfy { $0.idle })
+    // Every widget Always: each one has an idle state on this Mac (battery, latest note, empty shelf…).
+    for w in HomeWidget.allCases { s.setHomeMode(w, .always) }
+    cards = HomePage.available(context)
+    #expect(Set(cards.map(\.widget)) == Set(HomeWidget.allCases))
+    // Off is off, Always or not; Only when needed with nothing going on: no card.
+    s.setShownOnHome(.media, false)
+    s.setHomeMode(.timer, .whenNeeded)
+    cards = HomePage.available(context)
+    #expect(!cards.contains { $0.widget == .media || $0.widget == .timer })
+    // A module turned off takes its widgets with it.
+    s.setEnabled(.agents, false)
+    #expect(!HomePage.available(context).contains { $0.widget.module == .agents })
+    s.setEnabled(.agents, true)
+}
+
+@MainActor @Test func aCardWithSomethingReplacesTheIdleOne() {
+    let (context, mods, done) = restingHome(active: true)   // a Pomodoro running
+    defer { done() }
+    let cards = HomePage.available(context)
+    #expect(cards.first { $0.widget == .timer }?.idle == false)
+    #expect(cards.filter { $0.widget == .timer }.count == 1)
+    // The timer stops: back to its quick starts.
+    let timer = mods.compactMap { $0 as? TimerModule }.first!
+    timer.stopTimer()
+    #expect(HomePage.available(context).first { $0.widget == .timer }?.idle == true)
+    #expect(timer.homeIdleCard(.timer) != nil && timer.homeCard() == nil)
+    timer.start(minutes: 5)
+    #expect(timer.homeIdleCard(.timer) == nil)
+    timer.stopTimer()
+}
+
+@MainActor @Test func idleStatesAppearOnlyWhenTheyHaveSomethingUseful() {
+    let (_, mods, done) = restingHome()
+    defer { done() }
+    func module<T>(_ t: T.Type) -> T { mods.compactMap { $0 as? T }.first! }
+    // Sessions: always something to say ("no live sessions"); never for another widget.
+    let agents = module(AgentsModule.self)
+    #expect(agents.homeIdleCard(.agents) != nil && agents.homeIdleCard(.media) == nil)
+    // Limits: calm readings are the idle card, a nearly used-up one is a card with something.
+    #expect(!agents.homeWidgets().contains { $0.widget == .limits })
+    #expect(agents.homeIdleCard(.limits) != nil)
+    agents.seedLimitsSample()
+    #expect(agents.homeWidgets().first { $0.widget == .limits }?.priority == 70)
+    // No reading and no service on: nothing.
+    let empty = AgentsModule.renderEmpty()
+    #expect(empty.homeIdleCard(.limits) == nil)
+    // Media: the idle tile only while nothing plays.
+    let media = module(MediaModule.self)
+    #expect(media.homeCard() == nil && media.homeIdleCard(.media) != nil)
+    #expect(media.model.lastTrack?.title == "Golden Hour Drive")
+    // Notes: the latest note while nothing is pinned; the pinned note is the card with something.
+    let notes = module(NotesModule.self)
+    #expect(notes.homeCard() == nil && notes.homeIdleCard(.notes) != nil)
+    if let first = notes.model.notes.first { notes.model.togglePin(first.id) }
+    #expect(notes.homeCard() != nil && notes.homeIdleCard(.notes) == nil)
+    // Shelf: the drop target only while empty.
+    let shelf = module(ShelfModule.self)
+    #expect(shelf.homeCard() == nil && shelf.homeIdleCard(.shelf) != nil)
+    // Keep awake: the switch while off.
+    let control = module(ControlModule.self)
+    #expect(control.homeCard() == nil && control.homeIdleCard(.control) != nil)
+    control.prepareForRender(.awake)
+    #expect(control.homeCard() != nil && control.homeIdleCard(.control) == nil)
+    // Battery: the level at rest; a Mac without a battery has nothing to show.
+    let power = module(PowerModule.self)
+    #expect(power.homeCard() == nil && power.homeIdleCard(.power) != nil)
+    let desktop = PowerModule(settings: PowerSettings(defaults: UserDefaults(suiteName: "glancy.test.home.power.\(UUID().uuidString)")!))
+    desktop.fixed = .init(battery: .noBattery, devices: [])
+    desktop.start(hub: ActivityHub())
+    #expect(desktop.homeIdleCard(.power) == nil)
+    desktop.stop()
+}
+
+@MainActor @Test func calendarIdleFollowsTheAccess() {
+    let src = FixedCalendar()
+    let m = CalendarModule(source: src, settings: CalendarSettings(defaults: UserDefaults(suiteName: "glancy.test.home.cal.\(UUID().uuidString)")!))
+    m.start(hub: ActivityHub())
+    m.refresh()
+    // Granted, nothing left: "nothing else today".
+    #expect(m.homeCard() == nil && m.homeIdleCard(.calendar) != nil)
+    m.stop()
+    src.authorization = .denied
+    m.start(hub: ActivityHub()); m.refresh()
+    #expect(m.homeIdleCard(.calendar) != nil)   // a way to allow it
+    m.stop()
+    src.authorization = .notDetermined
+    m.start(hub: ActivityHub()); m.refresh()
+    #expect(m.homeIdleCard(.calendar) == nil)   // not asked yet: nothing
+    m.stop()
+}
+
+@Test func theLastTrackIsKeptAcrossLaunches() {
+    let suite = "glancy.test.home.media.\(UUID().uuidString)"
+    let d = UserDefaults(suiteName: suite)!
+    defer { UserDefaults().removePersistentDomain(forName: suite) }
+    #expect(LastTrack.load(d) == nil)
+    #expect(LastTrack(NowPlayingInfo(bundleID: "com.apple.Music", playing: true, title: "")) == nil)
+    let t = LastTrack(NowPlayingInfo(bundleID: "com.spotify.client", playing: true, title: "Song", artist: "Band"))
+    t?.save(d)
+    #expect(LastTrack.load(d) == LastTrack(title: "Song", artist: "Band", bundleID: "com.spotify.client"))
+    #expect(LastTrack.load(nil) == nil)
+}

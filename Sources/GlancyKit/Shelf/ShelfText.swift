@@ -19,6 +19,7 @@ let shelfItalian: [String: String] = [
     "Remove": "Rimuovi",
     "Clear shelf": "Svuota il ripiano",
     "Drop files here": "Trascina qui i file",
+    "They stay until you remove them": "Restano finché non li togli",
     "Drag files, text or links onto the notch. They stay here until you remove them.":
         "Trascina file, testo o link sulla notch: restano qui finché non li togli.",
     "1 file": "1 file",

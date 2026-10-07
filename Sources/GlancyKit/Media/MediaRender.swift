@@ -37,6 +37,17 @@ extension MediaModule {
         lyrics.settings.wingEnabled = state == .lyricsWing
     }
 
+    /// Home's idle tile: nothing playing, `track` remembered with `artwork` (a PNG). Renders and
+    /// the lab only: nothing is saved, no player is asked.
+    public func prepareIdleForRender(_ track: LastTrack?, artwork: URL?) {
+        model.lastTrack = track
+        if let artwork, let data = FileManager.default.contents(atPath: artwork.path), let d = Artwork.decode(data) {
+            model.lastArtwork = NSImage(cgImage: d.image, size: NSSize(width: d.image.width / 2, height: d.image.height / 2))
+        } else {
+            model.lastArtwork = nil
+        }
+    }
+
     /// Original words written for the renders.
     static let sampleLRC = """
     [ti:Golden Hour Drive]

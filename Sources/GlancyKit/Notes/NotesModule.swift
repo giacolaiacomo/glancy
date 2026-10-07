@@ -216,6 +216,24 @@ public final class NotesModule: GlancyModule {
         return AnyView(NotesHomeCard(model: model, note: note) { [weak self] in self?.open(note.id) })
     }
 
+    /// At rest (Always, nothing pinned): the latest note with a Pin, or a way to write the first.
+    public func homeIdleCard(_ widget: HomeWidget) -> AnyView? {
+        guard widget == .notes, model.pinned == nil else { return nil }
+        if let latest = model.notes.max(by: { $0.modified < $1.modified }) {
+            return AnyView(NotesHomeCard(model: model, note: latest, pinned: false) { [weak self] in self?.open(latest.id) })
+        }
+        return AnyView(HomeIdleRow(symbol: "note.text", caption: L10n.tr("Notes"), title: L10n.tr("No notes yet")) {
+            NotchTextButton(L10n.tr("New note")) { [weak self] in
+                guard let self else { return }
+                self.model.create()
+                self.hub?.requestOpen(.notes)
+            }
+        })
+    }
+
+    /// Renders: nothing pinned (Home's idle card shows the latest note).
+    public func unpinForRender() { model.settings.pinnedID = nil }
+
     /// Opens the tab on one note.
     func open(_ id: String) {
         model.select(id)

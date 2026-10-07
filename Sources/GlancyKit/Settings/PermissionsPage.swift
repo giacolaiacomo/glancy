@@ -160,7 +160,7 @@ private struct PermissionRow: View {
         switch p {
         case .calendar, .notifications: Color(nsColor: .systemRed)
         case .accessibility, .bluetooth, .fullDiskAccess: Color(nsColor: .systemBlue)
-        case .microphone: Color(nsColor: .systemOrange)
+        case .microphone, .systemAudio: Color(nsColor: .systemOrange)
         case .camera: Color(nsColor: .systemGreen)
         case .automation, .speech: Color(nsColor: .systemGray)
         }

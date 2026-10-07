@@ -27,7 +27,7 @@ enum SettingsCatalog {
         .agents: .systemPurple, .calendar: .systemRed, .media: .systemPink, .timer: .systemOrange,
         .notes: .systemYellow, .shelf: .systemTeal, .clipboard: .systemIndigo, .windows: .systemBlue,
         .control: .systemCyan, .monitor: .systemGreen, .notifications: .systemRed, .hud: .systemGray,
-        .power: .systemGreen, .command: .darkGray,
+        .power: .systemGreen, .command: .darkGray, .meetings: .systemRed,
     ]
 
     /// Row names the sidebar's search finds a module by (its name and purpose always match).

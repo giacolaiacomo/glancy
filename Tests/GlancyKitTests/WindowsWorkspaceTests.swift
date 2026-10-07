@@ -328,12 +328,12 @@ struct WorkspaceDisplaySetupTests {
     @Test func reconfigurationsAreDebouncedAndOnlyRealChangesCount() async throws {
         var current = [builtIn]
         let watcher = DisplaySetupWatcher()
-        watcher.debounce = .milliseconds(60)
+        watcher.debounce = .milliseconds(400)   // wide enough that a loaded runner can't split the burst
         watcher.displays = { current }
         var calls: [[Display]] = []
         watcher.onSetupChange = { calls.append($0) }
         watcher.noteChange()                     // baseline: built-in only
-        try await Task.sleep(for: .milliseconds(150))
+        await settled(watcher)
         #expect(calls.isEmpty)                   // nothing came or went
         current = [builtIn, ultrawide]           // a dock: three reconfigurations in a burst
         watcher.noteChange()
@@ -343,13 +343,20 @@ struct WorkspaceDisplaySetupTests {
         watcher.noteChange()
         #expect(watcher.isWaiting)
         #expect(calls.isEmpty)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(calls.count == 1 && calls[0].count == 2)
+        await settled(watcher)
+        #expect(calls.count == 1 && calls.first?.count == 2)
         #expect(!watcher.isWaiting)
         watcher.noteChange()                     // same setup again (the Dock resized)
-        try await Task.sleep(for: .milliseconds(150))
+        await settled(watcher)
         #expect(calls.count == 1)
         watcher.stop()
+    }
+
+    /// Waits for the debounce to fire (polling, so a slow runner only makes it slower).
+    private func settled(_ w: DisplaySetupWatcher, timeout: Double = 10) async {
+        let end = Date.now.addingTimeInterval(timeout)
+        try? await Task.sleep(for: .milliseconds(20))
+        while w.isWaiting, Date.now < end { try? await Task.sleep(for: .milliseconds(10)) }
     }
 
     @Test func matchingWorkspaceIsAppliedWithoutLaunching() async throws {

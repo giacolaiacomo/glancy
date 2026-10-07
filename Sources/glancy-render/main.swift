@@ -404,22 +404,10 @@ enum Render {
                 meetings.showSampleAutoPeek()
                 shot("18-meetings-peek-auto", ctx)
             }
-            // Settings → Meetings (on): in the panel, then the whole section (the panel shows its top).
+            // Settings → Meetings (on): the whole section (the page lives in the Settings window).
             meetings.stop(); meetings.start(hub: live.hub)
             meetings.prepareForRender(.list)
-            settings.navigation.go(.module(.meetings), animated: false)
-            shot("18-meetings-settings", live) { $0.expand(tab: nil); $0.toggleSettings() }
             sheet("18-meetings-settings-full", meetings.settingsSection(live))
-            // Permissions with only Meetings registered: its rows (Microphone, System audio, and
-            // Speech Recognition where the Mac needs it) on screen.
-            let meetingAccess: [PermissionKind: PermissionStatus] = [.microphone: .granted, .systemAudio: .notDetermined,
-                                                                     .speech: .notDetermined]
-            settings.permissions.probe = .fixed(meetingAccess)
-            settings.permissions.apply(meetingAccess)
-            settings.navigation.go(.permissions, animated: false)
-            let own = SurfaceContext(hub: live.hub, settings: settings, launchAtLogin: launch, modules: [meetings])
-            shot("18-meetings-permissions", own) { $0.expand(tab: nil); $0.toggleSettings() }
-            settings.navigation.go(.index, animated: false)
             // The largest size: nothing clipped.
             UIScale.shared.set(requested: .extraLarge, effective: .extraLarge)
             settings.size = .extraLarge

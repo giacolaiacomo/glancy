@@ -12,7 +12,7 @@ struct MeetingsSection: View {
     var body: some View {
         let _ = tick
         let settings = module.settings
-        VStack(alignment: .leading, spacing: 4.ui) {
+        VStack(alignment: .leading, spacing: SettingsStyle.rowSpacing) {
             SettingsRow(L10n.tr("When a call starts")) {
                 NotchSegments(selection: Binding(get: { settings.mode }, set: { settings.mode = $0; tick += 1 }),
                               options: [(.ask, L10n.tr("Ask")), (.always, L10n.tr("Always")), (.off, L10n.tr("Off"))])
@@ -25,10 +25,10 @@ struct MeetingsSection: View {
             let notesOn = context.settings.isEnabled(.notes)
             SettingsRow(L10n.tr("Save transcripts to Notes"),
                         note: notesOn ? L10n.tr("A note for each meeting") : L10n.tr("Turn the Notes module on to use this"),
-                        noteColor: notesOn ? Theme.tertiary : Theme.waiting) {
+                        noteColor: notesOn ? SettingsStyle.tertiary : SettingsStyle.waiting) {
                 NotchSwitch(isOn: Binding(get: { settings.saveToNotes }, set: { settings.saveToNotes = $0; tick += 1 }), enabled: notesOn)
             }
-            SettingsGroupTitle(L10n.tr("Permissions")).padding(.top, 8.ui)
+            SettingsGroupTitle(L10n.tr("Permissions")).padding(.top, 8)
             AccessRow(title: L10n.tr("Microphone"), purpose: L10n.tr("Your voice"), status: module.permissions.mic(),
                       pane: .microphone) { await module.permissions.requestMic() } done: { tick += 1 }
             AccessRow(title: L10n.tr("System audio"), purpose: L10n.tr("The others' voices, as the Mac plays them"),
@@ -40,7 +40,7 @@ struct MeetingsSection: View {
                           status: speechAccess, pane: .speech) { await module.permissions.requestSpeech() } done: { tick += 1 }
             } else {
                 SettingsRow(L10n.tr("Speech Recognition"), note: L10n.tr("Turns the audio into text, on this Mac")) {
-                    Text(verbatim: L10n.tr("Not needed on this Mac")).font(Theme.font(.s)).foregroundStyle(Theme.tertiary)
+                    Text(verbatim: L10n.tr("Not needed on this Mac")).font(SettingsStyle.font(.s)).foregroundStyle(SettingsStyle.tertiary)
                 }
             }
             SettingsRow(L10n.tr("Folder"), note: count.map { L10n.tr("%d recordings", $0) }) {
@@ -93,12 +93,12 @@ private struct AccessRow: View {
 
     var body: some View {
         SettingsRow(title, note: status == .denied ? L10n.tr("Off in System Settings") : purpose,
-                    noteColor: status == .granted ? Theme.tertiary : Theme.waiting) {
+                    noteColor: status == .granted ? SettingsStyle.tertiary : SettingsStyle.waiting) {
             switch status {
             case .granted:
-                HStack(spacing: 4.ui) {
-                    Image(systemName: "checkmark").font(.system(size: 9.ui, weight: .bold)).foregroundStyle(Theme.done)
-                    Text(verbatim: L10n.tr("Allowed")).font(Theme.font(.s)).foregroundStyle(Theme.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(SettingsStyle.done)
+                    Text(verbatim: L10n.tr("Allowed")).font(SettingsStyle.font(.s)).foregroundStyle(SettingsStyle.secondary)
                 }
             case .notDetermined:
                 NotchTextButton(L10n.tr("Allow…")) {

@@ -14,8 +14,11 @@ enum PermissionRows {
         if ids.contains(.timer) { out.append(.notifications) }
         if context.module(MediaModule.self)?.model.source == .scripts { out.append(.automation) }
         if ids.contains(.notifications), context.settings.isEnabled(.notifications) { out.append(.fullDiskAccess) }
-        if !ids.isDisjoint(with: [.notes, .hud]) { out.append(.microphone) }
-        if ids.contains(.notes) { out.append(.speech) }
+        let meetings = ids.contains(.meetings) && context.settings.isEnabled(.meetings)
+        if !ids.isDisjoint(with: [.notes, .hud]) || meetings { out.append(.microphone) }
+        if meetings { out.append(.systemAudio) }
+        let speechNeeded = context.module(MeetingsModule.self)?.system.transcriber.needsSpeechPermission ?? false
+        if ids.contains(.notes) || (meetings && speechNeeded) { out.append(.speech) }
         if ids.contains(.control) { out.append(.camera) }
         return out
     }
@@ -38,6 +41,7 @@ enum PermissionRows {
         case .microphone: tr("Microphone")
         case .camera: tr("Camera")
         case .speech: tr("Speech Recognition")
+        case .systemAudio: tr("System audio")
         }
     }
 
@@ -49,9 +53,10 @@ enum PermissionRows {
         case .notifications: tr("An alert when a timer ends")
         case .automation: tr("Music and Spotify controls")
         case .fullDiskAccess: tr("Your notifications in the notch")
-        case .microphone: tr("Voice notes and the mic mute")
+        case .microphone: tr("Voice notes, the mic mute and meetings")
         case .camera: tr("The camera mirror")
         case .speech: tr("Voice notes written out, on this Mac")
+        case .systemAudio: tr("Meetings: the other people's voices")
         }
     }
 
@@ -66,6 +71,7 @@ enum PermissionRows {
         case .microphone: "mic"
         case .camera: "camera"
         case .speech: "waveform"
+        case .systemAudio: "speaker.wave.2"
         }
     }
 }

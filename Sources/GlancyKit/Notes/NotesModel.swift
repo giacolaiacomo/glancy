@@ -156,6 +156,17 @@ public final class NotesModel {
         }
     }
 
+    /// A note made by another module (a meeting's transcript): first in the list, written at once,
+    /// not selected (the tab stays on the note being read or edited).
+    @discardableResult
+    public func addExternal(text: String) -> Note? {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let note = Note(id: Note.newID(at: now(), taken: Set(notes.map(\.id))), text: text, modified: now())
+        notes.insert(note, at: 0)
+        scheduleSave(note.id, immediate: true)
+        return note
+    }
+
     /// The quick-note hotkey: the last note if it was edited in the last 15 minutes (cursor at the
     /// end), otherwise a fresh one. A blank selected note is always reused.
     public func quickNote() {

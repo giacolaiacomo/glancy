@@ -21,7 +21,7 @@ public enum HomeWidgetMode: String, CaseIterable, Codable, Sendable {
 
 /// A card Home can show. Most modules have one; Agents has two (the sessions and the plan limits).
 public enum HomeWidget: String, CaseIterable, Codable, Sendable {
-    case agents, limits, calendar, media, timer, notes, shelf, control, power
+    case agents, limits, calendar, media, timer, notes, shelf, control, power, meetings
 
     /// The module that draws it (and whose being off hides it).
     public var module: ModuleID {
@@ -34,6 +34,7 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
         case .shelf: .shelf
         case .control: .control
         case .power: .power
+        case .meetings: .meetings
         }
     }
 
@@ -45,7 +46,8 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
 
     /// The order a new Home starts with: today's Home (sessions, meeting, media) with the plan
     /// limits right after the sessions.
-    public static let defaultOrder: [HomeWidget] = [.agents, .limits, .calendar, .media, .timer, .notes, .shelf, .control, .power]
+    /// Meetings (opt-in) comes last: while it records or asks, its live priority puts it on Home anyway.
+    public static let defaultOrder: [HomeWidget] = [.agents, .limits, .calendar, .media, .timer, .notes, .shelf, .control, .power, .meetings]
 
     /// Always for what is worth a look at rest (sessions, plan limits, the next meeting, the last
     /// track and Play, quick timers); Only when needed for the rest, which says nothing useful
@@ -53,7 +55,7 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
     public var defaultMode: HomeWidgetMode {
         switch self {
         case .agents, .limits, .calendar, .media, .timer: .always
-        case .notes, .shelf, .control, .power: .whenNeeded
+        case .notes, .shelf, .control, .power, .meetings: .whenNeeded
         }
     }
 
@@ -71,6 +73,7 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
         case .shelf: "Shelf"
         case .control: "Keep awake"
         case .power: "Battery"
+        case .meetings: "Meeting recording"
         }
     }
 
@@ -86,6 +89,7 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
         case .shelf: "When files are on the shelf"
         case .control: "While Keep awake is on"
         case .power: "Charging, low battery, headphones"
+        case .meetings: "While a meeting is offered, recorded or transcribed"
         }
     }
 
@@ -101,6 +105,7 @@ public enum HomeWidget: String, CaseIterable, Codable, Sendable {
         case .shelf: "At rest: a place to drop files"
         case .control: "At rest: a switch to turn it on"
         case .power: "At rest: the battery level"
+        case .meetings: "At rest: the last recording, with Play"
         }
     }
 

@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 enum SettingsCatalog {
     static func hasSection(_ id: ModuleID) -> Bool {
-        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power, .notes, .command, .control, .monitor].contains(id)
+        [.agents, .calendar, .media, .timer, .shelf, .clipboard, .windows, .hud, .power, .notes, .command, .control, .monitor, .meetings].contains(id)
     }
 
     static func generalSummary(_ s: AppSettings) -> String {
@@ -74,6 +74,8 @@ enum SettingsCatalog {
             return context.module(ControlModule.self).map { ControlText.summary($0.settings) } ?? ""
         case .monitor:
             return context.module(MonitorModule.self).map { MonitorText.summary($0.settings) } ?? ""
+        case .meetings:
+            return context.module(MeetingsModule.self)?.settingsSummary ?? ""
         case .notifications:
             return ""
         }
@@ -96,6 +98,7 @@ enum SettingsCatalog {
         case .control: "Quick toggles and system tools"
         case .notes: "Quick notes"
         case .monitor: "CPU, memory and the apps using them"
+        case .meetings: "Record meetings, with your consent"
         }
     }
 }
@@ -134,6 +137,7 @@ struct ModuleSection: View {
         case .command: if let m = context.module(CommandModule.self) { CommandSection(module: m, context: context) }
         case .control: if let m = context.module(ControlModule.self) { ControlSection(module: m) }
         case .monitor: if let m = context.module(MonitorModule.self) { MonitorSection(module: m) }
+        case .meetings: if let m = context.module(MeetingsModule.self) { MeetingsSection(module: m, context: context) }
         case .notifications: EmptyView()
         }
     }

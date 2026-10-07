@@ -88,6 +88,8 @@ struct ModuleLifecycleTests {
                           engine: ProcessEngine(numer: 1, denom: 1)),
             CommandModule(settings: CommandSettings(defaults: defaults()), history: PaletteHistory(url: nil),
                           apps: AppIndex(folders: [tempDir("apps")], extras: []), rates: CurrencyRates(cacheURL: nil)),
+            MeetingsModule(store: MeetingsStore(directory: tempDir("meetings")), settings: MeetingsSettings(defaults: defaults()),
+                           system: .inert),
         ]
     }
 

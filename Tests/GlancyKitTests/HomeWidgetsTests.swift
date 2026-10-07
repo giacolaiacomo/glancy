@@ -27,10 +27,10 @@ private func freshSettings() -> (AppSettings, UserDefaults, String) {
     s.moveOnHome(.media, by: -1)
     s.moveOnHome(.media, by: -1)
     s.moveOnHome(.agents, by: -1)          // already first: nothing moves
-    s.moveOnHome(.power, by: 1)            // already last: nothing moves
+    s.moveOnHome(.meetings, by: 1)         // already last: nothing moves
     s.setShownOnHome(.calendar, false)
     let again = AppSettings(defaults: d)
-    #expect(again.homeOrder == [.agents, .media, .limits, .calendar, .timer, .notes, .shelf, .control, .power])
+    #expect(again.homeOrder == [.agents, .media, .limits, .calendar, .timer, .notes, .shelf, .control, .power, .meetings])
     #expect(!again.isShownOnHome(.calendar) && again.isShownOnHome(.media))
     again.resetHome()
     #expect(AppSettings(defaults: d).homeOrder == HomeWidget.defaultOrder)
@@ -70,7 +70,7 @@ private func freshSettings() -> (AppSettings, UserDefaults, String) {
     d.set(["media", "power"], forKey: "homeWidgetsHidden")
     d.set(["bogus": "always", "timer": "sometimes"], forKey: "homeWidgetModes")   // junk is ignored
     let s = AppSettings(defaults: d)
-    #expect(s.homeOrder == order)
+    #expect(s.homeOrder == order + [.meetings])   // a widget added since lands in its default place
     // Off stays off, whatever its mode: nothing hidden comes back.
     #expect(!s.isShownOnHome(.media) && !s.isShownOnHome(.power))
     #expect(s.homeModes.isEmpty)
@@ -231,7 +231,8 @@ private func restingHome(active: Bool = false) -> (SurfaceContext, [any GlancyMo
     // Every widget Always: each one has an idle state on this Mac (battery, latest note, empty shelf…).
     for w in HomeWidget.allCases { s.setHomeMode(w, .always) }
     cards = HomePage.available(context)
-    #expect(Set(cards.map(\.widget)) == Set(HomeWidget.allCases))
+    // (Meetings is opt-in: off here, so no card.)
+    #expect(Set(cards.map(\.widget)) == Set(HomeWidget.allCases).subtracting([.meetings]))
     // Off is off, Always or not; Only when needed with nothing going on: no card.
     s.setShownOnHome(.media, false)
     s.setHomeMode(.timer, .whenNeeded)

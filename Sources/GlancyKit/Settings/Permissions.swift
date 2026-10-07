@@ -10,6 +10,8 @@ import UserNotifications
 /// The permissions Glancy can use (SPEC §4 onboarding checklist).
 public enum PermissionKind: String, CaseIterable, Sendable {
     case calendar, accessibility, bluetooth, notifications, automation, fullDiskAccess, microphone, camera, speech
+    /// "System Audio Recording Only" (Meetings: the other people's voices; Screen Recording before 14.4).
+    case systemAudio
 }
 
 public enum PermissionStatus: Sendable, Equatable {
@@ -46,6 +48,7 @@ public struct PermissionProbe: Sendable {
         out[.microphone] = SystemPermissions.capture(.audio, usage: "NSMicrophoneUsageDescription")
         out[.camera] = SystemPermissions.capture(.video, usage: "NSCameraUsageDescription")
         out[.speech] = SystemPermissions.speech()
+        out[.systemAudio] = SystemAudioPermission.permissionStatus()
         return out
     }
 }
@@ -227,6 +230,14 @@ public final class PermissionCenter {
                 self?.asking = nil
                 self?.refresh()
             }
+        case .systemAudio:
+            guard status(.systemAudio) == .notDetermined else { return openSettings(p) }
+            asking = .systemAudio
+            Task { [weak self] in
+                _ = await SystemAudioPermission.request()
+                self?.asking = nil
+                self?.refresh()
+            }
         }
     }
 
@@ -246,6 +257,7 @@ public final class PermissionCenter {
         case .microphone: pane = "com.apple.preference.security?Privacy_Microphone"
         case .camera: pane = "com.apple.preference.security?Privacy_Camera"
         case .speech: pane = "com.apple.preference.security?Privacy_SpeechRecognition"
+        case .systemAudio: pane = SystemAudioPermission.settingsPane
         }
         return URL(string: "x-apple.systempreferences:" + pane)!
     }

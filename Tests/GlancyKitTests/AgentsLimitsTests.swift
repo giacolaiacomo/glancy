@@ -350,7 +350,7 @@ private func settle(_ store: UsageLimitsStore, _ timeout: Double = 5) async {
         UsageLimit(kind: .week(model: nil), percent: 31, resetsAt: Date().addingTimeInterval(86400 * 3), window: 7 * 86400)], updated: .now))
     store.stop()
     let end = Date().addingTimeInterval(5)
-    while Date() < end, (try? Data(contentsOf: cache)).map({ String(decoding: $0, as: UTF8.self).contains("\"codex\"") }) != true {
+    while Date() < end, (try? Data(contentsOf: cache)).map({ String(decoding: $0, as: UTF8.self).contains("\"Plus\"") }) != true {
         try? await Task.sleep(for: .milliseconds(20))
     }
     let (again, _, _, suite2) = makeStore(FakeFetcher(), cache: cache)
